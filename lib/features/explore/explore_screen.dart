@@ -9,12 +9,11 @@ class ExploreScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final eventAsync = ref.watch(activeEventProvider); // Get active event data
-    final sponsorsStream = ref.watch(sponsorsStreamProvider); // Get sponsors data
+    final eventAsync = ref.watch(activeEventFutureProvider); // Get active event data
+    final sponsorsAsync = ref.watch(sponsorsStreamProvider); // Get sponsors data
 
     return eventAsync.when(
       data: (event) {
-        final eventData = event.data() as Map<String, dynamic>;
         return SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -24,12 +23,12 @@ class ExploreScreen extends ConsumerWidget {
                 child: Text('Venue Map', style: Theme.of(context).textTheme.headlineSmall),
               ),
               Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 clipBehavior: Clip.antiAlias, // Clip children (image) to card shape
                 child: AspectRatio(
                   aspectRatio: 16 / 9, // Standard aspect ratio for images
                   child: Image.network(
-                    eventData['venueMapUrl'],
+                    event.venueMapUrl,
                     width: double.infinity,
                     fit: BoxFit.cover,
                     loadingBuilder: (context, child, progress) {
@@ -37,10 +36,17 @@ class ExploreScreen extends ConsumerWidget {
                     },
                     errorBuilder: (context, error, stackTrace) {
                       return Center(
-                        child: Icon(
-                          Icons.broken_image,
-                          size: 60,
-                          color: Theme.of(context).colorScheme.error,
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.broken_image,
+                              size: 60,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(height: 8),
+                            Text('Map not available', style: Theme.of(context).textTheme.bodyMedium),
+                          ],
                         ),
                       );
                     },
@@ -53,9 +59,9 @@ class ExploreScreen extends ConsumerWidget {
                 child: Text('Event Partners', style: Theme.of(context).textTheme.headlineSmall),
               ),
               const SizedBox(height: 12),
-              sponsorsStream.when(
-                data: (snapshot) {
-                  if (snapshot.docs.isEmpty) {
+              sponsorsAsync.when(
+                data: (sponsors) {
+                  if (sponsors.isEmpty) {
                     return Center(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -69,24 +75,30 @@ class ExploreScreen extends ConsumerWidget {
                   return ListView.builder(
                     shrinkWrap: true, // Only take needed height
                     physics: const NeverScrollableScrollPhysics(), // Disable scrolling here
-                    itemCount: snapshot.docs.length,
+                    itemCount: sponsors.length,
                     itemBuilder: (context, index) {
-                       final sponsor = snapshot.docs[index].data() as Map<String, dynamic>;
+                       final sponsor = sponsors[index];
                        return Card(
                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                          child: Padding(
                            padding: const EdgeInsets.all(8.0),
                            child: ListTile(
                              leading: Image.network(
-                               sponsor['logoUrl'],
+                               sponsor.logoUrl,
                                width: 80,
                                height: 40,
                                fit: BoxFit.contain,
-                               errorBuilder: (context, error, stackTrace) => const Icon(Icons.business), // Fallback icon
+                               errorBuilder: (context, error, stackTrace) => Icon(
+                                 Icons.business,
+                                 color: Theme.of(context).colorScheme.secondary,
+                               ), // Fallback icon
                              ),
-                             title: Text(sponsor['name'], style: Theme.of(context).textTheme.titleMedium),
-                             subtitle: Text(sponsor['description'] ?? '', style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis,),
+                             title: Text(sponsor.name, style: Theme.of(context).textTheme.titleMedium),
+                             subtitle: Text(sponsor.description, style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis,),
                              onTap: () {
+                               ScaffoldMessenger.of(context).showSnackBar(
+                                 SnackBar(content: Text('${sponsor.name} details coming soon!')),
+                               );
                                // TODO: Navigate to Sponsor Detail (Phase 2/3) or open website
                              },
                            ),

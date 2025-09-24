@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/features/auth/auth_view_model.dart'; // To sign out
 
 // ProfileScreen displays the current user's profile information and actions.
 class ProfileScreen extends ConsumerWidget {
@@ -11,13 +12,13 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the stream of the current user's profile from Firestore
-    final userProfileStream = ref.watch(userProfileProvider);
-    final currentUser = FirebaseAuth.instance.currentUser; // Get current Firebase Auth user
+    final userProfileAsync = ref.watch(userAppProfileStreamProvider);
+    final authViewModel = ref.read(authViewModelProvider.notifier); // For signing out
 
-    return userProfileStream.when(
-      data: (snapshot) {
+    return userProfileAsync.when(
+      data: (appUser) {
         // Handle cases where profile data might not exist or snapshot is null
-        if (snapshot == null || !snapshot.exists) {
+        if (appUser == null) {
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -25,15 +26,14 @@ class ProfileScreen extends ConsumerWidget {
                 const Text('Could not load profile data.'),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () => FirebaseAuth.instance.signOut(),
+                  onPressed: () => authViewModel.signOut(),
                   child: const Text('Logout'),
                 ),
               ],
             ),
           );
         }
-        final userData = snapshot.data() as Map<String, dynamic>;
-
+        
         return ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
@@ -42,12 +42,12 @@ class ProfileScreen extends ConsumerWidget {
               child: CircleAvatar(
                 radius: 60,
                 backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                backgroundImage: (userData['profileImageUrl'] != null && userData['profileImageUrl']!.isNotEmpty)
-                    ? NetworkImage(userData['profileImageUrl'])
+                backgroundImage: (appUser.profileImageUrl.isNotEmpty)
+                    ? NetworkImage(appUser.profileImageUrl)
                     : null,
-                child: (userData['profileImageUrl'] == null || userData['profileImageUrl']!.isEmpty)
+                child: (appUser.profileImageUrl.isEmpty)
                     ? Text(
-                        (userData['name']?[0] ?? currentUser?.email?[0] ?? 'U').toUpperCase(),
+                        appUser.name[0].toUpperCase(),
                         style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                               color: Theme.of(context).colorScheme.primary,
                               fontWeight: FontWeight.bold,
@@ -58,12 +58,12 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
             Text(
-              userData['name'] ?? currentUser?.email ?? 'User',
+              appUser.name,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             Text(
-              userData['title'] ?? (userData['role'] ?? 'Attendee').toUpperCase(),
+              appUser.title.isNotEmpty ? appUser.title : appUser.role.toUpperCase(),
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Theme.of(context).colorScheme.secondary,
@@ -79,10 +79,10 @@ class ProfileScreen extends ConsumerWidget {
                     title: Text('Edit Profile', style: Theme.of(context).textTheme.titleMedium),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
-                      // TODO: Navigate to Edit Profile screen in Phase 2
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Edit Profile coming in Phase 2!')),
                       );
+                      // TODO: Navigate to Edit Profile screen in Phase 2
                     },
                   ),
                   const Divider(height: 0),
@@ -91,10 +91,10 @@ class ProfileScreen extends ConsumerWidget {
                     title: Text('Notifications', style: Theme.of(context).textTheme.titleMedium),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
-                      // TODO: Navigate to Notifications screen in Phase 2
-                       ScaffoldMessenger.of(context).showSnackBar(
+                      ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Notifications management coming in Phase 2!')),
                       );
+                      // TODO: Navigate to Notifications screen in Phase 2
                     },
                   ),
                 ],
@@ -105,9 +105,7 @@ class ProfileScreen extends ConsumerWidget {
               child: ListTile(
                 leading: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
                 title: Text('Logout', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.error)),
-                onTap: () async {
-                  await FirebaseAuth.instance.signOut();
-                },
+                onTap: () => authViewModel.signOut(),
               ),
             ),
             const SizedBox(height: 40),

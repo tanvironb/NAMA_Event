@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/core/services/firestore_service.dart';
+import 'package:events_app_trueattempt/features/auth/auth_view_model.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/core/constants/app_constants.dart'; // For logo path
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -15,8 +14,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
-  bool _isLogin = true; // Toggle between login and signup
+  AuthFormType _formType = AuthFormType.login;
 
   Future<void> _submit() async {
     if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
@@ -24,35 +22,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
-    try {
-      if (_isLogin) {
-        // Sign In
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
-      } else {
-        // Sign Up
-        final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
+    final viewModel = ref.read(authViewModelProvider.notifier);
+    if (_formType == AuthFormType.login) {
+      await viewModel.signIn(_emailController.text.trim(), _passwordController.text.trim());
+    } else {
+      await viewModel.signUp(_emailController.text.trim(), _passwordController.text.trim());
+    }
 
-        // Create user profile in Firestore via service
-        if (userCredential.user != null) {
-          await ref.read(firestoreServiceProvider).createUserProfile(
-            uid: userCredential.user!.uid,
-            email: _emailController.text.trim(),
-            name: _emailController.text.split('@')[0], // Basic name from email
-            role: 'attendee', // Default role for new sign-ups
-          );
-        }
-      }
-    } on FirebaseAuthException catch (e) {
-      _showSnackBar(e.message ?? 'Authentication failed. Please try again.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    // Handle authentication result (error state)
+    final authState = ref.read(authViewModelProvider);
+    if (authState.hasError) {
+      _showSnackBar(authState.error.toString());
     }
   }
 
@@ -76,6 +56,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authViewModelProvider); // Watch the auth state
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
       body: Center(
@@ -85,19 +67,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Event App',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
+              // Company Logo (Placeholder for image asset)
+              Center(
+                child: Image.asset(
+                  AppConstants.logoPath, // Your logo asset path
+                  height: 100,
+                  // width: 100,
+                  errorBuilder: (context, error, stackTrace) => Text(
+                    AppConstants.appName,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 30),
               Text(
-                _isLogin ? 'Welcome back!' : 'Create your account',
+                _formType == AuthFormType.login ? 'Welcome back!' : 'Create your account',
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: Theme.of(context).colorScheme.onBackground,
                 ),
               ),
@@ -114,16 +104,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 obscureText: true,
               ),
               const SizedBox(height: 24),
-              _isLoading
+              authState.isLoading
                   ? const LoadingIndicator()
                   : ElevatedButton(
                       onPressed: _submit,
-                      child: Text(_isLogin ? 'Sign In' : 'Sign Up'),
+                      child: Text(_formType == AuthFormType.login ? 'Sign In' : 'Sign Up'),
                     ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed: () => setState(() => _isLogin = !_isLogin),
-                child: Text(_isLogin
+                onPressed: () => setState(() {
+                  _formType = _formType == AuthFormType.login ? AuthFormType.signup : AuthFormType.login;
+                }),
+                child: Text(_formType == AuthFormType.login
                     ? 'Don\'t have an account? Sign Up'
                     : 'Already have an account? Sign In'),
               ),

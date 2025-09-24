@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
-import 'package:events_app_trueattempt/common_widgets/session_card.dart';
+import 'package:events_app_trueattempt/common_widgets/session_list_tile.dart'; // Renamed SessionCard
 
 // AgendaScreen displays the list of sessions for the active event.
 class AgendaScreen extends ConsumerWidget {
@@ -11,11 +11,11 @@ class AgendaScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the stream of sessions from Firestore
-    final sessionsStream = ref.watch(sessionsStreamProvider);
+    final sessionsAsyncValue = ref.watch(sessionsStreamProvider);
 
-    return sessionsStream.when(
-      data: (snapshot) {
-        if (snapshot.docs.isEmpty) {
+    return sessionsAsyncValue.when(
+      data: (sessions) {
+        if (sessions.isEmpty) {
           return Center(
             child: Text(
               'No sessions scheduled yet.',
@@ -25,10 +25,10 @@ class AgendaScreen extends ConsumerWidget {
         }
         return ListView.builder(
           padding: const EdgeInsets.all(12.0), // Padding around the list
-          itemCount: snapshot.docs.length,
+          itemCount: sessions.length,
           itemBuilder: (context, index) {
-            final sessionDoc = snapshot.docs[index];
-            return SessionCard(sessionDoc: sessionDoc); // Use the reusable SessionCard
+            final session = sessions[index];
+            return SessionListTile(session: session); // Use the renamed widget
           },
         );
       },

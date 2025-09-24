@@ -8,10 +8,10 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Event App',
-      theme: AppTheme.lightTheme,
+      title: 'NAMA Foundation Event App',
+      theme: AppTheme.lightTheme, // Default to light theme reflecting company brand
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system,
+      themeMode: ThemeMode.system, // Respect system theme preference
       debugShowCheckedModeBanner: false,
       home: const AuthGate(),
     );
