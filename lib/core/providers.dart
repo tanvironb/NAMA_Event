@@ -92,3 +92,4 @@ final sessionSpeakersFutureProvider =
   final repo = ref.watch(userProfileRepositoryProvider);
   return await repo.getUsersByIds(speakerIds);
 });
+

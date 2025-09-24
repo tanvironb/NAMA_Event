@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/features/home/home_screen.dart';
-import 'package:events_app_trueattempt/features/auth/login_screen.dart';
+import 'package:events_app_trueattempt/features/home/screen/home_screen.dart';
+import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 
 // AuthGate handles the initial routing based on user's authentication state.

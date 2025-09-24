@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:events_app_trueattempt/features/agenda/agenda_screen.dart';
-import 'package:events_app_trueattempt/features/explore/explore_screen.dart';
-import 'package:events_app_trueattempt/features/profile/profile_screen.dart';
+import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
+import 'package:events_app_trueattempt/features/explore/screen/explore_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/profile_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart'; // For app name/logo

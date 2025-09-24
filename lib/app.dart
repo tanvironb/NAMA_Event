@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'features/auth/auth_gate.dart';
+import 'features/auth/screen/auth_gate.dart';
 import 'config/app_themes.dart';
 
 class MyApp extends StatelessWidget {

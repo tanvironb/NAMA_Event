@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:events_app_trueattempt/features/agenda/session_detail_screen.dart';
+import 'package:events_app_trueattempt/features/agenda/screen/session_detail_screen.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 
 // SessionListTile is a reusable widget to display a summary of a session in lists.

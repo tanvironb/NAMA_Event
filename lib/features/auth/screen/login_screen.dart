@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/features/auth/auth_view_model.dart';
+import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart'; // For logo path
 
@@ -70,7 +70,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               // Company Logo (Placeholder for image asset)
               Center(
                 child: Image.asset(
-                  AppConstants.logoPath, // Your logo asset path
+                  AppConstants.logoEmblemPath, // logo asset path
                   height: 100,
                   // width: 100,
                   errorBuilder: (context, error, stackTrace) => Text(

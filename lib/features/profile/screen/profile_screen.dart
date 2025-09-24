@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
-import 'package:events_app_trueattempt/features/auth/auth_view_model.dart'; // To sign out
+import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart'; // To sign out
 
 // ProfileScreen displays the current user's profile information and actions.
 class ProfileScreen extends ConsumerWidget {
