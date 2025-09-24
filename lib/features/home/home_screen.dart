@@ -33,7 +33,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(eventAsync.asData?.value.data()?['name'] ?? 'Event'),
+        title: Text((eventAsync.asData?.value.data() as Map<String, dynamic>?)?['name'] ?? 'Event'),
         elevation: 0,
       ),
       body: IndexedStack(
