@@ -9,8 +9,11 @@ import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/speaker_carousel.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/partner_carousel.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/quick_action_grid.dart';
+import 'package:events_app_trueattempt/features/home/screen/widgets/live_stream_card.dart';
+import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live_player.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart'; // Ensure this path is correct
+import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -25,7 +28,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   static const List<Widget> _widgetOptions = <Widget>[
     _HomeDashboardScreen(), // Our new dynamic home dashboard
     AgendaScreen(),
+    DirectoriesHubScreen(), // NEW: Networking tab
     ExploreScreen(),
+    ProfileScreen(),
     ProfileScreen(),
   ];
 
@@ -141,9 +146,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _widgetOptions,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _selectedIndex,
+            children: _widgetOptions,
+          ),
+          // YouTube Live Player positioned at the bottom
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: const YoutubeLivePlayer(),
+          ),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
@@ -157,6 +173,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             icon: Icon(Icons.calendar_month_outlined),
             activeIcon: Icon(Icons.calendar_month),
             label: 'Agenda',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people_outline),
+            activeIcon: Icon(Icons.people),
+            label: 'Networking',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.explore_outlined),
@@ -249,6 +270,10 @@ class _HomeDashboardScreen extends ConsumerWidget {
               error: (err, stack) => Text('Failed to load event data.', style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
           ),
+          
+          // Live Stream Card - Shows only when there's an active live session
+          const LiveStreamCard(),
+          
           const SizedBox(height: 24),
 
           // Featured Speakers Carousel (Phase 2)

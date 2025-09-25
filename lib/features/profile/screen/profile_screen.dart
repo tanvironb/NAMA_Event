@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart'; // To sign out
+import 'package:events_app_trueattempt/features/agenda/screen/my_bookmarks_screen.dart'; // New screen
 
 // ProfileScreen displays the current user's profile information and actions.
 class ProfileScreen extends ConsumerWidget {
@@ -74,6 +74,18 @@ class ProfileScreen extends ConsumerWidget {
             Card(
               child: Column(
                 children: [
+                  // My Bookmarks Button
+                  ListTile(
+                    leading: Icon(Icons.bookmarks_outlined, color: Theme.of(context).colorScheme.primary),
+                    title: Text('My Bookmarks', style: Theme.of(context).textTheme.titleMedium),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () {
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (context) => const MyBookmarksScreen(),
+                      ));
+                    },
+                  ),
+                  const Divider(height: 0),
                   ListTile(
                     leading: Icon(Icons.edit_outlined, color: Theme.of(context).colorScheme.primary),
                     title: Text('Edit Profile', style: Theme.of(context).textTheme.titleMedium),

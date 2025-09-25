@@ -9,7 +9,7 @@ import 'package:events_app_trueattempt/core/models/sponsor_model.dart';
 import 'package:events_app_trueattempt/features/profile/data/profile_repository.dart';
 import 'package:events_app_trueattempt/features/explore/data/explore_repository.dart';
 import 'package:events_app_trueattempt/features/agenda/data/agenda_repository.dart';
-import 'package:events_app_trueattempt/features/auth/data/auth_repository.dart';
+import 'package:events_app_trueattempt/features/directories/data/directory_repository.dart';
 
 // --- Firebase Core Providers ---
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -93,3 +93,52 @@ final sessionSpeakersFutureProvider =
   return await repo.getUsersByIds(speakerIds);
 });
 
+final directoryRepositoryProvider = Provider((ref) => DirectoryRepository(ref.watch(firestoreServiceProvider)));
+
+final attendeesFutureProvider = FutureProvider.autoDispose<List<AppUser>>((ref) {
+  return ref.watch(directoryRepositoryProvider).getAttendees();
+});
+
+final speakersFutureProvider = FutureProvider.autoDispose<List<AppUser>>((ref) {
+  return ref.watch(directoryRepositoryProvider).getSpeakers();
+});
+
+// Provides the currently active live session (session happening right now)
+final activeLiveSessionProvider = StreamProvider.autoDispose<Session?>((ref) {
+  final eventAsync = ref.watch(activeEventFutureProvider);
+  final repo = ref.watch(agendaRepositoryProvider);
+  
+  return eventAsync.when(
+    data: (event) {
+      return repo.getSessionsStream(event.id).map((sessions) {
+        final now = DateTime.now();
+        
+        // Find sessions that are currently active (started but not ended) and have a live stream URL
+        final activeLiveSessions = sessions.where((session) {
+          final isCurrentlyActive = now.isAfter(session.startTime) && now.isBefore(session.endTime);
+          final hasLiveStream = session.liveStreamUrl.isNotEmpty;
+          return isCurrentlyActive && hasLiveStream;
+        }).toList();
+        
+        // If no active live sessions, return null
+        if (activeLiveSessions.isEmpty) return null;
+        
+        // If multiple active live sessions, select the highest priority one
+        // Priority scale: 1-5 where 5 is most urgent (keynotes, main events)
+        // Sort by priority (descending) then by start time (most recent first) as tiebreaker
+        activeLiveSessions.sort((a, b) {
+          // First compare by priority (higher priority first)
+          final priorityComparison = b.priority.compareTo(a.priority);
+          if (priorityComparison != 0) return priorityComparison;
+          
+          // If same priority, prefer the session that started more recently
+          return b.startTime.compareTo(a.startTime);
+        });
+        
+        return activeLiveSessions.first;
+      });
+    },
+    loading: () => Stream.value(null),
+    error: (err, stack) => Stream.value(null),
+  );
+});

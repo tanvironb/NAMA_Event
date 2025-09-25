@@ -10,6 +10,13 @@ class Session {
   final String location;
   final List<String> speakerIds;
   final String liveStreamUrl;
+  /// Priority rating for live stream sessions (1-5 scale)
+  /// 1 = Low priority (optional breakout sessions)
+  /// 2 = Below normal (specialized workshops)
+  /// 3 = Normal priority (regular talks)
+  /// 4 = High priority (featured speakers, important announcements)
+  /// 5 = Maximum priority (keynotes, urgent updates, main event streams)
+  final int priority;
 
   Session({
     required this.id,
@@ -21,6 +28,7 @@ class Session {
     required this.location,
     required this.speakerIds,
     this.liveStreamUrl = '',
+    this.priority = 3, // Default to normal priority
   });
 
   factory Session.fromFirestore(DocumentSnapshot doc) {
@@ -38,6 +46,7 @@ class Session {
       location: data['location'] as String? ?? 'Unknown Room',
       speakerIds: List<String>.from(data['speakerIds'] as List? ?? []),
       liveStreamUrl: data['liveStreamUrl'] as String? ?? '',
+      priority: data['priority'] as int? ?? 3, // Default to normal priority if not specified
     );
   }
 }

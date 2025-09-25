@@ -36,6 +36,13 @@ class FirestoreService {
   }
 
 
+  //Fetches users based on their role.
+  Future<List<DocumentSnapshot>> getUsersByRole(String role) async {
+    final snapshot = await _db.collection('users').where('role', isEqualTo: role).get();
+    return snapshot.docs;
+  }
+
+  
   // --- Event-related operations ---
   Future<DocumentSnapshot> getActiveEventDocument() async {
     final snapshot =
