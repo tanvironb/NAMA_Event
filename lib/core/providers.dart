@@ -13,6 +13,8 @@ import 'package:events_app_trueattempt/features/directories/data/directory_repos
 import 'package:events_app_trueattempt/features/chat/data/chat_repository.dart';
 import 'package:events_app_trueattempt/core/models/message_model.dart';
 import 'package:events_app_trueattempt/features/qrcode_checkin/data/checkin_repository.dart';
+import 'package:events_app_trueattempt/features/notifications/data/notification_repository.dart';
+import 'package:events_app_trueattempt/core/models/notification_model.dart';
 
 // --- Firebase Core Providers ---
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -155,3 +157,13 @@ final sessionChatStreamProvider = StreamProvider.autoDispose.family<List<Message
 
 // --- NEW: Check-in Provider ---
 final checkinRepositoryProvider = Provider((ref) => CheckinRepository(ref.watch(firestoreServiceProvider)));
+
+final notificationRepositoryProvider = Provider((ref) => NotificationRepository(ref.watch(firestoreServiceProvider)));
+
+final notificationsStreamProvider = StreamProvider.autoDispose<List<AppNotification>>((ref) {
+  final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
+  if (userId != null) {
+    return ref.watch(notificationRepositoryProvider).getNotificationsStream(userId);
+  }
+  return Stream.value([]);
+});

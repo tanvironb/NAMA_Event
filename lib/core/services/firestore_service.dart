@@ -78,6 +78,19 @@ class FirestoreService {
     }
     return snapshot.docs.first;
   }
+  
+  Stream<QuerySnapshot> getNotificationsCollectionStream(String userId) {
+    return _db
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .orderBy('timestamp', descending: true)
+        .snapshots();
+  }
+
+  Future<void> updateNotificationDocument(String userId, String notificationId, Map<String, dynamic> data) async {
+    await _db.collection('users').doc(userId).collection('notifications').doc(notificationId).update(data);
+  }
 
   // --- Session-related operations ---
   Stream<QuerySnapshot> getSessionsCollectionStream(String eventId) {

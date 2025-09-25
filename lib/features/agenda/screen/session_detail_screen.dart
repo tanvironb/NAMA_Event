@@ -42,9 +42,15 @@ class SessionDetailScreen extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              session.title,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            Hero(
+              tag: 'session_title_${session.id}', // Same unique tag
+              child: Material(
+                type: MaterialType.transparency,
+                child: Text(
+                  session.title,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             _InfoTile(icon: Icons.schedule_outlined, text: '${timeFormat.format(session.startTime)} - ${timeFormat.format(session.endTime)}'),
@@ -61,10 +67,15 @@ class SessionDetailScreen extends ConsumerWidget {
                 return Align(
                   alignment: Alignment.centerRight,
                   child: IconButton(
-                    icon: Icon(
-                      isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                      color: isBookmarked ? AppColors.goldenYellow : Theme.of(context).colorScheme.secondary,
-                      size: 32,
+                    icon: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 300),
+                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                      child: Icon(
+                        isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                        key: ValueKey<bool>(isBookmarked), // Key to trigger animation
+                        color: isBookmarked ? AppColors.goldenYellow : Theme.of(context).colorScheme.secondary,
+                        size: 32,
+                      ),
                     ),
                     onPressed: () async {
                       final repo = ref.read(userProfileRepositoryProvider);

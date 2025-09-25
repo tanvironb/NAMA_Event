@@ -4,6 +4,8 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart'; // To sign out
 import 'package:events_app_trueattempt/features/agenda/screen/my_bookmarks_screen.dart'; // New screen
+import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
+import 'package:events_app_trueattempt/features/qrcode_checkin/screen/qr_generator_screen.dart';
 
 // ProfileScreen displays the current user's profile information and actions.
 class ProfileScreen extends ConsumerWidget {
@@ -91,10 +93,9 @@ class ProfileScreen extends ConsumerWidget {
                     title: Text('Edit Profile', style: Theme.of(context).textTheme.titleMedium),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Edit Profile coming in Phase 2!')),
-                      );
-                      // TODO: Navigate to Edit Profile screen in Phase 2
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (context) => EditProfileScreen(user: appUser),
+                      ));
                     },
                   ),
                   const Divider(height: 0),
@@ -112,6 +113,35 @@ class ProfileScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            
+            // Speaker Tools Section
+            if (appUser.role == 'speaker')
+              Padding(
+                padding: const EdgeInsets.only(top: 20.0),
+                child: Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Text('Speaker Tools', style: Theme.of(context).textTheme.titleLarge),
+                      ),
+                      const Divider(height: 0),
+                      ListTile(
+                        leading: Icon(Icons.qr_code_2, color: Theme.of(context).colorScheme.primary),
+                        title: Text('Generate Session QR', style: Theme.of(context).textTheme.titleMedium),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () {
+                          Navigator.of(context).push(MaterialPageRoute(
+                            builder: (context) => const QRGeneratorScreen(),
+                          ));
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            
             const SizedBox(height: 20),
             Card(
               child: ListTile(

@@ -15,6 +15,7 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart'; // Ensure this path is correct
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/core/services/notification_services.dart';
+import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -95,10 +96,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Notifications are coming in Phase 2!')),
-              );
-              // TODO: Navigate to Notifications screen in Phase 2/3
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => const NotificationsScreen(),
+              ));
             },
           ),
         ],
