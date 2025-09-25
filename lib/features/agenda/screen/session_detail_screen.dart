@@ -6,6 +6,8 @@ import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
+import 'package:events_app_trueattempt/features/agenda/screen/widgets/session_youtube_player.dart';
 
 // SessionDetailScreen displays the detailed information for a selected session.
 class SessionDetailScreen extends ConsumerWidget {
@@ -123,6 +125,10 @@ class SessionDetailScreen extends ConsumerWidget {
             ),
             // (Phase 2)
             const SizedBox(height: 24),
+            
+            // YouTube Player - Shows during session time with auto-play
+            SessionYoutubePlayer(session: session),
+            
             if (session.liveStreamUrl.isNotEmpty) // Only show if URL exists
               ElevatedButton.icon(
                 onPressed: () async {
@@ -144,13 +150,12 @@ class SessionDetailScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            // Placeholder for Session Chat (Phase 2)
+            // Session Chat Button - Navigate to Session Chat Screen
             OutlinedButton.icon(
               onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Session Chat coming in Phase 2!')),
-                );
-                // TODO: Navigate to Session Chat in Phase 2
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => SessionChatScreen(session: session),
+                ));
               },
               icon: const Icon(Icons.chat_outlined, color: AppColors.navyBlue),
               label: Text('Open Session Chat', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.navyBlue)),

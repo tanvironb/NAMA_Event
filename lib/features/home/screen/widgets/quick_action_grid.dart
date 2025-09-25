@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart'; // Example navigation
-import 'package:events_app_trueattempt/features/explore/screen/explore_screen.dart'; // Example navigation
+import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
+import 'package:events_app_trueattempt/features/explore/screen/explore_screen.dart';
+import 'package:events_app_trueattempt/features/qrcode_checkin/screen/qr_scanner_screen.dart';
+import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/profile_screen.dart';
 
 class QuickActionGrid extends StatelessWidget {
   const QuickActionGrid({super.key});
@@ -25,10 +28,9 @@ class QuickActionGrid extends StatelessWidget {
         'label': 'My Bookmarks',
         'color': AppColors.goldenYellow,
         'onTap': () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Bookmarks are coming in Phase 2!')),
-          );
-          // TODO: Navigate to My Bookmarks (Phase 2)
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (context) => const ProfileScreen(),
+          ));
         },
       },
       {
@@ -36,10 +38,9 @@ class QuickActionGrid extends StatelessWidget {
         'label': 'Check-in',
         'color': AppColors.navyBlue,
         'onTap': () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('QR Check-in is coming in Phase 2!')),
-          );
-          // TODO: Navigate to QR Scanner (Phase 2)
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (context) => const QRScannerScreen(),
+          ));
         },
       },
       {
@@ -47,10 +48,9 @@ class QuickActionGrid extends StatelessWidget {
         'label': 'Networking',
         'color': AppColors.goldenYellow,
         'onTap': () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Networking features are coming in Phase 2!')),
-          );
-          // TODO: Navigate to Networking Hub (Phase 2)
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (context) => const DirectoriesHubScreen(),
+          ));
         },
       },
       {
@@ -58,10 +58,16 @@ class QuickActionGrid extends StatelessWidget {
         'label': 'Livestream',
         'color': AppColors.navyBlue,
         'onTap': () {
+          // Navigate to agenda to see live sessions, as livestream appears automatically on dashboard
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (context) => const AgendaScreen(),
+          ));
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Live Stream is coming in Phase 2!')),
+            const SnackBar(
+              content: Text('Check the agenda for live sessions! Live videos appear automatically on the dashboard.'),
+              duration: Duration(seconds: 3),
+            ),
           );
-          // TODO: Navigate to Livestream (Phase 2)
         },
       },
       {

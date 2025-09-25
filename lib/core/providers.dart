@@ -10,6 +10,9 @@ import 'package:events_app_trueattempt/features/profile/data/profile_repository.
 import 'package:events_app_trueattempt/features/explore/data/explore_repository.dart';
 import 'package:events_app_trueattempt/features/agenda/data/agenda_repository.dart';
 import 'package:events_app_trueattempt/features/directories/data/directory_repository.dart';
+import 'package:events_app_trueattempt/features/chat/data/chat_repository.dart';
+import 'package:events_app_trueattempt/core/models/message_model.dart';
+import 'package:events_app_trueattempt/features/qrcode_checkin/data/checkin_repository.dart';
 
 // --- Firebase Core Providers ---
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -142,3 +145,13 @@ final activeLiveSessionProvider = StreamProvider.autoDispose<Session?>((ref) {
     error: (err, stack) => Stream.value(null),
   );
 });
+
+// --- NEW: Chat Providers ---
+final chatRepositoryProvider = Provider((ref) => ChatRepository(ref.watch(firestoreServiceProvider)));
+
+final sessionChatStreamProvider = StreamProvider.autoDispose.family<List<Message>, String>((ref, sessionId) {
+  return ref.watch(chatRepositoryProvider).getSessionMessagesStream(sessionId);
+});
+
+// --- NEW: Check-in Provider ---
+final checkinRepositoryProvider = Provider((ref) => CheckinRepository(ref.watch(firestoreServiceProvider)));

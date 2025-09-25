@@ -16,6 +16,20 @@ class FirestoreService {
     return _db.collection('users').doc(uid).snapshots();
   }
 
+ Stream<QuerySnapshot> getChatCollectionStream(String sessionId) {
+    return _db
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('chat')
+        .orderBy('timestamp', descending: true) // Newest messages first
+        .snapshots();
+  }
+
+  Future<void> addChatMessage(String sessionId, Map<String, dynamic> messageData) async {
+    await _db.collection('sessions').doc(sessionId).collection('chat').add(messageData);
+  }
+
+
   Future<void> createUserDocument({
     required String uid,
     required Map<String, dynamic> userData,
@@ -42,7 +56,19 @@ class FirestoreService {
     return snapshot.docs;
   }
 
-  
+    Future<void> createCheckinDocument({
+    required String sessionId,
+    required String userId,
+    required Map<String, dynamic> checkinData,
+  }) async {
+    await _db
+        .collection('sessions')
+        .doc(sessionId)
+        .collection('checkins')
+        .doc(userId)
+        .set(checkinData);
+  }
+
   // --- Event-related operations ---
   Future<DocumentSnapshot> getActiveEventDocument() async {
     final snapshot =
@@ -70,3 +96,5 @@ class FirestoreService {
         .snapshots();
   }
 }
+
+

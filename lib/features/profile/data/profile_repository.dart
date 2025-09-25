@@ -49,4 +49,9 @@ class UserProfileRepository {
     };
     await _firestoreService.updateUserDocument(uid, updateData);
   }
+
+  // Updates user profile with the provided data
+  Future<void> updateUserProfile(String uid, Map<String, dynamic> updateData) async {
+    await _firestoreService.updateUserDocument(uid, updateData);
+  }
 }

@@ -14,7 +14,7 @@ import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart'; // Ensure this path is correct
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
-
+import 'package:events_app_trueattempt/core/services/notification_services.dart';
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -33,6 +33,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ProfileScreen(),
     ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifications();
+  }
+
+  Future<void> _initializeNotifications() async {
+    // Wait for the widget to be built before accessing providers
+    await Future.delayed(Duration.zero);
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    final userRepo = ref.read(userProfileRepositoryProvider);
+    if (user != null) {
+      final notificationService = NotificationService(userRepo, user.uid);
+      await notificationService.initialize();
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() {

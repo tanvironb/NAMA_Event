@@ -81,13 +81,12 @@ service cloud.firestore {
 
 
 
-### Proposed V3
+### Proposed V4
 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if a user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -114,8 +113,6 @@ service cloud.firestore {
     // --- USER PROFILE RULES ---
     match /users/{userId} {
       allow read: if isAuthenticated();
-      // Allow user to create, and update/delete their OWN profile.
-      // We allow updating `bookmarkedSessions` and `fcmToken`.
       allow create, update, delete: if request.auth.uid == userId;
     }
 
