@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:card_swiper/card_swiper.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 
@@ -23,8 +24,7 @@ class PartnerCarousel extends ConsumerWidget {
               ),
             );
           }
-          return PageView.builder(
-            controller: PageController(viewportFraction: 0.5), // Show part of next card
+          return Swiper(
             itemCount: sponsors.length,
             itemBuilder: (context, index) {
               final sponsor = sponsors[index];
@@ -44,6 +44,11 @@ class PartnerCarousel extends ConsumerWidget {
                 ),
               );
             },
+            pagination: sponsors.length > 3 ? const SwiperPagination() : null,
+            autoplay: sponsors.length > 1,
+            autoplayDelay: 3000,
+            viewportFraction: 0.5,
+            scale: 0.95,
           );
         },
         loading: () => const LoadingIndicator(),

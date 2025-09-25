@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:card_swiper/card_swiper.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 
@@ -24,8 +25,7 @@ class SpeakerCarousel extends ConsumerWidget {
               ),
             );
           }
-          return PageView.builder(
-            controller: PageController(viewportFraction: 0.7), // Show part of next card
+          return Swiper(
             itemCount: speakers.length,
             itemBuilder: (context, index) {
               final speaker = speakers[index];
@@ -62,6 +62,12 @@ class SpeakerCarousel extends ConsumerWidget {
                 ),
               );
             },
+            pagination: speakers.length > 1 ? const SwiperPagination() : null,
+            control: speakers.length > 1 ? const SwiperControl() : null,
+            autoplay: speakers.length > 1,
+            autoplayDelay: 4000,
+            viewportFraction: 0.7,
+            scale: 0.9,
           );
         },
         loading: () => const LoadingIndicator(),

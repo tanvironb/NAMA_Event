@@ -18,7 +18,7 @@ void main() async {
   // Seeding configuration
   // Set this to true if you want to seed data on app startup
   // WARNING: Only set to true on first run or when you need to populate test data
-  const bool shouldSeedData = true; // Change to true to seed data
+  const bool shouldSeedData = false; // Change to true to seed data
 
   // Seed data if enabled (you can ignore the "dead code" warning - it's intentional for safety)
   // ignore: dead_code
