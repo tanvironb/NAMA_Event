@@ -20,6 +20,8 @@ class SessionDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Get the remote config service
+    final remoteConfig = ref.watch(remoteConfigServiceProvider);
     final timeFormat = DateFormat('h:mm a');
     final speakersFuture = ref.watch(sessionSpeakersFutureProvider(session.speakerIds)); // Fetch speaker details
     final userProfileAsync = ref.watch(userAppProfileStreamProvider); // Watch user profile
@@ -161,21 +163,22 @@ class SessionDetailScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 16),
-            // Session Chat Button - Navigate to Session Chat Screen
-            OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => SessionChatScreen(session: session),
-                ));
-              },
-              icon: const Icon(Icons.chat_outlined, color: AppColors.navyBlue),
-              label: Text('Open Session Chat', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.navyBlue)),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.navyBlue),
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            // Conditionally show Session Chat Button - Navigate to Session Chat Screen
+            if (remoteConfig.isChatEnabled)
+              OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (context) => SessionChatScreen(session: session),
+                  ));
+                },
+                icon: const Icon(Icons.chat_outlined, color: AppColors.navyBlue),
+                label: Text('Open Session Chat', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.navyBlue)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.navyBlue),
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
-            ),
           ],
         ),
       ),

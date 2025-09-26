@@ -15,39 +15,57 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
 
   // Handles user sign-in.
   Future<void> signIn(String email, String password) async {
+    if (!mounted) return;
+    
     state = const AsyncValue.loading();
     try {
       await _authRepository.signInWithEmailAndPassword(email, password);
-      state = const AsyncValue.data(null);
+      if (mounted) {
+        state = const AsyncValue.data(null);
+      }
     } on FirebaseAuthException catch (e, stack) {
-      state = AsyncValue.error(e.message ?? 'Authentication failed.', stack);
+      if (mounted) {
+        state = AsyncValue.error(e.message ?? 'Authentication failed.', stack);
+      }
     }
   }
 
   // Handles user sign-up.
   Future<void> signUp(String email, String password) async {
+    if (!mounted) return;
+    
     state = const AsyncValue.loading();
     try {
       await _authRepository.createUserWithEmailAndPassword(email, password);
-      state = const AsyncValue.data(null);
+      if (mounted) {
+        state = const AsyncValue.data(null);
+      }
     } on FirebaseAuthException catch (e, stack) {
-      state = AsyncValue.error(e.message ?? 'Registration failed.', stack);
+      if (mounted) {
+        state = AsyncValue.error(e.message ?? 'Registration failed.', stack);
+      }
     }
   }
 
   // Handles user sign-out.
   Future<void> signOut() async {
+    if (!mounted) return; // Check if still mounted before proceeding
+    
     state = const AsyncValue.loading();
     try {
       await _authRepository.signOut();
-      state = const AsyncValue.data(null);
+      if (mounted) {
+        state = const AsyncValue.data(null);
+      }
     } on Exception catch (e, stack) {
-      state = AsyncValue.error(e.toString(), stack);
+      if (mounted) {
+        state = AsyncValue.error(e.toString(), stack);
+      }
     }
   }
 }
 
 // Riverpod provider for AuthViewModel
-final authViewModelProvider = StateNotifierProvider.autoDispose<AuthViewModel, AsyncValue<void>>((ref) {
+final authViewModelProvider = StateNotifierProvider<AuthViewModel, AsyncValue<void>>((ref) {
   return AuthViewModel(ref.watch(authRepositoryProvider));
 });

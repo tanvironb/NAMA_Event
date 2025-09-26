@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/features/home/screen/home_screen.dart';
 import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/features/main_hub/screen/main_hub_screen.dart'; // New import
 
 // AuthGate handles the initial routing based on user's authentication state.
 class AuthGate extends ConsumerWidget {
@@ -15,7 +15,7 @@ class AuthGate extends ConsumerWidget {
 
     return authState.when(
       data: (user) => user != null // If a user is logged in
-          ? const HomeScreen() // Show the main app content
+          ? const MainHubScreen() // Show the main app content
           : const LoginScreen(), // Otherwise, show the login screen
       loading: () => const Scaffold(
         body: LoadingIndicator(), // Show a loading spinner while checking auth state

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/common_widgets/session_list_tile.dart'; // Renamed SessionCard
@@ -23,13 +24,24 @@ class AgendaScreen extends ConsumerWidget {
             ),
           );
         }
-        return ListView.builder(
-          padding: const EdgeInsets.all(12.0), // Padding around the list
-          itemCount: sessions.length,
-          itemBuilder: (context, index) {
-            final session = sessions[index];
-            return SessionListTile(session: session); // Use the renamed widget
-          },
+        return AnimationLimiter(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(12.0), // Padding around the list
+            itemCount: sessions.length,
+            itemBuilder: (context, index) {
+              final session = sessions[index];
+              return AnimationConfiguration.staggeredList(
+                position: index,
+                duration: const Duration(milliseconds: 375),
+                child: SlideAnimation(
+                  verticalOffset: 50.0,
+                  child: FadeInAnimation(
+                    child: SessionListTile(session: session), // Use the renamed widget
+                  ),
+                ),
+              );
+            },
+          ),
         );
       },
       loading: () => const LoadingIndicator(), // Show loading spinner

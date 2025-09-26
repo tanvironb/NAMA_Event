@@ -15,6 +15,9 @@ import 'package:events_app_trueattempt/core/models/message_model.dart';
 import 'package:events_app_trueattempt/features/qrcode_checkin/data/checkin_repository.dart';
 import 'package:events_app_trueattempt/features/notifications/data/notification_repository.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:events_app_trueattempt/core/services/remote_config_service.dart';
+
 
 // --- Firebase Core Providers ---
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -166,4 +169,11 @@ final notificationsStreamProvider = StreamProvider.autoDispose<List<AppNotificat
     return ref.watch(notificationRepositoryProvider).getNotificationsStream(userId);
   }
   return Stream.value([]);
+});
+
+// --- NEW: Remote Config Providers ---
+final firebaseRemoteConfigProvider = Provider<FirebaseRemoteConfig>((ref) => FirebaseRemoteConfig.instance);
+
+final remoteConfigServiceProvider = Provider<RemoteConfigService>((ref) {
+  return RemoteConfigService(ref.watch(firebaseRemoteConfigProvider));
 });

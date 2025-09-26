@@ -6,6 +6,7 @@ import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart
 import 'package:events_app_trueattempt/features/agenda/screen/my_bookmarks_screen.dart'; // New screen
 import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
 import 'package:events_app_trueattempt/features/qrcode_checkin/screen/qr_generator_screen.dart';
+import 'package:events_app_trueattempt/debug/auth_debug_screen.dart'; // Debug screen
 
 // ProfileScreen displays the current user's profile information and actions.
 class ProfileScreen extends ConsumerWidget {
@@ -28,7 +29,17 @@ class ProfileScreen extends ConsumerWidget {
                 const Text('Could not load profile data.'),
                 const SizedBox(height: 20),
                 ElevatedButton(
-                  onPressed: () => authViewModel.signOut(),
+                  onPressed: () async {
+                    try {
+                      await authViewModel.signOut();
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Logout failed: $e')),
+                        );
+                      }
+                    }
+                  },
                   child: const Text('Logout'),
                 ),
               ],
@@ -147,7 +158,17 @@ class ProfileScreen extends ConsumerWidget {
               child: ListTile(
                 leading: Icon(Icons.logout, color: Theme.of(context).colorScheme.error),
                 title: Text('Logout', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.error)),
-                onTap: () => authViewModel.signOut(),
+                onTap: () async {
+                  try {
+                    await authViewModel.signOut();
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Logout failed: $e')),
+                      );
+                    }
+                  }
+                },
               ),
             ),
             const SizedBox(height: 40),
