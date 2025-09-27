@@ -1,11 +1,14 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/features/profile/data/profile_repository.dart';
+import 'package:events_app_trueattempt/features/notifications/services/notification_handler.dart';
 
 class NotificationService {
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
   final UserProfileRepository _userProfileRepository;
   final String _userId;
+  static GlobalKey<NavigatorState>? navigatorKey;
 
   NotificationService(this._userProfileRepository, this._userId);
 
@@ -46,8 +49,35 @@ class NotificationService {
       debugPrint('Message data: ${message.data}');
       if (message.notification != null) {
         debugPrint('Message also contained a notification: ${message.notification}');
-        // Here you could show an in-app notification banner
+        _showInAppNotification(message);
       }
     });
+
+    // Handle notification taps when app is in background/terminated
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('A new onMessageOpenedApp event was published!');
+      _handleNotificationTap(message);
+    });
+
+    // Check if app was opened from a notification
+    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+      if (message != null) {
+        debugPrint('App opened from notification!');
+        _handleNotificationTap(message);
+      }
+    });
+  }
+
+  void _showInAppNotification(RemoteMessage message) {
+    // Show a snackbar or banner for foreground notifications
+    if (navigatorKey?.currentContext != null) {
+      NotificationHandler.showInAppBanner(navigatorKey!.currentContext!, message);
+    }
+  }
+
+  void _handleNotificationTap(RemoteMessage message) {
+    if (navigatorKey?.currentContext != null) {
+      NotificationHandler.handleNotificationRoute(navigatorKey!.currentContext!, message);
+    }
   }
 }

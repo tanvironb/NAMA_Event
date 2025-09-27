@@ -14,14 +14,36 @@ class AuthGate extends ConsumerWidget {
     final authState = ref.watch(authStateChangesProvider);
 
     return authState.when(
-      data: (user) => user != null // If a user is logged in
-          ? const MainHubScreen() // Show the main app content
-          : const LoginScreen(), // Otherwise, show the login screen
+      data: (user) {
+        if (user != null && user.email != null) {
+          // User is authenticated - show main app
+          return const MainHubScreen();
+        } else {
+          // User is not authenticated - show login
+          return const LoginScreen();
+        }
+      },
       loading: () => const Scaffold(
         body: LoadingIndicator(), // Show a loading spinner while checking auth state
       ),
       error: (err, stack) => Scaffold(
-        body: Center(child: Text('Error: $err')), // Display any authentication errors
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: 16),
+              Text('Authentication Error', style: Theme.of(context).textTheme.headlineSmall),
+              const SizedBox(height: 8),
+              Text('$err', textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => ref.refresh(authStateChangesProvider),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

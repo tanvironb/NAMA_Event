@@ -6,7 +6,6 @@ import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart
 import 'package:events_app_trueattempt/features/agenda/screen/my_bookmarks_screen.dart'; // New screen
 import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
 import 'package:events_app_trueattempt/features/qrcode_checkin/screen/qr_generator_screen.dart';
-import 'package:events_app_trueattempt/debug/auth_debug_screen.dart'; // Debug screen
 
 // ProfileScreen displays the current user's profile information and actions.
 class ProfileScreen extends ConsumerWidget {

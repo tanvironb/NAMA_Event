@@ -14,7 +14,7 @@ class CheckinRepository {
       checkinData: checkinData,
     );
 
-    // TODO in Phase 3: Increment user points for leaderboard
-    // await _firestoreService.updateUserDocument(userId, {'points': FieldValue.increment(10)});
+    // Increment user points for check-in (10 points per check-in)
+    await _firestoreService.updateUserDocument(userId, {'points': FieldValue.increment(10)});
   }
 }

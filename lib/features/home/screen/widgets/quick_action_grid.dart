@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
 import 'package:events_app_trueattempt/features/explore/screen/explore_screen.dart';
 import 'package:events_app_trueattempt/features/qrcode_checkin/screen/qr_scanner_screen.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_screen.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
 
-class QuickActionGrid extends StatelessWidget {
+class QuickActionGrid extends ConsumerWidget {
   const QuickActionGrid({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Define your quick action buttons here.
     // Each button is a map containing its icon, label, and onTap action.
     final List<Map<String, dynamic>> quickActions = [
@@ -58,16 +61,7 @@ class QuickActionGrid extends StatelessWidget {
         'label': 'Livestream',
         'color': AppColors.navyBlue,
         'onTap': () {
-          // Navigate to agenda to see live sessions, as livestream appears automatically on dashboard
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (context) => const AgendaScreen(),
-          ));
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Check the agenda for live sessions! Live videos appear automatically on the dashboard.'),
-              duration: Duration(seconds: 3),
-            ),
-          );
+          _handleLivestreamTap(context, ref);
         },
       },
       {
@@ -158,5 +152,52 @@ class QuickActionGrid extends StatelessWidget {
         );
       },
     );
+  }
+
+  void _handleLivestreamTap(BuildContext context, WidgetRef ref) {
+    final activeLiveSessionAsync = ref.read(activeLiveSessionProvider);
+    
+    activeLiveSessionAsync.when(
+      data: (activeSession) {
+        if (activeSession != null) {
+          // There's an active live session, launch it directly
+          _launchLiveStream(context, activeSession.liveStreamUrl);
+        } else {
+          // No active session, navigate to agenda to see upcoming sessions
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (context) => const AgendaScreen(),
+          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No live session right now. Check the agenda for upcoming livestreams!'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      },
+      loading: () {
+        // Navigate to agenda while loading
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (context) => const AgendaScreen(),
+        ));
+      },
+      error: (err, stack) {
+        // On error, navigate to agenda
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (context) => const AgendaScreen(),
+        ));
+      },
+    );
+  }
+
+  Future<void> _launchLiveStream(BuildContext context, String liveStreamUrl) async {
+    final url = Uri.parse(liveStreamUrl);
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not open the live stream.')),
+      );
+    }
   }
 }

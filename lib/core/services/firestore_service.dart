@@ -78,7 +78,7 @@ class FirestoreService {
     }
     return snapshot.docs.first;
   }
-  
+
   Stream<QuerySnapshot> getNotificationsCollectionStream(String userId) {
     return _db
         .collection('users')
@@ -107,6 +107,10 @@ class FirestoreService {
         .collection('sponsors')
         .where('eventId', isEqualTo: eventId)
         .snapshots();
+  }
+
+  Stream<QuerySnapshot> getAllUsersStream() {
+    return _db.collection('users').snapshots();
   }
 }
 

@@ -17,6 +17,7 @@ import 'package:events_app_trueattempt/features/notifications/data/notification_
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:events_app_trueattempt/core/services/remote_config_service.dart';
+import 'package:events_app_trueattempt/features/admin/data/admin_repository.dart';
 
 
 // --- Firebase Core Providers ---
@@ -111,6 +112,47 @@ final speakersFutureProvider = FutureProvider.autoDispose<List<AppUser>>((ref) {
   return ref.watch(directoryRepositoryProvider).getSpeakers();
 });
 
+// Provider for featured speakers (speakers from current/upcoming sessions)
+final featuredSpeakersFutureProvider = FutureProvider.autoDispose<List<AppUser>>((ref) async {
+  final sessionsAsync = ref.watch(sessionsStreamProvider);
+  
+  return sessionsAsync.when(
+    data: (sessions) async {
+      if (sessions.isEmpty) return [];
+      
+      // Get unique speaker IDs from all sessions, prioritizing current/upcoming sessions
+      final now = DateTime.now();
+      final currentOrUpcomingSessions = sessions.where((session) => 
+        session.endTime.isAfter(now) // Session hasn't ended yet
+      ).toList();
+      
+      // Sort by priority and start time to get the most important speakers
+      currentOrUpcomingSessions.sort((a, b) {
+        // First by priority (higher first)
+        final priorityCompare = b.priority.compareTo(a.priority);
+        if (priorityCompare != 0) return priorityCompare;
+        
+        // Then by start time (sooner first for upcoming sessions)
+        return a.startTime.compareTo(b.startTime);
+      });
+      
+      // Get unique speaker IDs from top sessions (limit to avoid too many speakers)
+      final Set<String> speakerIds = {};
+      for (final session in currentOrUpcomingSessions.take(10)) {
+        speakerIds.addAll(session.speakerIds);
+      }
+      
+      if (speakerIds.isEmpty) return [];
+      
+      // Fetch speaker details
+      final repo = ref.watch(userProfileRepositoryProvider);
+      return await repo.getUsersByIds(speakerIds.toList());
+    },
+    loading: () => <AppUser>[],
+    error: (err, stack) => <AppUser>[],
+  );
+});
+
 // Provides the currently active live session (session happening right now)
 final activeLiveSessionProvider = StreamProvider.autoDispose<Session?>((ref) {
   final eventAsync = ref.watch(activeEventFutureProvider);
@@ -151,14 +193,14 @@ final activeLiveSessionProvider = StreamProvider.autoDispose<Session?>((ref) {
   );
 });
 
-// --- NEW: Chat Providers ---
+// --- Chat Providers ---
 final chatRepositoryProvider = Provider((ref) => ChatRepository(ref.watch(firestoreServiceProvider)));
 
 final sessionChatStreamProvider = StreamProvider.autoDispose.family<List<Message>, String>((ref, sessionId) {
   return ref.watch(chatRepositoryProvider).getSessionMessagesStream(sessionId);
 });
 
-// --- NEW: Check-in Provider ---
+// --- Check-in Provider ---
 final checkinRepositoryProvider = Provider((ref) => CheckinRepository(ref.watch(firestoreServiceProvider)));
 
 final notificationRepositoryProvider = Provider((ref) => NotificationRepository(ref.watch(firestoreServiceProvider)));
@@ -171,9 +213,15 @@ final notificationsStreamProvider = StreamProvider.autoDispose<List<AppNotificat
   return Stream.value([]);
 });
 
-// --- NEW: Remote Config Providers ---
+// --- Remote Config Providers ---
 final firebaseRemoteConfigProvider = Provider<FirebaseRemoteConfig>((ref) => FirebaseRemoteConfig.instance);
 
 final remoteConfigServiceProvider = Provider<RemoteConfigService>((ref) {
   return RemoteConfigService(ref.watch(firebaseRemoteConfigProvider));
+});
+
+final adminRepositoryProvider = Provider((ref) => AdminRepository(ref.watch(firestoreServiceProvider)));
+
+final allUsersStreamProvider = StreamProvider.autoDispose<List<AppUser>>((ref) {
+  return ref.watch(adminRepositoryProvider).getAllUsersStream();
 });

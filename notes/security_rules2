@@ -132,3 +132,74 @@ service cloud.firestore {
     }
   }
 }
+
+
+
+#v5.. please be good
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      // Check the user's role from their own profile document
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Read-Only for All Authenticated Users ---
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin(); // Admins can now edit events
+    }
+    match /sponsors/{sponsorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin(); // Admins can manage sponsors
+    }
+    match /announcements/{announcementId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin(); // Admins can create announcements
+    }
+
+    // --- SESSIONS ---
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated();
+      // Only admins can create, update, or delete sessions
+      allow create, update, delete: if isAdmin();
+    }
+
+    // --- USERS ---
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      // A user can create/update/delete their own profile
+      // An admin can update any user's profile (e.g., to change their role)
+      allow create, update, delete: if request.auth.uid == userId || isAdmin();
+    }
+    
+    // --- NOTIFICATIONS ---
+    match /users/{userId}/notifications/{notificationId} {
+      // Users can only access their own notifications
+      allow read, update, delete: if request.auth.uid == userId;
+      // Admins can create notifications for any user
+      allow create: if isAdmin();
+    }
+
+    // --- Chat & Check-ins (No change from before) ---
+    match /sessions/{sessionId}/chat/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+    }
+    match /sessions/{sessionId}/checkins/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && userId == request.auth.uid;
+    }
+  }
+}

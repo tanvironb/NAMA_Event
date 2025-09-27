@@ -14,30 +14,89 @@ class HomeDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final eventAsync = ref.watch(activeEventFutureProvider); // Assuming you want event details on dashboard
+    final eventAsync = ref.watch(activeEventFutureProvider);
+    final activeLiveSessionAsync = ref.watch(activeLiveSessionProvider);
     
-    // Placeholder for Announcement/Highlight Card (Phase 2)
-    final announcementCard = Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: Theme.of(context).colorScheme.primary.withOpacity(0.05), // Light background
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            Icon(Icons.campaign_outlined, color: Theme.of(context).colorScheme.secondary),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Session A starts in 10 minutes! Join now.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface,
-                  fontWeight: FontWeight.w500,
-                ),
-                overflow: TextOverflow.ellipsis,
+    // Smart announcement card that adapts based on current state
+    final announcementCard = activeLiveSessionAsync.when(
+      data: (liveSession) {
+        if (liveSession != null) {
+          // Show live session announcement
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: Colors.red.withOpacity(0.1),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Icon(Icons.live_tv, color: Colors.red),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '🔴 ${liveSession.title} is LIVE now!',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, size: 16, color: Colors.red.withOpacity(0.6)),
+                ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
-          ],
+          );
+        } else {
+          // Show default announcement
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Icon(Icons.campaign_outlined, color: Theme.of(context).colorScheme.secondary),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Welcome to the event! Check out the agenda for upcoming sessions.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+                ],
+              ),
+            ),
+          );
+        }
+      },
+      loading: () => const SizedBox.shrink(),
+      error: (err, stack) => Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Icon(Icons.campaign_outlined, color: Theme.of(context).colorScheme.secondary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Welcome to the event! Check out the agenda for upcoming sessions.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios, size: 16, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6)),
+            ],
+          ),
         ),
       ),
     );
@@ -82,7 +141,7 @@ class HomeDashboardScreen extends ConsumerWidget {
             ),
           ),
           
-          // Live Stream Card - Shows only when there's an active live session
+          // Live Stream Card - Auto-detects and shows active live sessions
           const LiveStreamCard(),
           
           const SizedBox(height: 24),

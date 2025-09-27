@@ -9,9 +9,8 @@ class SpeakerCarousel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // For Phase 1, this will display a loading indicator or placeholder.
-    // In Phase 2, this will fetch actual speaker data.
-    final speakersAsync = ref.watch(sessionSpeakersFutureProvider(['dummy_speaker_id'])); // Will need actual speaker IDs
+    // Get featured speakers from current/upcoming sessions
+    final speakersAsync = ref.watch(featuredSpeakersFutureProvider);
 
     return SizedBox(
       height: 160, // Fixed height for the carousel

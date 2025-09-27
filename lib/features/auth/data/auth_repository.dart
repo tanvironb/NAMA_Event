@@ -13,8 +13,32 @@ class AuthRepository {
 
   Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
 
+  /// SECURITY: Sign-in only works for users who already have authorized profiles
+  /// To add new users:
+  /// 1. Admin creates Firebase Auth account (via console or admin API)
+  /// 2. Admin creates corresponding Firestore user document with proper role
+  /// 3. User can then sign in successfully
+  /// This prevents unauthorized access to the application
+
   Future<UserCredential> signInWithEmailAndPassword(String email, String password) async {
-    return await _firebaseAuth.signInWithEmailAndPassword(email: email, password: password);
+    final userCredential = await _firebaseAuth.signInWithEmailAndPassword(email: email, password: password);
+    
+    // SECURITY: Only allow sign-in if user already has a valid profile
+    // This prevents unauthorized users from gaining access
+    final userId = userCredential.user!.uid;
+    final userDoc = await _firestoreService.getUserDocument(userId);
+    
+    if (!userDoc.exists) {
+      // User exists in Firebase Auth but NOT authorized for this app
+      // Sign them out immediately and throw error
+      await _firebaseAuth.signOut();
+      throw FirebaseAuthException(
+        code: 'user-not-authorized',
+        message: 'This account is not authorized to access this application. Please contact an administrator.',
+      );
+    }
+    
+    return userCredential;
   }
 
   Future<UserCredential> createUserWithEmailAndPassword(String email, String password) async {

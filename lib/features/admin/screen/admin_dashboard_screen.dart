@@ -1,7 +1,7 @@
 // lib/features/admin/screen/admin_dashboard_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/admin/screen/user_management_screen.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -32,7 +32,9 @@ class AdminDashboardScreen extends ConsumerWidget {
             title: 'Manage Users',
             subtitle: 'View all registered users and their roles.',
             onTap: () {
-              // TODO: Navigate to a user management screen
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => const UserManagementScreen(),
+              ));
             },
           ),
           // Example Admin Action: View Event Stats
