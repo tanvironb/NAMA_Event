@@ -1,6 +1,7 @@
 // lib/features/directories/presentation/widgets/user_list_tile.dart
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_profile_screen.dart';
 
 class UserListTile extends StatelessWidget {
   final AppUser user;
@@ -19,10 +20,9 @@ class UserListTile extends StatelessWidget {
         subtitle: Text(user.title),
         trailing: const Icon(Icons.chevron_right),
         onTap: () {
-          // TODO: Navigate to a detailed user profile screen in Phase 3
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Viewing ${user.name}\'s profile...')),
-          );
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (context) => UserProfileScreen(userId: user.uid),
+          ));
         },
       ),
     );

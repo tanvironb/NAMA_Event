@@ -203,3 +203,36 @@ service cloud.firestore {
     }
   }
 }
+
+
+// the new stuff for exisiting rules:
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+    function isAuthenticated() { /* ... */ }
+    function isAdmin() { /* ... */ }
+
+    // Default deny
+    match /{document=**} { allow read, write: if false; }
+
+    // ... Existing rules for events, sponsors, announcements, sessions, users ...
+
+    // --- NEW: DIRECT MESSAGING RULES (PHASE 3) ---
+    match /directMessages/{conversationId} {
+      // A user can read/write to a conversation only if they are a member of it.
+      allow read, update, create: if isAuthenticated() && request.auth.uid in resource.data.members;
+    }
+
+    match /directMessages/{conversationId}/messages/{messageId} {
+      // A user can read messages in a conversation they are a member of.
+      allow read: if isAuthenticated() && get(/databases/$(database)/documents/directMessages/$(conversationId)).data.members[0] == request.auth.uid || get(/databases/$(database)/documents/directMessages/$(conversationId)).data.members[1] == request.auth.uid;
+      
+      // A user can only create messages where they are the sender.
+      allow create: if isAuthenticated() && request.resource.data.senderId == request.auth.uid;
+    }
+
+    // ... Existing rules for Chat & Check-ins ...
+  }
+}

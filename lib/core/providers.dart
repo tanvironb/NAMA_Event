@@ -18,7 +18,8 @@ import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:events_app_trueattempt/core/services/remote_config_service.dart';
 import 'package:events_app_trueattempt/features/admin/data/admin_repository.dart';
-
+import 'package:events_app_trueattempt/features/messaging/data/messaging_repository.dart';
+import 'package:events_app_trueattempt/core/models/conversation_model.dart';
 
 // --- Firebase Core Providers ---
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -66,6 +67,12 @@ final userAppProfileStreamProvider = StreamProvider.autoDispose<AppUser?>((ref) 
     return repo.getUserProfileStream(auth.currentUser!.uid);
   }
   return Stream.value(null);
+});
+
+// Provides a specific user's profile data by userId (for viewing other users' profiles)
+final userProfileFutureProvider = FutureProvider.autoDispose.family<AppUser?, String>((ref, userId) {
+  final repo = ref.watch(userProfileRepositoryProvider);
+  return repo.getUserProfile(userId);
 });
 
 // Provides a stream of sessions for the active event.
@@ -224,4 +231,22 @@ final adminRepositoryProvider = Provider((ref) => AdminRepository(ref.watch(fire
 
 final allUsersStreamProvider = StreamProvider.autoDispose<List<AppUser>>((ref) {
   return ref.watch(adminRepositoryProvider).getAllUsersStream();
+});
+
+// --- NEW: Messaging Providers ---
+final messagingRepositoryProvider = Provider((ref) => MessagingRepository(ref.watch(firestoreServiceProvider)));
+
+final conversationsStreamProvider = StreamProvider.autoDispose<List<Conversation>>((ref) {
+  final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
+  if (userId == null) return Stream.value([]);
+  return ref.watch(messagingRepositoryProvider).getConversationsStream(userId);
+});
+
+final directMessagesStreamProvider = StreamProvider.autoDispose.family<List<Message>, String>((ref, conversationId) {
+  return ref.watch(messagingRepositoryProvider).getDirectMessagesStream(conversationId);
+});
+
+final userSearchProvider = FutureProvider.autoDispose.family<List<AppUser>, String>((ref, query) {
+  if (query.isEmpty) return [];
+  return ref.watch(userProfileRepositoryProvider).searchUsers(query);
 });

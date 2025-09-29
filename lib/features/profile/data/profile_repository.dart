@@ -54,4 +54,17 @@ class UserProfileRepository {
   Future<void> updateUserProfile(String uid, Map<String, dynamic> updateData) async {
     await _firestoreService.updateUserDocument(uid, updateData);
   }
+
+  // NEW: Searches for users by name.
+  // Note: This is a basic "starts-with" search. For full-text search,
+  // can use smth like Algolia for production later.
+  Future<List<AppUser>> searchUsers(String query) async {
+    if (query.isEmpty) return [];
+    try {
+      final snapshot = await _firestoreService.searchUsersByName(query);
+      return snapshot.map((doc) => AppUser.fromFirestore(doc)).toList();
+    } catch (e) {
+      return [];
+    }
+  }
 }

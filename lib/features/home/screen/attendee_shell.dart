@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
 import 'package:events_app_trueattempt/features/explore/screen/explore_screen.dart';
-import 'package:events_app_trueattempt/features/profile/screen/profile_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_profile_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
@@ -10,6 +10,7 @@ import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/core/services/notification_services.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
+import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 class AttendeeShell extends ConsumerStatefulWidget {
   const AttendeeShell({super.key});
 
@@ -20,12 +21,12 @@ class AttendeeShell extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<AttendeeShell> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _widgetOptions = <Widget>[
-    HomeDashboardScreen(), // The dynamic home dashboard
-    AgendaScreen(),
-    DirectoriesHubScreen(), // Networking tab
-    ExploreScreen(),
-    ProfileScreen(),
+  static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
+    const HomeDashboardScreen(), // The dynamic home dashboard
+    const AgendaScreen(),
+    const DirectoriesHubScreen(), // Networking tab
+    const ExploreScreen(),
+    UserProfileScreen(userId: currentUserId), // Updated to use UserProfileScreen
   ];
 
   @override
@@ -86,6 +87,14 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.message_outlined),
+            onPressed: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => const ConversationsScreen(),
+              ));
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {
@@ -158,9 +167,14 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
       ),
       body: Stack(
         children: [
-          IndexedStack(
-            index: _selectedIndex,
-            children: _widgetOptions,
+          Consumer(
+            builder: (context, ref, child) {
+              final currentUserId = ref.watch(firebaseAuthProvider).currentUser?.uid ?? '';
+              return IndexedStack(
+                index: _selectedIndex,
+                children: _widgetOptions(currentUserId),
+              );
+            },
           ),
           // YouTube Live Player positioned at the bottom
           Positioned(

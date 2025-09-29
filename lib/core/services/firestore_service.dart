@@ -112,6 +112,69 @@ class FirestoreService {
   Stream<QuerySnapshot> getAllUsersStream() {
     return _db.collection('users').snapshots();
   }
+
+  // --- NEW: Direct Messaging operations ---
+  Stream<QuerySnapshot> getConversationsCollectionStream(String userId) {
+    return _db
+        .collection('directMessages')
+        .where('members', arrayContains: userId)
+        .orderBy('lastMessageTimestamp', descending: true)
+        .snapshots();
+  }
+
+  Stream<QuerySnapshot> getDirectMessagesCollectionStream(String conversationId) {
+    return _db
+        .collection('directMessages')
+        .doc(conversationId)
+        .collection('messages')
+        .orderBy('timestamp', descending: true)
+        .snapshots();
+  }
+
+  Future<void> addDirectMessage(String conversationId, Map<String, dynamic> messageData) async {
+    final conversationRef = _db.collection('directMessages').doc(conversationId);
+    final messageRef = conversationRef.collection('messages').doc();
+
+    await _db.runTransaction((transaction) async {
+      transaction.set(messageRef, messageData);
+      transaction.update(conversationRef, {
+        'lastMessageText': messageData['text'],
+        'lastMessageTimestamp': messageData['timestamp'],
+      });
+    });
+  }
+
+  Future<String> createOrGetConversation(String currentUserId, String otherUserId) async {
+    final members = [currentUserId, otherUserId]..sort();
+    final conversationId = members.join('_');
+    final conversationRef = _db.collection('directMessages').doc(conversationId);
+
+    final doc = await conversationRef.get();
+    if (!doc.exists) {
+      final currentUserDoc = await getUserDocument(currentUserId);
+      final otherUserDoc = await getUserDocument(otherUserId);
+      
+      await conversationRef.set({
+        'members': members,
+        'memberInfo': {
+          currentUserId: {'name': currentUserDoc['name'], 'profileImageUrl': currentUserDoc['profileImageUrl']},
+          otherUserId: {'name': otherUserDoc['name'], 'profileImageUrl': otherUserDoc['profileImageUrl']},
+        },
+        'lastMessageTimestamp': FieldValue.serverTimestamp(),
+      });
+    }
+    return conversationId;
+  }
+
+  Future<List<DocumentSnapshot>> searchUsersByName(String query) async {
+    final snapshot = await _db
+        .collection('users')
+        .where('name', isGreaterThanOrEqualTo: query)
+        .where('name', isLessThanOrEqualTo: '$query\uf8ff')
+        .limit(10)
+        .get();
+    return snapshot.docs;
+  }
 }
 
 
