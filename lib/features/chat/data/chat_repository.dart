@@ -30,4 +30,8 @@ class ChatRepository {
     };
     await _firestoreService.addChatMessage(sessionId, messageData);
   }
+
+  Future<void> deleteMessage(String sessionId, String messageId) async {
+    await _firestoreService.deleteChatMessage(sessionId, messageId);
+  }
 }

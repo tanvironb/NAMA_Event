@@ -175,6 +175,10 @@ class FirestoreService {
         .get();
     return snapshot.docs;
   }
+
+  Future<void> deleteChatMessage(String sessionId, String messageId) async {
+    await _db.collection('sessions').doc(sessionId).collection('chat').doc(messageId).delete();
+  }
 }
 
 
