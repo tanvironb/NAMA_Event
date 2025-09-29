@@ -69,12 +69,6 @@ final userAppProfileStreamProvider = StreamProvider.autoDispose<AppUser?>((ref) 
   return Stream.value(null);
 });
 
-// Provides a specific user's profile data by userId (for viewing other users' profiles)
-final userProfileFutureProvider = FutureProvider.autoDispose.family<AppUser?, String>((ref, userId) {
-  final repo = ref.watch(userProfileRepositoryProvider);
-  return repo.getUserProfile(userId);
-});
-
 // Provides a stream of sessions for the active event.
 final sessionsStreamProvider = StreamProvider.autoDispose<List<Session>>((ref) {
   final eventAsync = ref.watch(activeEventFutureProvider);

@@ -15,7 +15,7 @@ class DirectMessageScreen extends ConsumerWidget {
     super.key,
     required this.conversationId,
     required this.otherUserName,
-    required this.otherUserProfileImage,
+    this.otherUserProfileImage = '',
   });
 
   @override
@@ -44,27 +44,17 @@ class DirectMessageScreen extends ConsumerWidget {
               child: Text(
                 otherUserName,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
           ],
         ),
         backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        elevation: 0,
       ),
       body: currentUserAsync.when(
         data: (currentUser) {
           if (currentUser == null) {
-            return const Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.person_off, size: 64),
-                  SizedBox(height: 16),
-                  Text('You must be logged in to send messages.'),
-                ],
-              ),
-            );
+            return const Center(child: Text('You must be logged in to chat.'));
           }
           
           return Column(
@@ -72,37 +62,10 @@ class DirectMessageScreen extends ConsumerWidget {
               Expanded(
                 child: messagesAsync.when(
                   data: (messages) {
-                    if (messages.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.chat_bubble_outline,
-                              size: 64,
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Start the conversation!',
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Send a message to ${otherUserName}',
-                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
+                    if (messages.isEmpty) return const Center(child: Text('Say hello!'));
                     
                     return ListView.builder(
-                      reverse: true, // Show newest messages at bottom
+                      reverse: true,
                       padding: const EdgeInsets.all(8.0),
                       itemCount: messages.length,
                       itemBuilder: (context, index) {
@@ -113,31 +76,7 @@ class DirectMessageScreen extends ConsumerWidget {
                     );
                   },
                   loading: () => const LoadingIndicator(),
-                  error: (err, stack) => Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 64,
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Error loading messages',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          err.toString(),
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
+                  error: (err, stack) => Center(child: Text('Error: $err')),
                 ),
               ),
               DirectMessageComposer(
@@ -148,31 +87,7 @@ class DirectMessageScreen extends ConsumerWidget {
           );
         },
         loading: () => const LoadingIndicator(),
-        error: (err, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Error loading user profile',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                err.toString(),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
+        error: (err, stack) => Center(child: Text('Error: $err')),
       ),
     );
   }

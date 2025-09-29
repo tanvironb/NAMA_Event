@@ -5,7 +5,9 @@ import 'package:events_app_trueattempt/features/profile/screen/user_profile_scre
 
 class UserListTile extends StatelessWidget {
   final AppUser user;
-  const UserListTile({super.key, required this.user});
+  final VoidCallback? onTap; // NEW: Optional onTap callback
+
+  const UserListTile({super.key, required this.user, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -19,9 +21,9 @@ class UserListTile extends StatelessWidget {
         title: Text(user.name),
         subtitle: Text(user.title),
         trailing: const Icon(Icons.chevron_right),
-        onTap: () {
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (context) => UserProfileScreen(userId: user.uid),
+        onTap: onTap ?? () { // Use the provided onTap, or default to navigating to the profile
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (context) => UserProfileScreen(userId: user.uid),
           ));
         },
       ),

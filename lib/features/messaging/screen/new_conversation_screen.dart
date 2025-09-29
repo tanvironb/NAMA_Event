@@ -5,6 +5,7 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
+import 'package:events_app_trueattempt/features/directories/screen/widgets/user_list_tile.dart';
 
 class NewConversationScreen extends ConsumerStatefulWidget {
   const NewConversationScreen({super.key});
@@ -14,8 +15,8 @@ class NewConversationScreen extends ConsumerStatefulWidget {
 }
 
 class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
-  String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void dispose() {
@@ -25,15 +26,13 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final searchResultsAsync = _searchQuery.isEmpty 
-        ? const AsyncValue.data(<AppUser>[])
-        : ref.watch(userSearchProvider(_searchQuery));
+    final searchResultsAsync = ref.watch(userSearchProvider(_searchQuery));
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Message'),
+        title: const Text('New Conversation'),
         backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        elevation: 0,
       ),
       body: Column(
         children: [
@@ -42,8 +41,7 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                labelText: 'Search for a user...',
-                hintText: 'Enter name, email, or company',
+                hintText: 'Search for people...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
@@ -83,14 +81,6 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
                             color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Type a name, email, or company to find users',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
                       ],
                     ),
                   );
@@ -113,13 +103,6 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
                             color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Try a different search term',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                          ),
-                        ),
                       ],
                     ),
                   );
@@ -136,43 +119,9 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
                       return const SizedBox.shrink();
                     }
                     
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundImage: user.profileImageUrl.isNotEmpty
-                              ? NetworkImage(user.profileImageUrl)
-                              : null,
-                          child: user.profileImageUrl.isEmpty
-                              ? Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U')
-                              : null,
-                        ),
-                        title: Text(
-                          user.name.isNotEmpty ? user.name : 'Unknown User',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (user.title.isNotEmpty)
-                              Text(
-                                user.title,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                                ),
-                              ),
-                            if (user.company.isNotEmpty)
-                              Text(
-                                user.company,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                                ),
-                              ),
-                          ],
-                        ),
-                        trailing: _buildRoleBadge(context, user.role),
-                        onTap: () => _startConversation(context, user),
-                      ),
+                    return UserListTile(
+                      user: user,
+                      onTap: () => _startConversation(context, user),
                     );
                   },
                 );
@@ -194,61 +143,9 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
                       'Error searching users',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      err.toString(),
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
                   ],
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRoleBadge(BuildContext context, String role) {
-    Color badgeColor;
-    IconData icon;
-    
-    switch (role.toLowerCase()) {
-      case 'admin':
-        badgeColor = Colors.red;
-        icon = Icons.admin_panel_settings;
-        break;
-      case 'speaker':
-        badgeColor = Colors.blue;
-        icon = Icons.mic;
-        break;
-      case 'attendee':
-      default:
-        badgeColor = Colors.green;
-        icon = Icons.person;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: badgeColor.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: badgeColor.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: badgeColor),
-          const SizedBox(width: 4),
-          Text(
-            role.toUpperCase(),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: badgeColor,
-              fontWeight: FontWeight.bold,
             ),
           ),
         ],
