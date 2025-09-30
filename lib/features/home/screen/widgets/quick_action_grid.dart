@@ -8,6 +8,7 @@ import 'package:events_app_trueattempt/features/qrcode_checkin/screen/qr_scanner
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_profile_screen.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/leaderboard/screen/leaderboard_screen.dart';
 
 class QuickActionGrid extends ConsumerWidget {
   const QuickActionGrid({super.key});
@@ -79,10 +80,9 @@ class QuickActionGrid extends ConsumerWidget {
         'label': 'Leaderboard',
         'color': AppColors.navyBlue,
         'onTap': () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Leaderboard is coming in Phase 3!')),
-          );
-          // TODO: Navigate to Leaderboard (Phase 3)
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (context) => const LeaderboardScreen(),
+          ));
         },
       },
       {

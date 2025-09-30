@@ -179,6 +179,15 @@ class FirestoreService {
   Future<void> deleteChatMessage(String sessionId, String messageId) async {
     await _db.collection('sessions').doc(sessionId).collection('chat').doc(messageId).delete();
   }
+
+  Future<List<DocumentSnapshot>> getUsersSortedByPoints() async {
+    final snapshot = await _db
+        .collection('users')
+        .orderBy('points', descending: true)
+        .limit(20) // Get top 20 users
+        .get();
+    return snapshot.docs;
+  }
 }
 
 

@@ -20,6 +20,7 @@ import 'package:events_app_trueattempt/core/services/remote_config_service.dart'
 import 'package:events_app_trueattempt/features/admin/data/admin_repository.dart';
 import 'package:events_app_trueattempt/features/messaging/data/messaging_repository.dart';
 import 'package:events_app_trueattempt/core/models/conversation_model.dart';
+import 'package:events_app_trueattempt/features/leaderboard/data/leaderboard_repository.dart';
 
 // --- Firebase Core Providers ---
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -227,7 +228,7 @@ final allUsersStreamProvider = StreamProvider.autoDispose<List<AppUser>>((ref) {
   return ref.watch(adminRepositoryProvider).getAllUsersStream();
 });
 
-// --- NEW: Messaging Providers ---
+// --- Messaging Providers ---
 final messagingRepositoryProvider = Provider((ref) => MessagingRepository(ref.watch(firestoreServiceProvider)));
 
 final conversationsStreamProvider = StreamProvider.autoDispose<List<Conversation>>((ref) {
@@ -243,4 +244,11 @@ final directMessagesStreamProvider = StreamProvider.autoDispose.family<List<Mess
 final userSearchProvider = FutureProvider.autoDispose.family<List<AppUser>, String>((ref, query) {
   if (query.isEmpty) return [];
   return ref.watch(userProfileRepositoryProvider).searchUsers(query);
+});
+
+// --- NEW: Leaderboard Providers ---
+final leaderboardRepositoryProvider = Provider((ref) => LeaderboardRepository(ref.watch(firestoreServiceProvider)));
+
+final leaderboardFutureProvider = FutureProvider.autoDispose<List<AppUser>>((ref) {
+  return ref.watch(leaderboardRepositoryProvider).getLeaderboardUsers();
 });
