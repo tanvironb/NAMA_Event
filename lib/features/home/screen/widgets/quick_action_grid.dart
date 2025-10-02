@@ -4,7 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
 import 'package:events_app_trueattempt/features/explore/screen/explore_screen.dart';
-import 'package:events_app_trueattempt/features/qrcode_checkin/screen/qr_scanner_screen.dart';
+import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_scanner_screen.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_profile_screen.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
