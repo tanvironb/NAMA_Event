@@ -8,3 +8,15 @@ typings/
 # Node.js dependency directory
 node_modules/
 *.local
+
+# Firebase service account keys and secrets
+serviceAccountKey.json
+.env
+.env.local
+.env.production
+.runtimeconfig.json
+
+# Firebase debug and logs
+firebase-debug.log
+firebase-debug.*.log
+.firebase/
