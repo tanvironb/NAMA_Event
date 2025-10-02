@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/directories/screen/widgets/user_list_tile.dart'; // Reusing this tile
+import 'package:events_app_trueattempt/features/admin/screen/user_detail_admin_screen.dart';
 
 class UserManagementScreen extends ConsumerWidget {
   const UserManagementScreen({super.key});
@@ -18,8 +19,15 @@ class UserManagementScreen extends ConsumerWidget {
           return ListView.builder(
             itemCount: users.length,
             itemBuilder: (context, index) {
-              // TODO: Wrap UserListTile with an OnTap that navigates to a UserDetailScreen for editing
-              return UserListTile(user: users[index]);
+              final user = users[index];
+              return UserListTile(
+                user: user,
+                onTap: () {
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (context) => UserDetailAdminScreen(user: user),
+                  ));
+                },
+              );
             },
           );
         },

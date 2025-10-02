@@ -7,7 +7,7 @@ import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/my_bookmarks_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
-import 'package:events_app_trueattempt/features/qrcode_checkin/screen/qr_generator_screen.dart';
+import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_generator_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
 
 // NEW: A provider to fetch a specific user's profile

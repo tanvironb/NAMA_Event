@@ -12,4 +12,9 @@ class AppColors {
   static const secondaryDarkGray = Color(0xFF6B6B6B);
   static const accentBlue = Color(0xFF3366FF); 
   static const errorRed = Color(0xFFD32F2F); // Standard error color
+  
+  // Status colors for user management
+  static const successGreen = Color(0xFF4CAF50); // For approved status
+  static const warningOrange = Color(0xFFFF9800); // For pending status
+  static const dangerRed = Color(0xFFE53935); // For rejected status
 }

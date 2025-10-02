@@ -1,7 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
-import 'package:events_app_trueattempt/core/models/app_user.dart'; // Import the AppUser model
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 
@@ -42,15 +41,32 @@ class AuthRepository {
   }
 
   Future<UserCredential> createUserWithEmailAndPassword(String email, String password) async {
+    // First, create the user in Firebase Auth
     final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(email: email, password: password);
     
-    // Create a new AppUser model with default values
-    final newAppUser = AppUser(uid: userCredential.user!.uid, email: email);
-    
-    // Convert the AppUser model to a Firestore-compatible map and save
+    // Then, create their 'pending' profile document in Firestore
+    final userData = {
+      'email': email,
+      'name': email.split('@')[0],
+      'role': 'attendee',
+      'status': 'pending', // CRITICAL: Set status to pending
+      'qrCodePayload': '',
+      'profileImageUrl': '',
+      'title': '',
+      'company': '',
+      'bio': '',
+      'phone': '',
+      'linkedin': '',
+      'twitter': '',
+      'website': '',
+      'isOnline': false,
+      'lastSeen': FieldValue.serverTimestamp(),
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
     await _firestoreService.createUserDocument(
       uid: userCredential.user!.uid, 
-      userData: newAppUser.toFirestore(),
+      userData: userData,
     );
     return userCredential;
   }

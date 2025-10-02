@@ -8,6 +8,7 @@ import 'package:events_app_trueattempt/features/home/screen/speaker_shell.dart';
 import 'package:events_app_trueattempt/features/home/screen/admin_shell.dart';
 import 'package:events_app_trueattempt/common_widgets/in_app_notification_handler.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
+import 'package:events_app_trueattempt/features/auth/screen/pending_approval_screen.dart';
 
 class MainHubScreen extends ConsumerWidget {
   const MainHubScreen({super.key});
@@ -39,6 +40,9 @@ class MainHubScreen extends ConsumerWidget {
               ),
             ),
           );
+        }
+        if (user.status != 'approved') {
+          return const PendingApprovalScreen();
         }
 
         // Route to the correct shell based on user role

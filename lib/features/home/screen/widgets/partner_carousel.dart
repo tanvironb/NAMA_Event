@@ -2,25 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:card_swiper/card_swiper.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PartnerCarousel extends ConsumerWidget {
   const PartnerCarousel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // This watches the sponsors stream. It's ready for Phase 1 data.
     final sponsorsAsync = ref.watch(sponsorsStreamProvider);
 
     return SizedBox(
-      height: 120, // Fixed height for the carousel
+      height: 160, // Increased height for better design
       child: sponsorsAsync.when(
         data: (sponsors) {
           if (sponsors.isEmpty) {
             return Center(
-              child: Text(
-                'No partners yet.',
-                style: Theme.of(context).textTheme.bodyMedium,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.business_outlined,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No partners yet.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                ],
               ),
             );
           }
@@ -28,37 +42,260 @@ class PartnerCarousel extends ConsumerWidget {
             itemCount: sponsors.length,
             itemBuilder: (context, index) {
               final sponsor = sponsors[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Image.network(
-                    sponsor.logoUrl,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => Icon(
-                      Icons.business,
-                      size: 40,
-                      color: Theme.of(context).colorScheme.secondary,
-                    ),
-                  ),
-                ),
-              );
+              return _buildPartnerCard(context, sponsor);
             },
-            pagination: sponsors.length > 3 ? const SwiperPagination() : null,
+            pagination: sponsors.length > 3 ? SwiperPagination(
+              builder: DotSwiperPaginationBuilder(
+                color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                activeColor: Theme.of(context).colorScheme.primary,
+                size: 8,
+                activeSize: 10,
+              ),
+            ) : null,
             autoplay: sponsors.length > 1,
-            autoplayDelay: 3000,
-            viewportFraction: 0.5,
-            scale: 0.95,
+            autoplayDelay: 4000, // Slower for better readability
+            autoplayDisableOnInteraction: false,
+            viewportFraction: 0.7, // Show more of each card
+            scale: 0.9,
+            loop: sponsors.length > 1,
           );
         },
         loading: () => const LoadingIndicator(),
-        error: (err, stack) => Center(
-          child: Text(
-            'Error loading partners: $err',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+        error: (err, stack) => _buildErrorState(context, err),
+      ),
+    );
+  }
+
+  Widget _buildPartnerCard(BuildContext context, dynamic sponsor) {
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      elevation: 6,
+      shadowColor: Theme.of(context).colorScheme.shadow.withOpacity(0.2),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _openPartnerWebsite(context, sponsor),
+          child: Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Theme.of(context).colorScheme.surface,
+                  Theme.of(context).colorScheme.surface.withOpacity(0.8),
+                ],
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Logo container with enhanced design
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(8.0),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                      ),
+                    ),
+                    child: sponsor.logoUrl.isNotEmpty
+                        ? Image.network(
+                            sponsor.logoUrl,
+                            fit: BoxFit.contain,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  strokeWidth: 2,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) => _buildLogoFallback(context, sponsor.name),
+                          )
+                        : _buildLogoFallback(context, sponsor.name),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Partner name with enhanced typography
+                Expanded(
+                  flex: 1,
+                  child: Text(
+                    sponsor.name,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                // Tap indicator
+                if (sponsor.website.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.open_in_new,
+                          size: 12,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Visit',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildLogoFallback(BuildContext context, String partnerName) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.business,
+            size: 32,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          if (partnerName.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              partnerName.length > 15 ? '${partnerName.substring(0, 15)}...' : partnerName,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, dynamic error) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.error_outline,
+            size: 48,
+            color: Theme.of(context).colorScheme.error,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Unable to load partners',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: () {
+              // Trigger a refresh by invalidating the provider
+              // This would need to be implemented based on your provider setup
+            },
+            icon: const Icon(Icons.refresh, size: 16),
+            label: const Text('Retry'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openPartnerWebsite(BuildContext context, dynamic sponsor) async {
+    final website = sponsor.website as String;
+    
+    if (website.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${sponsor.name} website not available'),
+          backgroundColor: Theme.of(context).colorScheme.secondary,
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Ensure URL has proper scheme
+      String url = website;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://$url';
+      }
+
+      final uri = Uri.parse(url);
+      
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        throw 'Could not launch $url';
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open ${sponsor.name} website'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            action: SnackBarAction(
+              label: 'Copy URL',
+              textColor: Colors.white,
+              onPressed: () {
+                // TODO: Copy URL to clipboard
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('URL copied to clipboard')),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    }
   }
 }

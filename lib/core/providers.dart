@@ -12,7 +12,7 @@ import 'package:events_app_trueattempt/features/agenda/data/agenda_repository.da
 import 'package:events_app_trueattempt/features/directories/data/directory_repository.dart';
 import 'package:events_app_trueattempt/features/chat/data/chat_repository.dart';
 import 'package:events_app_trueattempt/core/models/message_model.dart';
-import 'package:events_app_trueattempt/features/qrcode_checkin/data/checkin_repository.dart';
+import 'package:events_app_trueattempt/features/qr_scanner/data/checkin_repository.dart';
 import 'package:events_app_trueattempt/features/notifications/data/notification_repository.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
@@ -21,6 +21,7 @@ import 'package:events_app_trueattempt/features/admin/data/admin_repository.dart
 import 'package:events_app_trueattempt/features/messaging/data/messaging_repository.dart';
 import 'package:events_app_trueattempt/core/models/conversation_model.dart';
 import 'package:events_app_trueattempt/features/leaderboard/data/leaderboard_repository.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 // --- Firebase Core Providers ---
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -246,9 +247,12 @@ final userSearchProvider = FutureProvider.autoDispose.family<List<AppUser>, Stri
   return ref.watch(userProfileRepositoryProvider).searchUsers(query);
 });
 
-// --- NEW: Leaderboard Providers ---
+// --- Leaderboard Providers ---
 final leaderboardRepositoryProvider = Provider((ref) => LeaderboardRepository(ref.watch(firestoreServiceProvider)));
 
 final leaderboardFutureProvider = FutureProvider.autoDispose<List<AppUser>>((ref) {
   return ref.watch(leaderboardRepositoryProvider).getLeaderboardUsers();
 });
+
+// --- NEW: Firebase Functions Provider ---
+final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) => FirebaseFunctions.instance);

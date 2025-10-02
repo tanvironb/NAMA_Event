@@ -236,3 +236,74 @@ service cloud.firestore {
     // ... Existing rules for Chat & Check-ins ...
   }
 }
+
+
+
+
+
+
+
+
+
+## cutest one tbh:
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+    function isAuthenticated() { return request.auth != null; }
+    function isAdmin() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
+    function isStaffOrAdmin() {
+      let userRole = get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      return userRole == 'admin' || userRole == 'staff';
+    }
+    function isApproved() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    // Default deny
+    match /{document=**} { allow read, write: if false; }
+
+    // --- CORE COLLECTIONS ---
+    // All readable content is only accessible to approved users.
+    match /events/{doc} { allow read: if isApproved(); allow write: if isAdmin(); }
+    match /sessions/{doc} { allow read: if isApproved(); allow create, update, delete: if isAdmin(); }
+    match /sponsors/{doc} { allow read: if isApproved(); allow write: if isAdmin(); }
+    match /announcements/{doc} { allow read: if isApproved(); allow write: if isAdmin(); }
+
+    // --- USERS ---
+    match /users/{userId} {
+      // An approved user can read any profile. A pending user can only read their own.
+      allow read: if (isApproved()) || (request.auth.uid == userId);
+      
+      // A new user can create their own 'pending' profile during sign-up.
+      allow create: if request.auth.uid == userId && request.resource.data.status == 'pending';
+      
+      // An admin can update any user's profile.
+      // A user can update their own profile, BUT CANNOT change their role, status, or qrCodePayload.
+      allow update: if (isAdmin()) || 
+                     (request.auth.uid == userId && 
+                      !("role" in request.resource.data) && 
+                      !("status" in request.resource.data) &&
+                      !("qrCodePayload" in request.resource.data));
+
+      allow delete: if isAdmin();
+    }
+
+    // --- EVENT CHECK-INS (SECURE LOGGING) ---
+    match /eventCheckIns/{checkInId} {
+      allow read: if isStaffOrAdmin();
+      // Only Staff or Admins can create check-in logs, and they must be the scanner.
+      allow create: if isStaffOrAdmin() && request.resource.data.scannerUserId == request.auth.uid;
+    }
+
+    // --- DIRECT MESSAGING ---
+    match /directMessages/{conversationId} {
+      allow read, update, create: if isApproved() && request.auth.uid in resource.data.members;
+    }
+    match /directMessages/{conversationId}/messages/{messageId} {
+      allow read: if isApproved() && get(/databases/$(database)/documents/directMessages/$(conversationId)).data.members[0] == request.auth.uid || get(/databases/$(database)/documents/directMessages/$(conversationId)).data.members[1] == request.auth.uid;
+      allow create: if isApproved() && request.resource.data.senderId == request.auth.uid;
+    }
+  }
+}

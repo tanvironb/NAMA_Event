@@ -6,7 +6,9 @@ import 'package:events_app_trueattempt/core/models/session_model.dart';
 // SessionListTile is a reusable widget to display a summary of a session in lists.
 class SessionListTile extends StatelessWidget {
   final Session session;
-  const SessionListTile({super.key, required this.session});
+  final VoidCallback? onTap; // NEW: Optional onTap callback
+
+  const SessionListTile({super.key, required this.session, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +34,7 @@ class SessionListTile extends StatelessWidget {
               ),
             ),
             trailing: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.secondary),
-            onTap: () {
+            onTap: onTap ?? () { // Use provided onTap, or default to attendee view
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => SessionDetailScreen(session: session),

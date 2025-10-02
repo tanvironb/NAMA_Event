@@ -6,6 +6,7 @@ import 'package:events_app_trueattempt/features/home/screen/widgets/speaker_caro
 import 'package:events_app_trueattempt/features/home/screen/widgets/partner_carousel.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/quick_action_grid.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/live_stream_card.dart';
+import 'package:events_app_trueattempt/features/home/screen/widgets/venue_maps_carousel.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 
@@ -153,6 +154,15 @@ class HomeDashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           const SpeakerCarousel(), // Custom widget for speakers (Phase 2)
+          const SizedBox(height: 24),
+
+          // Venue Maps Carousel (replacing explore section)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Text('Venue Maps', style: Theme.of(context).textTheme.headlineSmall),
+          ),
+          const SizedBox(height: 12),
+          const VenueMapsCarousel(), // New venue maps carousel
           const SizedBox(height: 24),
 
           // Event Partners/Sponsors Carousel

@@ -1,6 +1,6 @@
-import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
+import 'package:events_app_trueattempt/features/explore/screen/explore_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_profile_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
@@ -11,22 +11,23 @@ import 'package:events_app_trueattempt/features/directories/screen/directories_h
 import 'package:events_app_trueattempt/core/services/notification_services.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
-class AttendeeShell extends ConsumerStatefulWidget {
-  const AttendeeShell({super.key});
+// import 'package:events_app_trueattempt/features/profile/screen/speaker_dashboard_screen.dart'; // New speaker dashboard - TODO: Uncomment when created
 
+class SpeakerShell extends ConsumerStatefulWidget {
+  const SpeakerShell({super.key});
+  
   @override
-  ConsumerState<AttendeeShell> createState() => _HomeScreenState();
+  ConsumerState<SpeakerShell> createState() => _SpeakerShellState();
 }
 
-class _HomeScreenState extends ConsumerState<AttendeeShell> {
+class _SpeakerShellState extends ConsumerState<SpeakerShell> {
   int _selectedIndex = 0;
 
   static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
-    const HomeDashboardScreen(), // The dynamic home dashboard
+    const HomeDashboardScreen(),
     const AgendaScreen(),
-    const DirectoriesHubScreen(), // Networking tab
-    // const ExploreScreen(),
-    const QRHubScreen(), // QR Code Hub
+    const DirectoriesHubScreen(),
+    const ExploreScreen(),
     UserProfileScreen(userId: currentUserId), // Updated to use UserProfileScreen
   ];
 
@@ -47,11 +48,7 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
     }
   }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
+  void _onItemTapped(int index) => setState(() => _selectedIndex = index);
 
   @override
   Widget build(BuildContext context) {
@@ -162,7 +159,7 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
                 );
               },
             ),
-            // TODO: Add more drawer items for other features in later phases (e.g., Leaderboard, Support)
+            // Speaker-specific drawer items could be added here
           ],
         ),
       ),
@@ -205,14 +202,14 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
             label: 'Networking',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.qr_code_scanner),
-            activeIcon: Icon(Icons.qr_code_scanner),
-            label: 'Scan',
+            icon: Icon(Icons.explore_outlined),
+            activeIcon: Icon(Icons.explore),
+            label: 'Explore',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
+            icon: Icon(Icons.dashboard_outlined),
+            activeIcon: Icon(Icons.dashboard),
+            label: 'Dashboard',
           ),
         ],
         currentIndex: _selectedIndex,
@@ -221,4 +218,3 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
     );
   }
 }
-
