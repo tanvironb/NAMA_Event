@@ -8,7 +8,6 @@ import 'package:events_app_trueattempt/features/speaker/screen/speaker_shell.dar
 import 'package:events_app_trueattempt/features/home/screen/admin_shell.dart';
 import 'package:events_app_trueattempt/common_widgets/in_app_notification_handler.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
-import 'package:events_app_trueattempt/features/auth/screen/pending_approval_screen.dart';
 
 class MainHubScreen extends ConsumerWidget {
   const MainHubScreen({super.key});
@@ -20,7 +19,7 @@ class MainHubScreen extends ConsumerWidget {
     return userProfileAsync.when(
       data: (user) {
         if (user == null) {
-          // This should never happen due to auth-level security, but as fallback
+          // This should never happen due to AuthGate-level security, but as fallback
           return Scaffold(
             body: Center(
               child: Column(
@@ -41,10 +40,8 @@ class MainHubScreen extends ConsumerWidget {
             ),
           );
         }
-        if (user.status != 'approved') {
-          return const PendingApprovalScreen();
-        }
 
+        // Status checking is now handled by AuthGate, so we only route by role here
         // Route to the correct shell based on user role
         Widget shell;
         switch (user.role) {
@@ -53,6 +50,10 @@ class MainHubScreen extends ConsumerWidget {
             break;
           case 'speaker':
             shell = const SpeakerShell();
+            break;
+          case 'staff':
+            // Staff users get the same interface as users but with QR scanning privileges
+            shell = const AttendeeShell();
             break;
           case 'attendee':
           default:

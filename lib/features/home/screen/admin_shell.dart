@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
-import 'package:events_app_trueattempt/features/profile/screen/user_profile_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
@@ -26,7 +26,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     const Center(child: Text('Admin Dashboard Coming Soon')), // Temporary placeholder
     const AgendaScreen(), // Can still view the agenda
     const DirectoriesHubScreen(), // Can still network
-    UserProfileScreen(userId: currentUserId), // Updated to use UserProfileScreen
+    const ProfileTabScreen(), // Updated to use ProfileTabScreen
   ];
 
   @override
@@ -55,25 +55,17 @@ class _AdminShellState extends ConsumerState<AdminShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            // Using the combination logo for the AppBar title
-            Image.asset(
-              AppConstants.logoEmblemPath, // Just the emblem
-              height: 30,
-              errorBuilder: (context, error, stackTrace) => Text(
-                AppConstants.appName,
-                style: Theme.of(context).appBarTheme.titleTextStyle,
-              ),
+        title: Center(
+          child: Image.asset(
+            AppConstants.logoEmblemPath, // Just the emblem
+            height: 30,
+            errorBuilder: (context, error, stackTrace) => Text(
+              AppConstants.appName,
+              style: Theme.of(context).appBarTheme.titleTextStyle,
             ),
-            const SizedBox(width: 8),
-            eventAsync.when(
-              data: (event) => Text(event.name, style: Theme.of(context).appBarTheme.titleTextStyle),
-              loading: () => Text('Loading Event...', style: Theme.of(context).appBarTheme.titleTextStyle),
-              error: (err, stack) => Text('Event App', style: Theme.of(context).appBarTheme.titleTextStyle), // Fallback title
-            ),
-          ],
+          ),
         ),
+        centerTitle: true,
         leading: Builder(
           builder: (context) => IconButton(
             icon: const Icon(Icons.menu),

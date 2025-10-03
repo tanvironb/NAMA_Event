@@ -2,10 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
-import 'package:events_app_trueattempt/features/agenda/screen/session_detail_screen.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
-import 'package:events_app_trueattempt/core/models/session_model.dart';
 
 class NotificationHandler {
   static void handleNotificationRoute(BuildContext context, RemoteMessage message) {

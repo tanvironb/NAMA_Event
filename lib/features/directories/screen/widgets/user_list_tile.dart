@@ -1,7 +1,7 @@
 // lib/features/directories/presentation/widgets/user_list_tile.dart
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
-import 'package:events_app_trueattempt/features/profile/screen/user_profile_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 
 class UserListTile extends StatelessWidget {
   final AppUser user;
@@ -23,7 +23,7 @@ class UserListTile extends StatelessWidget {
         trailing: const Icon(Icons.chevron_right),
         onTap: onTap ?? () { // Use the provided onTap, or default to navigating to the profile
           Navigator.of(context).push(MaterialPageRoute(
-            builder: (context) => UserProfileScreen(userId: user.uid),
+            builder: (context) => UserDetailsScreen(userId: user.uid),
           ));
         },
       ),

@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/new_conversation_screen.dart';
-import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/widgets/conversation_list_tile.dart';
 
 class ConversationsScreen extends ConsumerWidget {

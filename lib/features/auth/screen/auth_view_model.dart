@@ -1,8 +1,6 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:events_app_trueattempt/features/auth/data/auth_repository.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
 
 // Enum to represent the current authentication form state
 enum AuthFormType { login, signup }

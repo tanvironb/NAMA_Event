@@ -6,7 +6,7 @@ import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart
 import 'package:events_app_trueattempt/features/explore/screen/explore_screen.dart';
 import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_scanner_screen.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
-import 'package:events_app_trueattempt/features/profile/screen/user_profile_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/leaderboard/screen/leaderboard_screen.dart';
 
@@ -33,7 +33,7 @@ class QuickActionGrid extends ConsumerWidget {
         'color': AppColors.goldenYellow,
         'onTap': () {
           Navigator.of(context).push(MaterialPageRoute(
-            builder: (context) => const UserProfileScreen(userId: '',), //THIS IS RUNABOUT. TODO:FIX IT LATER
+            builder: (context) => const ProfileTabScreen(), // Navigate to profile tab for bookmarks
           ));
         },
       },

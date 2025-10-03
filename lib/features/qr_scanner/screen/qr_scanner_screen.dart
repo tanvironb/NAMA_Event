@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
-import 'package:events_app_trueattempt/features/profile/screen/user_profile_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 
@@ -92,7 +92,7 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
     } else { // Attendee is scanning
       // Navigate to the full profile screen using the secure UID
       Navigator.of(context).push(MaterialPageRoute(
-        builder: (context) => UserProfileScreen(userId: scannedUserData['uid']),
+        builder: (context) => UserDetailsScreen(userId: scannedUserData['uid']),
       )).then((_) => _resetScanner());
     }
   }
@@ -186,7 +186,7 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
             onPressed: () {
               Navigator.of(context).pop(); // Close dialog
               Navigator.of(context).push(MaterialPageRoute(
-                builder: (context) => UserProfileScreen(userId: scannedUserData['uid']),
+                builder: (context) => UserDetailsScreen(userId: scannedUserData['uid']),
               ));
             },
           ),

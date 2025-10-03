@@ -254,5 +254,10 @@ final leaderboardFutureProvider = FutureProvider.autoDispose<List<AppUser>>((ref
   return ref.watch(leaderboardRepositoryProvider).getLeaderboardUsers();
 });
 
+// User Profile by ID Provider
+final userProfileByIdProvider = FutureProvider.autoDispose.family<AppUser?, String>((ref, userId) {
+  return ref.watch(userProfileRepositoryProvider).getUserProfile(userId);
+});
+
 // --- NEW: Firebase Functions Provider ---
 final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) => FirebaseFunctions.instance);

@@ -1,5 +1,6 @@
 // lib/core/enums/notification_type.dart
 import 'package:flutter/material.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
 
 enum AppNotificationType {
   warning,
@@ -46,21 +47,21 @@ extension AppNotificationTypeExtension on AppNotificationType {
     }
   }
 
-  // Optional: Add color support
+  // NAMA Foundation color support
   Color get color {
     switch (this) {
       case AppNotificationType.warning:
-        return Colors.orange;
+        return AppColors.warningAmber;
       case AppNotificationType.important:
-        return Colors.red;
+        return AppColors.errorRed;
       case AppNotificationType.announcement:
-        return Colors.blue;
+        return AppColors.namaNavyBlue;
       case AppNotificationType.chat:
-        return Colors.green;
+        return AppColors.successGreen;
       case AppNotificationType.reminder:
-        return Colors.purple;
+        return AppColors.namaGoldenYellow;
       case AppNotificationType.generic:
-        return Colors.grey;
+        return AppColors.namaMediumGray;
     }
   }
 }

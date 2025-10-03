@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
-import 'package:events_app_trueattempt/features/main_hub/screen/main_hub_screen.dart'; // New import
+import 'package:events_app_trueattempt/features/main_hub/screen/main_hub_screen.dart';
+import 'package:events_app_trueattempt/features/auth/screen/pending_approval_screen.dart';
+import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 
 // AuthGate handles the initial routing based on user's authentication state.
 class AuthGate extends ConsumerWidget {
@@ -16,8 +18,83 @@ class AuthGate extends ConsumerWidget {
     return authState.when(
       data: (user) {
         if (user != null && user.email != null) {
-          // User is authenticated - show main app
-          return const MainHubScreen();
+          // User is authenticated - check their profile and status
+          final userProfileAsync = ref.watch(userAppProfileStreamProvider);
+          return userProfileAsync.when(
+            data: (appUser) {
+              if (appUser == null) {
+                // User authenticated but no profile found
+                return Scaffold(
+                  body: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
+                        const SizedBox(height: 16),
+                        Text('Profile Not Found', style: Theme.of(context).textTheme.headlineSmall),
+                        const SizedBox(height: 8),
+                        const Text('Your account profile could not be loaded.'),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => ref.read(authViewModelProvider.notifier).signOut(),
+                          child: const Text('Sign Out'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              // Check user status
+              switch (appUser.status) {
+                case 'approved':
+                  return const MainHubScreen();
+                case 'rejected':
+                  return Scaffold(
+                    body: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.error),
+                          const SizedBox(height: 16),
+                          Text('Access Denied', style: Theme.of(context).textTheme.headlineSmall),
+                          const SizedBox(height: 8),
+                          const Text('Your account has been rejected.'),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => ref.read(authViewModelProvider.notifier).signOut(),
+                            child: const Text('Sign Out'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                case 'pending':
+                default:
+                  return const PendingApprovalScreen();
+              }
+            },
+            loading: () => const Scaffold(body: LoadingIndicator()),
+            error: (err, stack) => Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
+                    const SizedBox(height: 16),
+                    Text('Error', style: Theme.of(context).textTheme.headlineSmall),
+                    const SizedBox(height: 8),
+                    Text('Failed to load profile: $err'),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => ref.read(authViewModelProvider.notifier).signOut(),
+                      child: const Text('Sign Out'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
         } else {
           // User is not authenticated - show login
           return const LoginScreen();

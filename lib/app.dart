@@ -18,7 +18,7 @@ class MyApp extends StatelessWidget {
       title: 'NAMA Foundation Event App',
       theme: AppTheme.lightTheme, // Default to light theme reflecting company brand
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.system, // Respect system theme preference
+      themeMode: ThemeMode.light, // Force light theme as default
       debugShowCheckedModeBanner: false,
       initialRoute: '/', // Use initialRoute instead of home
       // Add basic named routes for notification deep linking

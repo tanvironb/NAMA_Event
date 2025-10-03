@@ -201,10 +201,10 @@ class UserDetailAdminScreen extends ConsumerWidget {
       case 'approved':
         return AppColors.successGreen;
       case 'rejected':
-        return AppColors.dangerRed;
+        return AppColors.errorRed;
       case 'pending':
       default:
-        return AppColors.warningOrange;
+        return AppColors.warningAmber;
     }
   }
 

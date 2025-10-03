@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/models/event_model.dart';
 import 'package:events_app_trueattempt/core/models/sponsor_model.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';

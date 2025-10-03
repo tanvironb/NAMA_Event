@@ -3,8 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class AppUser {
   final String uid;
   final String email;
+  final String personalEmail; // New field for personal email
   final String name;
-  final String role; // 'attendee', 'speaker', 'admin'
+  final String role; // 'attendee', 'speaker', 'staff', 'admin'
   final String status; // 'pending', 'approved', 'rejected'
   final String profileImageUrl;
   final String company;
@@ -14,6 +15,9 @@ class AppUser {
   final String linkedin;
   final String twitter;
   final String website;
+  final String github;
+  final String medium;
+  final String instagram;
   final String qrCodePayload;
   final bool visibleInDirectory;
   final List<String> bookmarkedSessions;
@@ -27,8 +31,9 @@ class AppUser {
   AppUser({
     required this.uid,
     required this.email,
+    this.personalEmail = '',
     this.name = 'New User',
-    this.role = 'attendee',
+    this.role = 'user',
     this.status = 'pending',
     this.profileImageUrl = '',
     this.company = '',
@@ -38,6 +43,9 @@ class AppUser {
     this.linkedin = '',
     this.twitter = '',
     this.website = '',
+    this.github = '',
+    this.medium = '',
+    this.instagram = '',
     this.qrCodePayload = '',
     this.visibleInDirectory = true,
     this.bookmarkedSessions = const [],
@@ -69,6 +77,9 @@ class AppUser {
       linkedin: data['linkedin'] as String? ?? '',
       twitter: data['twitter'] as String? ?? '',
       website: data['website'] as String? ?? '',
+      github: data['github'] as String? ?? '',
+      medium: data['medium'] as String? ?? '',
+      instagram: data['instagram'] as String? ?? '',
       qrCodePayload: data['qrCodePayload'] as String? ?? '',
       visibleInDirectory: data['visibleInDirectory'] as bool? ?? true,
       bookmarkedSessions: List<String>.from(data['bookmarkedSessions'] as List? ?? []),
@@ -96,6 +107,9 @@ class AppUser {
       'linkedin': linkedin,
       'twitter': twitter,
       'website': website,
+      'github': github,
+      'medium': medium,
+      'instagram': instagram,
       'qrCodePayload': qrCodePayload,
       'visibleInDirectory': visibleInDirectory,
       'bookmarkedSessions': bookmarkedSessions,
