@@ -1,20 +1,15 @@
 import 'package:flutter/material.dart';
 import 'features/auth/screen/auth_gate.dart';
 import 'config/app_themes.dart';
-import 'core/services/notification_services.dart';
+import 'package:events_app_trueattempt/core/services/notification_services.dart';
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
   @override
   Widget build(BuildContext context) {
-    // Set the navigator key for notification routing
-    NotificationService.navigatorKey = navigatorKey;
-
     return MaterialApp(
-      navigatorKey: navigatorKey,
+      navigatorKey: navigatorKey, // Use the global navigatorKey from notification_services.dart
       title: 'NAMA Foundation Event App',
       theme: AppTheme.lightTheme, // Default to light theme reflecting company brand
       darkTheme: AppTheme.darkTheme,

@@ -123,9 +123,9 @@ class ProfileTabScreen extends ConsumerWidget {
                   
                   _buildMenuItem(
                     context,
-                    icon: Icons.bookmark_outline,
-                    title: 'My Bookmarks',
-                    subtitle: 'View your saved sessions',
+                    icon: Icons.calendar_month_outlined,
+                    title: 'My Calendar',
+                    subtitle: 'View your bookmarked sessions',
                     onTap: () {
                       Navigator.push(
                         context,

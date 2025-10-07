@@ -8,6 +8,7 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/widgets/session_youtube_player.dart';
+import 'package:events_app_trueattempt/features/agenda/screen/widgets/session_bookmark_button.dart';
 
 // SessionDetailScreen displays the detailed information for a selected session.
 class SessionDetailScreen extends ConsumerWidget {
@@ -24,7 +25,6 @@ class SessionDetailScreen extends ConsumerWidget {
     final remoteConfig = ref.watch(remoteConfigServiceProvider);
     final timeFormat = DateFormat('h:mm a');
     final speakersFuture = ref.watch(sessionSpeakersFutureProvider(session.speakerIds)); // Fetch speaker details
-    final userProfileAsync = ref.watch(userAppProfileStreamProvider); // Watch user profile
 
     return Scaffold(
       appBar: AppBar(
@@ -60,35 +60,7 @@ class SessionDetailScreen extends ConsumerWidget {
             
             // Functional bookmark button
             const SizedBox(height: 16),
-            userProfileAsync.when(
-              data: (appUser) {
-                if (appUser == null) return const SizedBox.shrink(); // Hide if not logged in
-                
-                final isBookmarked = appUser.bookmarkedSessions.contains(session.id);
-
-                return Align(
-                  alignment: Alignment.centerRight,
-                  child: IconButton(
-                    icon: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 300),
-                      transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
-                      child: Icon(
-                        isBookmarked ? Icons.bookmark : Icons.bookmark_border,
-                        key: ValueKey<bool>(isBookmarked), // Key to trigger animation
-                        color: isBookmarked ? AppColors.goldenYellow : Theme.of(context).colorScheme.secondary,
-                        size: 32,
-                      ),
-                    ),
-                    onPressed: () async {
-                      final repo = ref.read(userProfileRepositoryProvider);
-                      await repo.updateUserBookmarks(appUser.uid, session.id, !isBookmarked);
-                    },
-                  ),
-                );
-              },
-              loading: () => const SizedBox(height: 32, width: 32, child: LoadingIndicator()),
-              error: (err, stack) => const SizedBox.shrink(),
-            ),
+            SessionBookmarkButton(sessionId: session.id),
             const Divider(height: 32),
             Text('About this session', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),

@@ -6,7 +6,6 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live_player.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
-import 'package:events_app_trueattempt/core/services/notification_services.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 // import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_screen.dart'; // New admin dashboard - TODO: Uncomment when created
@@ -39,10 +38,11 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     // Wait for the widget to be built before accessing providers
     await Future.delayed(Duration.zero);
     final user = ref.read(firebaseAuthProvider).currentUser;
-    final userRepo = ref.read(userProfileRepositoryProvider);
     if (user != null) {
-      final notificationService = NotificationService(userRepo, user.uid);
-      await notificationService.initialize();
+      final notificationService = ref.read(notificationServiceProvider(user.uid));
+      if (notificationService != null) {
+        await notificationService.initialize();
+      }
     }
   }
 

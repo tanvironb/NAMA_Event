@@ -13,5 +13,11 @@ class AgendaRepository {
     });
   }
 
+  // NEW: Fetches all sessions associated with a specific partner ID.
+  Future<List<Session>> getSessionsByPartnerId(String partnerId) async {
+    final snapshot = await _firestoreService.getSessionsByPartnerId(partnerId);
+    return snapshot.docs.map((doc) => Session.fromFirestore(doc)).toList();
+  }
+
   // Future methods for specific session fetches can be added here if needed
 }

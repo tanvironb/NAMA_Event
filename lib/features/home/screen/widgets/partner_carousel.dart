@@ -4,6 +4,7 @@ import 'package:card_swiper/card_swiper.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:events_app_trueattempt/features/agenda/screen/sponsor_detail_screen.dart';
 
 class PartnerCarousel extends ConsumerWidget {
   const PartnerCarousel({super.key});
@@ -77,7 +78,7 @@ class PartnerCarousel extends ConsumerWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () => _openPartnerWebsite(context, sponsor),
+          onTap: () => _showPartnerOptions(context, sponsor),
           child: Container(
             padding: const EdgeInsets.all(16.0),
             decoration: BoxDecoration(
@@ -242,6 +243,129 @@ class PartnerCarousel extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPartnerOptions(BuildContext context, dynamic sponsor) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Row(
+              children: [
+                if (sponsor.logoUrl.isNotEmpty)
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      image: DecorationImage(
+                        image: NetworkImage(sponsor.logoUrl),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.business,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        sponsor.name,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Choose an action',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // View Sessions option
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.event_note,
+                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+              title: const Text('View Sessions'),
+              subtitle: const Text('See all sessions by this partner'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => SponsorDetailScreen(
+                      partnerId: sponsor.id, // Assuming the sponsor has an id field
+                      partnerName: sponsor.name,
+                      partnerLogo: sponsor.logoUrl.isNotEmpty ? sponsor.logoUrl : null,
+                      partnerDescription: sponsor.description, // Assuming description field exists
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            // Visit Website option
+            if (sponsor.website.isNotEmpty)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.open_in_new,
+                    color: Theme.of(context).colorScheme.onSecondaryContainer,
+                  ),
+                ),
+                title: const Text('Visit Website'),
+                subtitle: Text('Open ${sponsor.name} website'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _openPartnerWebsite(context, sponsor);
+                },
+              ),
+
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }

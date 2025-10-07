@@ -50,6 +50,16 @@ class UserProfileRepository {
     await _firestoreService.updateUserDocument(uid, updateData);
   }
 
+  // Bulk bookmark/unbookmark multiple sessions for a user.
+  Future<void> bulkUpdateUserBookmarks(String uid, List<String> sessionIds, bool isBookmarked) async {
+    final updateData = {
+      'bookmarkedSessions': isBookmarked
+          ? FieldValue.arrayUnion(sessionIds)
+          : FieldValue.arrayRemove(sessionIds),
+    };
+    await _firestoreService.updateUserDocument(uid, updateData);
+  }
+
   // Updates user profile with the provided data
   Future<void> updateUserProfile(String uid, Map<String, dynamic> updateData) async {
     await _firestoreService.updateUserDocument(uid, updateData);

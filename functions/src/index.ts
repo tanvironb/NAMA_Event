@@ -281,3 +281,110 @@ export const logSessionCheckIn = onCall(async (request) => {
     },
   };
 });
+
+/**
+ * NEW: Triggered when a new direct message is created.
+ * Sends a push notification to the recipient.
+ */
+export const onNewDirectMessage = onDocumentCreated(
+  "directMessages/{conversationId}/messages/{messageId}",
+  async (event) => {
+    const messageData = event.data?.data();
+    if (!messageData) return null;
+    
+    const conversationId = event.params.conversationId;
+
+    // Get the conversation members from the parent document
+    const conversationDoc = await db.collection("directMessages").doc(conversationId).get();
+    const members = conversationDoc.data()?.members as string[];
+    
+    // Find the recipient's ID
+    const recipientId = members.find((id: string) => id !== messageData.senderId);
+    if (!recipientId) {
+      console.log("Recipient not found.");
+      return null;
+    }
+
+    // Get recipient's user document to find their FCM token
+    const recipientDoc = await db.collection("users").doc(recipientId).get();
+    const fcmToken = recipientDoc.data()?.fcmToken;
+
+    if (!fcmToken) {
+      console.log("Recipient does not have an FCM token.");
+      return null;
+    }
+
+    // Construct the notification payload
+    const payload = {
+      notification: {
+        title: `New message from ${messageData.senderName}`,
+        body: messageData.text,
+        sound: "default",
+      },
+      data: {
+        type: "dm",
+        conversationId: conversationId,
+        senderId: messageData.senderId,
+      },
+    };
+
+    console.log(`Sending DM notification to user ${recipientId}`);
+    return admin.messaging().sendToDevice(fcmToken, payload);
+  }
+);
+
+/**
+ * NEW: Triggered on any write to the meetings collection.
+ * Sends a notification for new requests or status updates.
+ */
+export const onMeetingWrite = onDocumentWritten(
+  "meetings/{meetingId}",
+  async (event) => {
+    const beforeData = event.data?.before?.exists ? event.data.before.data() : null;
+    const afterData = event.data?.after?.exists ? event.data.after.data() : null;
+
+    let recipientId: string | null = null;
+    let payload: admin.messaging.MessagingPayload;
+
+    // Case 1: A new meeting is created (a new request is sent)
+    if (!beforeData && afterData) {
+      recipientId = afterData.recipientId;
+      payload = {
+        notification: {
+          title: "New Meeting Request",
+          body: `${afterData.requesterInfo.name} wants to meet with you.`,
+        },
+        data: { type: "meeting_request", meetingId: event.params.meetingId },
+      };
+    } 
+    // Case 2: An existing meeting is updated (request is accepted/rejected)
+    else if (beforeData && afterData && beforeData.status === "pending" && afterData.status !== "pending") {
+      recipientId = afterData.requesterId; // Notify the original requester
+      payload = {
+        notification: {
+          title: `Meeting Request ${afterData.status}`,
+          body: `${afterData.recipientInfo.name} has ${afterData.status} your meeting request.`,
+        },
+        data: { type: "meeting_update", meetingId: event.params.meetingId },
+      };
+    } else {
+      return null; // No notification needed
+    }
+
+    if (!recipientId) {
+      console.log("No recipient ID found.");
+      return null;
+    }
+
+    // Get recipient's FCM token and send the notification
+    const recipientDoc = await db.collection("users").doc(recipientId).get();
+    const fcmToken = recipientDoc.data()?.fcmToken;
+    if (!fcmToken) {
+      console.log(`Recipient ${recipientId} does not have an FCM token.`);
+      return null;
+    }
+    
+    console.log(`Sending meeting notification to user ${recipientId}`);
+    return admin.messaging().sendToDevice(fcmToken, payload);
+  }
+);

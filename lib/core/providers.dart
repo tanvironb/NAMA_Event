@@ -22,6 +22,9 @@ import 'package:events_app_trueattempt/features/messaging/data/messaging_reposit
 import 'package:events_app_trueattempt/core/models/conversation_model.dart';
 import 'package:events_app_trueattempt/features/leaderboard/data/leaderboard_repository.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:events_app_trueattempt/core/services/notification_services.dart';
+import 'package:events_app_trueattempt/core/models/meeting_model.dart';
+import 'package:events_app_trueattempt/features/meetings/data/meeting_repository.dart';
 
 // --- Firebase Core Providers ---
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -53,6 +56,13 @@ final agendaRepositoryProvider = Provider((ref) => AgendaRepository(ref.watch(fi
 // Sponsor Repository Provider
 final sponsorRepositoryProvider = Provider((ref) => SponsorRepository(ref.watch(firestoreServiceProvider)));
 
+// Notification Service Provider
+final notificationServiceProvider = Provider.family<NotificationService?, String>((ref, userId) {
+  final userProfileRepo = ref.watch(userProfileRepositoryProvider);
+  if (userId.isEmpty) return null;
+  return NotificationService(userProfileRepo, userId);
+});
+
 // --- App Data Providers (for presentation layer consumption) ---
 
 // Provides the active event as a Future.
@@ -81,6 +91,22 @@ final sessionsStreamProvider = StreamProvider.autoDispose<List<Session>>((ref) {
     return repo.getSessionsStream(eventId);
   }
   return Stream.value([]); // Return empty list if no active event is found
+});
+
+// Provides a stream of sessions where a specific user is a speaker.
+final speakerSessionsProvider = Provider.autoDispose.family<AsyncValue<List<Session>>, String>((ref, speakerId) {
+  final allSessionsAsync = ref.watch(sessionsStreamProvider);
+  
+  return allSessionsAsync.when(
+    data: (sessions) {
+      final speakerSessions = sessions.where((session) => 
+        session.speakerIds.contains(speakerId)
+      ).toList();
+      return AsyncValue.data(speakerSessions);
+    },
+    loading: () => const AsyncValue.loading(),
+    error: (error, stack) => AsyncValue.error(error, stack),
+  );
 });
 
 // Provides a stream of sponsors for the active event.
@@ -208,6 +234,17 @@ final checkinRepositoryProvider = Provider((ref) => CheckinRepository(ref.watch(
 
 final notificationRepositoryProvider = Provider((ref) => NotificationRepository(ref.watch(firestoreServiceProvider)));
 
+// --- Meeting Providers ---
+final meetingRepositoryProvider = Provider((ref) => MeetingRepository(ref.watch(firestoreServiceProvider)));
+
+final meetingsStreamProvider = StreamProvider.autoDispose<List<Meeting>>((ref) {
+  final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
+  if (userId != null) {
+    return ref.watch(meetingRepositoryProvider).getMeetingsStream(userId);
+  }
+  return Stream.value([]);
+});
+
 final notificationsStreamProvider = StreamProvider.autoDispose<List<AppNotification>>((ref) {
   final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
   if (userId != null) {
@@ -261,3 +298,9 @@ final userProfileByIdProvider = FutureProvider.autoDispose.family<AppUser?, Stri
 
 // --- NEW: Firebase Functions Provider ---
 final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) => FirebaseFunctions.instance);
+
+// --- Partner Sessions Provider ---
+final partnerSessionsProvider = FutureProvider.autoDispose.family<List<Session>, String>((ref, partnerId) async {
+  final repo = ref.watch(agendaRepositoryProvider);
+  return await repo.getSessionsByPartnerId(partnerId);
+});

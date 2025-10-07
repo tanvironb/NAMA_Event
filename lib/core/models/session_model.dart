@@ -18,6 +18,8 @@ class Session {
   /// 4 = High priority (featured speakers, important announcements)
   /// 5 = Maximum priority (keynotes, urgent updates, main event streams)
   final int priority;
+  final String partnerId; // NEW (Optional): Links session to a sponsor for bulk-bookmarking
+
 
   Session({
     required this.id,
@@ -31,6 +33,7 @@ class Session {
     this.liveStreamUrl = '',
     this.qrCodePayload = '', // NEW
     this.priority = 3, // Default to normal priority
+    this.partnerId = '', // NEW (Optional): Links session to a sponsor for bulk-bookmarking
   });
 
   factory Session.fromFirestore(DocumentSnapshot doc) {
@@ -50,6 +53,7 @@ class Session {
       liveStreamUrl: data['liveStreamUrl'] as String? ?? '',
       qrCodePayload: data['qrCodePayload'] as String? ?? '', // NEW
       priority: data['priority'] as int? ?? 3, // Default to normal priority if not specified
+      partnerId: data['partnerId'] as String? ?? '', // NEW (Optional): Links session to a sponsor for bulk-bookmarking
     );
   }
 }

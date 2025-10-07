@@ -8,9 +8,9 @@ import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/home_dashboard_screen.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live_player.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
-import 'package:events_app_trueattempt/core/services/notification_services.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
+import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
 class AttendeeShell extends ConsumerStatefulWidget {
   const AttendeeShell({super.key});
 
@@ -40,10 +40,11 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
     // Wait for the widget to be built before accessing providers
     await Future.delayed(Duration.zero);
     final user = ref.read(firebaseAuthProvider).currentUser;
-    final userRepo = ref.read(userProfileRepositoryProvider);
     if (user != null) {
-      final notificationService = NotificationService(userRepo, user.uid);
-      await notificationService.initialize();
+      final notificationService = ref.read(notificationServiceProvider(user.uid));
+      if (notificationService != null) {
+        await notificationService.initialize();
+      }
     }
   }
 
@@ -142,6 +143,16 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('About Event details will be here!')),
                 );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.calendar_today_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('My Meetings', style: Theme.of(context).textTheme.titleMedium),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const MyMeetingsScreen(),
+                ));
               },
             ),
             ListTile(

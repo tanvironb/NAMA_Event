@@ -101,6 +101,28 @@ class FirestoreService {
         .snapshots();
   }
 
+  // NEW: Service method to query sessions by partnerId.
+  Future<QuerySnapshot> getSessionsByPartnerId(String partnerId) {
+    return _db.collection('sessions').where('partnerId', isEqualTo: partnerId).get();
+  }
+
+  // NEW: Service method to get multiple sessions by their IDs.
+  Future<List<DocumentSnapshot>> getSessionsByIds(List<String> sessionIds) async {
+    if (sessionIds.isEmpty) return [];
+    
+    // Firestore 'in' queries are limited to 10 items, so we may need to batch
+    const batchSize = 10;
+    final List<DocumentSnapshot> allDocs = [];
+    
+    for (int i = 0; i < sessionIds.length; i += batchSize) {
+      final batch = sessionIds.skip(i).take(batchSize).toList();
+      final snapshot = await _db.collection('sessions').where(FieldPath.documentId, whereIn: batch).get();
+      allDocs.addAll(snapshot.docs);
+    }
+    
+    return allDocs;
+  }
+
   // --- Sponsor-related operations ---
   Stream<QuerySnapshot> getSponsorsCollectionStream(String eventId) {
     return _db
@@ -187,6 +209,22 @@ class FirestoreService {
         .limit(20) // Get top 20 users
         .get();
     return snapshot.docs;
+  }
+
+  // --- NEW: Meeting operations ---
+  Stream<QuerySnapshot> getMeetingsCollectionStream(String userId) {
+    return _db.collection('meetings')
+      .where('memberIds', arrayContains: userId) // We use a 'memberIds' field for efficient querying
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+  }
+
+  Future<void> createMeetingDocument(Map<String, dynamic> data) async {
+    await _db.collection('meetings').add(data);
+  }
+
+  Future<void> updateMeetingDocument(String meetingId, Map<String, dynamic> data) async {
+    await _db.collection('meetings').doc(meetingId).update(data);
   }
 }
 

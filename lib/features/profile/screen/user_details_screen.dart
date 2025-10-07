@@ -7,7 +7,10 @@ import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
+import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/widgets/speaker_sessions_bookmark_button.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserDetailsScreen extends ConsumerWidget {
   final String userId;
@@ -93,7 +96,7 @@ class UserDetailsScreen extends ConsumerWidget {
               physics: const BouncingScrollPhysics(),
               child: Column(
                 children: [
-                  _buildProfileHeader(context, appUser, currentUserId),
+                  _buildProfileHeader(context, appUser, currentUserId, ref),
                   _buildProfileContent(context, appUser),
                 ],
               ),
@@ -142,7 +145,7 @@ class UserDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileHeader(BuildContext context, AppUser appUser, String? currentUserId) {
+  Widget _buildProfileHeader(BuildContext context, AppUser appUser, String? currentUserId, WidgetRef ref) {
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 800),
       tween: Tween(begin: 0.0, end: 1.0),
@@ -353,7 +356,9 @@ class UserDetailsScreen extends ConsumerWidget {
                   
                   const SizedBox(height: 32),
                   
-                  if (currentUserId != userId) _buildSayHiButton(context),
+                  if (currentUserId != userId) ...[
+                    _buildActionButtons(context, appUser, currentUserId!, ref),
+                  ],
                 ],
               ),
             ),
@@ -399,59 +404,262 @@ class UserDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSayHiButton(BuildContext context) {
+  Widget _buildActionButtons(BuildContext context, AppUser appUser, String currentUserId, WidgetRef ref) {
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 1000),
       tween: Tween(begin: 0.0, end: 1.0),
       builder: (context, value, child) {
         return Transform.scale(
           scale: value,
-          child: SizedBox(
-            width: double.infinity,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  _showComingSoonSnackBar(context);
-                },
-                icon: const Icon(Icons.chat_bubble_outline),
-                label: const Text(
-                  'Say Hi',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.namaNavyBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+          child: Column(
+            children: [
+              // Say Hi button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      final repo = ref.read(messagingRepositoryProvider);
+                      final conversationId = await repo.createOrGetConversation(currentUserId, appUser.uid);
+                      
+                      if (context.mounted) {
+                        Navigator.of(context).push(MaterialPageRoute(
+                          builder: (context) => DirectMessageScreen(
+                            conversationId: conversationId,
+                            otherUserName: appUser.name,
+                          ),
+                        ));
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Failed to start conversation: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                  icon: const Icon(Icons.chat_bubble_outline),
+                  label: const Text(
+                    'Say Hi',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
-                  elevation: 4,
-                  shadowColor: AppColors.namaNavyBlue.withOpacity(0.3),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.namaNavyBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 4,
+                    shadowColor: AppColors.namaNavyBlue.withOpacity(0.3),
+                  ),
                 ),
               ),
-            ),
+              
+              const SizedBox(height: 12),
+              
+              // Request Meeting button
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _showRequestMeetingDialog(context, appUser, currentUserId, ref),
+                  icon: const Icon(Icons.calendar_today_outlined),
+                  label: const Text(
+                    'Request Meeting',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.namaNavyBlue,
+                    side: const BorderSide(color: AppColors.namaNavyBlue, width: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Book All Sessions button (only for speakers)
+              if (appUser.role == 'speaker') ...[
+                const SizedBox(height: 12),
+                SpeakerSessionsBookmarkButton(speakerId: appUser.uid),
+              ],
+            ],
           ),
         );
       },
     );
   }
 
-  void _showComingSoonSnackBar(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.info_outline, color: Colors.white),
-            SizedBox(width: 12),
-            Text('Messaging feature coming soon!'),
+  void _showRequestMeetingDialog(BuildContext context, AppUser appUser, String currentUserId, WidgetRef ref) {
+    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
+    TimeOfDay selectedTime = const TimeOfDay(hour: 14, minute: 0);
+    final locationController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Request Meeting with ${appUser.name}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Choose a date and time:', style: TextStyle(fontWeight: FontWeight.w500)),
+                const SizedBox(height: 12),
+                
+                // Date picker
+                InkWell(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (date != null) {
+                      setState(() {
+                        selectedDate = date;
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // Time picker
+                InkWell(
+                  onTap: () async {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: selectedTime,
+                    );
+                    if (time != null) {
+                      setState(() {
+                        selectedTime = time;
+                      });
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.access_time, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          selectedTime.format(context),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Location field
+                TextField(
+                  controller: locationController,
+                  decoration: const InputDecoration(
+                    labelText: 'Location (optional)',
+                    hintText: 'e.g., Coffee shop, Zoom call, etc.',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.location_on),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final proposedDateTime = DateTime(
+                  selectedDate.year,
+                  selectedDate.month,
+                  selectedDate.day,
+                  selectedTime.hour,
+                  selectedTime.minute,
+                );
+
+                try {
+                  // Get current user info
+                  final currentUser = ref.read(firebaseAuthProvider).currentUser;
+                  final currentUserProfile = await ref.read(userProfileByIdProvider(currentUserId).future);
+                  
+                  if (currentUser != null && currentUserProfile != null) {
+                    await ref.read(meetingRepositoryProvider).requestMeeting(
+                      requesterId: currentUserId,
+                      recipientId: appUser.uid,
+                      requesterInfo: {
+                        'name': currentUserProfile.name,
+                        'email': currentUserProfile.email,
+                      },
+                      recipientInfo: {
+                        'name': appUser.name,
+                        'email': appUser.email,
+                      },
+                      proposedTime: Timestamp.fromDate(proposedDateTime),
+                      location: locationController.text.trim(),
+                    );
+
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Meeting request sent!'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to send meeting request: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.namaNavyBlue,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Send Request'),
+            ),
           ],
         ),
-        backgroundColor: AppColors.namaNavyBlue,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
       ),
     );
   }
