@@ -9,8 +9,8 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/widgets/speaker_sessions_bookmark_button.dart';
+import 'package:events_app_trueattempt/features/meetings/screen/request_meeting_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserDetailsScreen extends ConsumerWidget {
   final String userId;
@@ -465,7 +465,13 @@ class UserDetailsScreen extends ConsumerWidget {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () => _showRequestMeetingDialog(context, appUser, currentUserId, ref),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => RequestMeetingScreen(recipient: appUser),
+                      ),
+                    );
+                  },
                   icon: const Icon(Icons.calendar_today_outlined),
                   label: const Text(
                     'Request Meeting',
@@ -491,176 +497,6 @@ class UserDetailsScreen extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-
-  void _showRequestMeetingDialog(BuildContext context, AppUser appUser, String currentUserId, WidgetRef ref) {
-    DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
-    TimeOfDay selectedTime = const TimeOfDay(hour: 14, minute: 0);
-    final locationController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text('Request Meeting with ${appUser.name}'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Choose a date and time:', style: TextStyle(fontWeight: FontWeight.w500)),
-                const SizedBox(height: 12),
-                
-                // Date picker
-                InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: selectedDate,
-                      firstDate: DateTime.now(),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (date != null) {
-                      setState(() {
-                        selectedDate = date;
-                      });
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[300]!),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.calendar_today, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 12),
-                
-                // Time picker
-                InkWell(
-                  onTap: () async {
-                    final time = await showTimePicker(
-                      context: context,
-                      initialTime: selectedTime,
-                    );
-                    if (time != null) {
-                      setState(() {
-                        selectedTime = time;
-                      });
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[300]!),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.access_time, size: 20),
-                        const SizedBox(width: 8),
-                        Text(
-                          selectedTime.format(context),
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                // Location field
-                TextField(
-                  controller: locationController,
-                  decoration: const InputDecoration(
-                    labelText: 'Location (optional)',
-                    hintText: 'e.g., Coffee shop, Zoom call, etc.',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.location_on),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final proposedDateTime = DateTime(
-                  selectedDate.year,
-                  selectedDate.month,
-                  selectedDate.day,
-                  selectedTime.hour,
-                  selectedTime.minute,
-                );
-
-                try {
-                  // Get current user info
-                  final currentUser = ref.read(firebaseAuthProvider).currentUser;
-                  final currentUserProfile = await ref.read(userProfileByIdProvider(currentUserId).future);
-                  
-                  if (currentUser != null && currentUserProfile != null) {
-                    await ref.read(meetingRepositoryProvider).requestMeeting(
-                      requesterId: currentUserId,
-                      recipientId: appUser.uid,
-                      requesterInfo: {
-                        'name': currentUserProfile.name,
-                        'email': currentUserProfile.email,
-                      },
-                      recipientInfo: {
-                        'name': appUser.name,
-                        'email': appUser.email,
-                      },
-                      proposedTime: Timestamp.fromDate(proposedDateTime),
-                      location: locationController.text.trim(),
-                    );
-
-                    if (context.mounted) {
-                      Navigator.of(context).pop();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Meeting request sent!'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    }
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Failed to send meeting request: $e'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.namaNavyBlue,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Send Request'),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
