@@ -1,1 +1,10 @@
-{}
+{
+  "is_chat_enabled": {
+    "defaultValue": true,
+    "description": "Controls whether session chat features are shown throughout the app. When disabled, chat buttons and navigation will be hidden."
+  },
+  "is_leaderboard_enabled": {
+    "defaultValue": false,
+    "description": "Controls whether the leaderboard feature appears in quick actions and navigation. Enable this when the leaderboard system is ready for users."
+  }
+}

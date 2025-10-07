@@ -41,6 +41,16 @@ final authStateChangesProvider = StreamProvider<User?>(
 final firestoreServiceProvider = Provider<FirestoreService>(
     (ref) => FirestoreService(ref.watch(firestoreProvider)));
 
+// --- App Initialization Provider ---
+// A provider that encapsulates all essential async initializations before the app starts
+final appInitializationProvider = FutureProvider<void>((ref) async {
+  // Remote Config is already initialized in main.dart, but we can add more here if needed.
+  // For example, initializing any other async services.
+  
+  // Add a small delay to ensure smooth loading experience
+  await Future.delayed(const Duration(milliseconds: 500));
+});
+
 // --- Repository Providers (for data layer abstraction) ---
 // These abstract direct FirestoreService calls and work with domain models.
 

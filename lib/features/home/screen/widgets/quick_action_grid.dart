@@ -15,9 +15,11 @@ class QuickActionGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final remoteConfig = ref.watch(remoteConfigServiceProvider);
+    
     // Define your quick action buttons here.
     // Each button is a map containing its icon, label, and onTap action.
-    final List<Map<String, dynamic>> quickActions = [
+    final List<Map<String, dynamic>> allActions = [
       {
         'icon': Icons.calendar_month_outlined,
         'label': 'Agenda',
@@ -108,6 +110,15 @@ class QuickActionGrid extends ConsumerWidget {
         },
       },
     ];
+
+    // Filter the list based on feature flags
+    final List<Map<String, dynamic>> quickActions = allActions.where((action) {
+      if (action['label'] == 'Leaderboard') {
+        return remoteConfig.isLeaderboardEnabled;
+      }
+      // Add more conditions for other flags later
+      return true;
+    }).toList();
 
     return GridView.builder(
       shrinkWrap: true, // Takes only the space it needs

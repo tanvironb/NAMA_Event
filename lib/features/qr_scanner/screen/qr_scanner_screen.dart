@@ -126,11 +126,15 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
         ),
       );
       
-      // Close scanner and navigate to chat
+      // Close scanner and conditionally navigate to chat if enabled
       Navigator.of(context).pop(); // Pop the scanner screen
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (context) => SessionChatScreen(session: session),
-      ));
+      
+      final remoteConfig = ref.read(remoteConfigServiceProvider);
+      if (remoteConfig.isChatEnabled) {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (context) => SessionChatScreen(session: session),
+        ));
+      }
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Checked into "${session.title}"!'), backgroundColor: Colors.green),
