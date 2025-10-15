@@ -8,6 +8,7 @@ import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class QRScannerScreen extends ConsumerStatefulWidget {
   const QRScannerScreen({super.key});
@@ -137,7 +138,7 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       }
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Checked into "${session.title}"!'), backgroundColor: Colors.green),
+        SnackBar(content: Text('Checked into "${session.title}"!'), backgroundColor: AppColors.successGreen),
       );
 
     } catch (e) {
@@ -204,7 +205,7 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
                 
                 Navigator.of(context).pop(); // Close dialog
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Checked in ${scannedUserData['name']}!'), backgroundColor: Colors.green),
+                  SnackBar(content: Text('Checked in ${scannedUserData['name']}!'), backgroundColor: AppColors.successGreen),
                 );
               } catch (e) {
                 Navigator.of(context).pop();

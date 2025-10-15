@@ -75,14 +75,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Profile updated successfully!'), backgroundColor: Colors.green),
+          const SnackBar(content: Text('Profile updated successfully!'), backgroundColor: AppColors.successGreen),
         );
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update profile: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('Failed to update profile: $e'), backgroundColor: AppColors.errorRed),
         );
       }
     } finally {
@@ -113,7 +113,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       appBar: AppBar(
         title: const Text('Edit Profile'),
         backgroundColor: AppColors.navyBlue,
-        foregroundColor: Colors.white,
+        foregroundColor: AppColors.namaWhite,
       ),
       body: Form(
         key: _formKey,
@@ -326,7 +326,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         onPressed: _saveProfile,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.navyBlue,
-                          foregroundColor: Colors.white,
+                          foregroundColor: AppColors.namaWhite,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),

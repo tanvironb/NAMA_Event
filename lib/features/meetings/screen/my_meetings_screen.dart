@@ -75,9 +75,9 @@ class MyMeetingsScreen extends ConsumerWidget {
             Text(
               type == 'pending' ? 'No pending meetings' :
               type == 'upcoming' ? 'No upcoming meetings' : 'No past meetings',
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.grey[600],
+              style: const TextStyle(
+                fontSize: 16,
+                color: AppColors.namaMediumGray,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -85,7 +85,7 @@ class MyMeetingsScreen extends ConsumerWidget {
             Text(
               type == 'pending' ? 'Meeting requests will appear here' :
               type == 'upcoming' ? 'Accepted meetings will appear here' : 'Completed meetings will appear here',
-              style: TextStyle(color: Colors.grey[500]),
+              style: const TextStyle(color: AppColors.namaMediumGray),
             ),
           ],
         ),
@@ -200,9 +200,9 @@ class MyMeetingsScreen extends ConsumerWidget {
                       onPressed: () => _handleMeetingResponse(context, ref, meeting.id, 'rejected'),
                       icon: const Icon(Icons.close, size: 18),
                       label: const Text('Decline'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
+                        style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.errorRed,
+                        side: const BorderSide(color: AppColors.errorRed),
                       ),
                     ),
                   ),
@@ -213,8 +213,8 @@ class MyMeetingsScreen extends ConsumerWidget {
                       icon: const Icon(Icons.check, size: 18),
                       label: const Text('Accept'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.namaNavyBlue,
-                        foregroundColor: Colors.white,
+                        backgroundColor: AppColors.successGreen,
+                        foregroundColor: AppColors.namaWhite,
                       ),
                     ),
                   ),

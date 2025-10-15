@@ -40,7 +40,7 @@ class UserDetailsScreen extends ConsumerWidget {
             body: const Center(
               child: Text(
                 'User not found',
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                style: TextStyle(fontSize: 16, color: AppColors.namaMediumGray),
               ),
             ),
           );
@@ -126,16 +126,16 @@ class UserDetailsScreen extends ConsumerWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.grey),
+              const Icon(Icons.error_outline, size: 64, color: AppColors.namaMediumGray),
               const SizedBox(height: 16),
               Text(
                 'Error loading profile',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 16, color: AppColors.namaMediumGray),
               ),
               const SizedBox(height: 8),
               Text(
                 error.toString(),
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                style: TextStyle(fontSize: 12, color: AppColors.namaMediumGray),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -168,7 +168,7 @@ class UserDetailsScreen extends ConsumerWidget {
                       height: 120,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.grey[300]!, width: 3),
+                        border: Border.all(color: AppColors.namaLightGray, width: 3),
                         boxShadow: [
                           BoxShadow(
                             color: AppColors.namaNavyBlue.withOpacity(0.1),
@@ -232,9 +232,9 @@ class UserDetailsScreen extends ConsumerWidget {
                             child: Text(
                               appUser.title,
                               style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
+                              fontSize: 18,
+                              color: AppColors.namaMediumGray,
+                              fontWeight: FontWeight.w500,
                               ),
                               textAlign: TextAlign.center,
                             ),
@@ -393,7 +393,7 @@ class UserDetailsScreen extends ConsumerWidget {
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: Colors.grey[200],
+        color: AppColors.namaLightGray,
       ),
       child: const Center(
         child: CircularProgressIndicator(
@@ -435,7 +435,7 @@ class UserDetailsScreen extends ConsumerWidget {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('Failed to start conversation: $e'),
-                            backgroundColor: Colors.red,
+                            backgroundColor: AppColors.errorRed,
                           ),
                         );
                       }
@@ -448,7 +448,7 @@ class UserDetailsScreen extends ConsumerWidget {
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.namaNavyBlue,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.namaWhite,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),

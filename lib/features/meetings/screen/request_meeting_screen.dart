@@ -105,7 +105,7 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Meeting request sent to ${widget.recipient.name}!'),
-            backgroundColor: Colors.green,
+            backgroundColor: AppColors.successGreen,
           ),
         );
       }
@@ -114,7 +114,7 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error sending meeting request: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.errorRed,
           ),
         );
       }
@@ -275,7 +275,7 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
                 onPressed: _isLoading ? null : _proposeMeeting,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.namaGoldenYellow,
-                  foregroundColor: Colors.white,
+                  foregroundColor: AppColors.namaWhite,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -287,7 +287,7 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          color: Colors.white,
+                          color: AppColors.namaWhite,
                         ),
                       )
                     : const Text(
