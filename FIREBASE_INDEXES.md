@@ -22,6 +22,16 @@
 - Field 1: `members` (Array Contains)
 - Field 2: `lastMessageTimestamp` (Descending)
 
+### 3. Meetings Collection
+**Query**: Get meetings for a user ordered by creation time
+```dart
+.where('memberIds', arrayContains: userId)
+.orderBy('createdAt', descending: true)
+```
+**Index Required**:
+- Field 1: `memberIds` (Array Contains)
+- Field 2: `createdAt` (Descending)
+
 ## **SINGLE FIELD INDEXES** 
 *(Automatically created by Firebase)*
 
