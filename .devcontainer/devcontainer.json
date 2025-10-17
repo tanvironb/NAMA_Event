@@ -1,7 +1,8 @@
 {
   "name": "Flutter Dev Container",
   "build": {
-    "dockerfile": "Dockerfile"
+    "dockerfile": "Dockerfile",
+    "context": ".."
   },
   "workspaceFolder": "/app",
   "customizations": {

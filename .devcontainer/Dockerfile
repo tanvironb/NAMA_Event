@@ -1,5 +1,5 @@
 # Flutter development environment with support for web, emulators, and device connections
-FROM cirrusci/flutter:3.29.0
+FROM ghcr.io/cirruslabs/flutter:3.29.0
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
