@@ -307,7 +307,17 @@ final userProfileByIdProvider = FutureProvider.autoDispose.family<AppUser?, Stri
 });
 
 // --- NEW: Firebase Functions Provider ---
-final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) => FirebaseFunctions.instance);
+// Configured for asia-southeast1 (same region as Firestore)
+final firebaseFunctionsProvider = Provider<FirebaseFunctions>((ref) {
+  final functions = FirebaseFunctions.instanceFor(region: 'asia-southeast1');
+  
+  // For local development with emulator, uncomment this:
+  // if (kDebugMode) {
+  //   functions.useFunctionsEmulator('localhost', 5001);
+  // }
+  
+  return functions;
+});
 
 // --- Partner Sessions Provider ---
 final partnerSessionsProvider = FutureProvider.autoDispose.family<List<Session>, String>((ref, partnerId) async {

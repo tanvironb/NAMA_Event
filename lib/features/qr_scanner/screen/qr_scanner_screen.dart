@@ -39,8 +39,11 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
   }
 
   Future<void> _processScannedPayload(String payload) async {
+    if (!mounted) return; // Check if widget is still mounted
+    
     final scannerProfile = ref.read(userAppProfileStreamProvider).asData?.value;
     if (scannerProfile == null) {
+      if (!mounted) return;
       _showErrorDialog('Your profile could not be loaded. Please try again.');
       return;
     }
@@ -49,24 +52,50 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       // Step 1: Securely validate the QR code via Cloud Function
       final functions = ref.read(firebaseFunctionsProvider);
       final callable = functions.httpsCallable('validateQrCode');
-      final result = await callable.call<Map<String, dynamic>>({'payload': payload});
+      
+      // Add timeout to prevent hanging
+      final result = await callable.call({
+        'payload': payload
+      }).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Request timed out. Please check your internet connection and try again.');
+        },
+      );
+      
+      if (!mounted) return; // Check again after async operation
+      
+      debugPrint('Cloud function result: ${result.data}');
+      debugPrint('Result data type: ${result.data.runtimeType}');
       
       // v3 structure: result.data has 'type' and 'data' fields
-      final String type = result.data['type'];
-      final Map<String, dynamic> data = result.data['data'];
+      // Convert from _Map<Object?, Object?> to Map<String, dynamic>
+      final responseData = Map<String, dynamic>.from(result.data as Map);
+      final String type = responseData['type'] as String;
+      final Map<String, dynamic> data = Map<String, dynamic>.from(responseData['data'] as Map);
+
+      debugPrint('QR Code validated successfully: type=$type'); // Debug logging
 
       // Handle different QR types using v3's approach
       if (type == 'user') {
-        _handleUserScan(scannerProfile, data);
+        // Stop camera before navigation to prevent further scans
+        _scannerController.stop();
+        await _handleUserScan(scannerProfile, data);
       } else if (type == 'session') {
         // v3's simplified approach: direct call to _logSessionCheckIn with sessionId from data
-        setState(() => _processingMessage = 'Checking in to session...');
+        if (mounted) {
+          setState(() => _processingMessage = 'Checking in to session...');
+        }
         _logSessionCheckIn(data['sessionId']);
       } else {
         _showErrorDialog('Unknown QR code type.');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       // Handle both FirebaseFunctionsException and other exceptions
+      debugPrint('QR Validation Error: $e'); // Debug logging
+      debugPrint('Stack trace: $stackTrace'); // Stack trace for debugging
+      if (!mounted) return; // Don't show error if widget disposed
+      
       String errorMessage = 'Invalid QR Code.';
       if (e.toString().contains('FirebaseFunctionsException')) {
         // Extract message from Firebase Functions exception
@@ -80,31 +109,64 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
         errorMessage = 'Please log in to scan QR codes.';
       } else if (e.toString().contains('failed-precondition')) {
         errorMessage = 'This session is not currently active.';
+      } else if (e.toString().contains('type \'String\' is not a subtype')) {
+        errorMessage = 'Invalid data format received from server.';
+        debugPrint('Detailed error: Response data type mismatch');
       } else if (e.toString().isNotEmpty) {
-        errorMessage = 'An unexpected error occurred. Please try again.';
+        // Show more details in development
+        errorMessage = 'An unexpected error occurred: ${e.toString()}';
       }
       _showErrorDialog(errorMessage);
     }
   }
 
-  void _handleUserScan(dynamic scannerProfile, Map<String, dynamic> scannedUserData) {
-    if (scannerProfile.role == 'admin' || scannerProfile.role == 'staff') {
-      _showAdminStaffPopup(scannedUserData);
-    } else { // Attendee is scanning
-      // Navigate to the full profile screen using the secure UID
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (context) => UserDetailsScreen(userId: scannedUserData['uid']),
-      )).then((_) => _resetScanner());
+  Future<void> _handleUserScan(dynamic scannerProfile, Map<String, dynamic> scannedUserData) async {
+    if (!mounted) return; // Check if widget is still mounted
+    
+    try {
+      debugPrint('_handleUserScan called with data: $scannedUserData');
+      debugPrint('Scanner profile role: ${scannerProfile.role}');
+      
+      if (scannerProfile.role == 'admin' || scannerProfile.role == 'staff') {
+        _showAdminStaffPopup(scannedUserData);
+      } else { // Attendee is scanning
+        // Small delay to ensure state is stable before navigation
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        if (!mounted) return;
+        
+        final userId = scannedUserData['uid'];
+        debugPrint('Navigating to UserDetailsScreen with userId: $userId');
+        
+        // Navigate to the full profile screen using the secure UID
+        await Navigator.of(context).push(MaterialPageRoute(
+          builder: (context) => UserDetailsScreen(userId: userId),
+        ));
+        
+        // Reset scanner when user returns
+        if (mounted) {
+          _resetScanner();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error in _handleUserScan: $e');
+      if (mounted) {
+        _showErrorDialog('Failed to load user profile: ${e.toString()}');
+      }
     }
   }
 
   // v3: Removed _handleSessionScan method - goes directly to _logSessionCheckIn
   Future<void> _logSessionCheckIn(String sessionId) async {
+    if (!mounted) return; // Check if widget is still mounted
+    
     try {
       final functions = ref.read(firebaseFunctionsProvider);
       final callable = functions.httpsCallable('logSessionCheckIn');
       final result = await callable.call<Map<String, dynamic>>({'sessionId': sessionId});
 
+      if (!mounted) return; // Check again after async operation
+      
       // On success, the function returns the session details
       final returnedSessionData = result.data['session'];
       
@@ -127,6 +189,8 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
         ),
       );
       
+      if (!mounted) return; // Check before navigation
+      
       // Close scanner and conditionally navigate to chat if enabled
       Navigator.of(context).pop(); // Pop the scanner screen
       
@@ -142,6 +206,9 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       );
 
     } catch (e) {
+      debugPrint('Session Check-in Error: $e'); // Debug logging
+      if (!mounted) return; // Don't show error if widget disposed
+      
       String errorMessage = 'Check-in failed.';
       if (e.toString().contains('FirebaseFunctionsException')) {
         // Extract message from Firebase Functions exception
@@ -198,16 +265,23 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
           ElevatedButton(
             child: const Text('Check-in User'),
             onPressed: () async {
+              if (!mounted) return; // Check if widget is still mounted
+              
               try {
                 final functions = ref.read(firebaseFunctionsProvider);
                 final callable = functions.httpsCallable('logEventCheckIn');
                 await callable.call<Map<String, dynamic>>({'scannedUserId': scannedUserData['uid']});
+                
+                if (!mounted) return;
                 
                 Navigator.of(context).pop(); // Close dialog
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Checked in ${scannedUserData['name']}!'), backgroundColor: AppColors.successGreen),
                 );
               } catch (e) {
+                debugPrint('Event Check-in Error: $e'); // Debug logging
+                if (!mounted) return;
+                
                 Navigator.of(context).pop();
                 String errorMessage = 'Check-in failed.';
                 if (e.toString().contains('FirebaseFunctionsException')) {
