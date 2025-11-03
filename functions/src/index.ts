@@ -331,26 +331,60 @@ export const onNewDirectMessage = onDocumentCreated(
     const fcmToken = recipientDoc.data()?.fcmToken;
 
     if (!fcmToken) {
-      console.log("Recipient does not have an FCM token.");
+      console.log(`Recipient ${recipientId} does not have an FCM token.`);
       return null;
     }
 
-    // Construct the notification payload
-    const payload = {
+    const tokenPreview = fcmToken.substring(0, 20);
+    console.log(`Sending DM notification to user ${recipientId} ` +
+      `with token: ${tokenPreview}...`);
+
+    // Construct the notification message using FCM HTTP v1 API
+    const message = {
+      token: fcmToken,
       notification: {
         title: `New message from ${messageData.senderName}`,
         body: messageData.text,
-        sound: "default",
       },
       data: {
         type: "dm",
         conversationId: conversationId,
         senderId: messageData.senderId,
       },
+      android: {
+        notification: {
+          sound: "default",
+          clickAction: "FLUTTER_NOTIFICATION_CLICK",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+          },
+        },
+      },
     };
 
-    console.log(`Sending DM notification to user ${recipientId}`);
-    return admin.messaging().sendToDevice(fcmToken, payload);
+    try {
+      const response = await admin.messaging().send(message);
+      console.log(`Successfully sent DM notification: ${response}`);
+      return response;
+    } catch (error) {
+      console.error("Error sending DM notification:", error);
+
+      // If token is invalid, remove it from the user document
+      if (error instanceof Error &&
+          (error.message.includes("registration-token-not-registered") ||
+           error.message.includes("invalid-registration-token"))) {
+        console.log(`Removing invalid FCM token for user ${recipientId}`);
+        await db.collection("users").doc(recipientId).update({
+          fcmToken: admin.firestore.FieldValue.delete(),
+        });
+      }
+
+      throw error;
+    }
   }
 );
 
@@ -413,7 +447,48 @@ export const onMeetingWrite = onDocumentWritten(
       return null;
     }
 
-    console.log(`Sending meeting notification to user ${recipientId}`);
-    return admin.messaging().sendToDevice(fcmToken, payload);
+    const tokenPreview = fcmToken.substring(0, 20);
+    console.log(`Sending meeting notification to user ${recipientId} ` +
+      `with token: ${tokenPreview}...`);
+
+    // Construct the notification message using FCM HTTP v1 API
+    const message = {
+      token: fcmToken,
+      notification: payload.notification,
+      data: payload.data,
+      android: {
+        notification: {
+          sound: "default",
+          clickAction: "FLUTTER_NOTIFICATION_CLICK",
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+          },
+        },
+      },
+    };
+
+    try {
+      const response = await admin.messaging().send(message);
+      console.log(`Successfully sent meeting notification: ${response}`);
+      return response;
+    } catch (error) {
+      console.error("Error sending meeting notification:", error);
+
+      // If token is invalid, remove it from the user document
+      if (error instanceof Error &&
+          (error.message.includes("registration-token-not-registered") ||
+           error.message.includes("invalid-registration-token"))) {
+        console.log(`Removing invalid FCM token for user ${recipientId}`);
+        await db.collection("users").doc(recipientId).update({
+          fcmToken: admin.firestore.FieldValue.delete(),
+        });
+      }
+
+      throw error;
+    }
   }
 );

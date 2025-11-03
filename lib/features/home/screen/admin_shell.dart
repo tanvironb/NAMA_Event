@@ -31,18 +31,27 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   @override
   void initState() {
     super.initState();
-    _initializeNotifications();
+    // Use addPostFrameCallback to ensure providers are ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeNotifications();
+    });
   }
 
   Future<void> _initializeNotifications() async {
-    // Wait for the widget to be built before accessing providers
-    await Future.delayed(Duration.zero);
+    if (!mounted) return;
+    
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user != null) {
+      debugPrint('AdminShell: Initializing notifications for user ${user.uid}');
       final notificationService = ref.read(notificationServiceProvider(user.uid));
       if (notificationService != null) {
         await notificationService.initialize();
+        debugPrint('AdminShell: Notification service initialized successfully');
+      } else {
+        debugPrint('AdminShell: Notification service is null');
       }
+    } else {
+      debugPrint('AdminShell: No authenticated user found');
     }
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart';
 import 'app.dart';
@@ -8,11 +9,26 @@ import 'utils/seed_data.dart';
 import 'utils/test_live_session.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 
+/// Background message handler
+/// This MUST be a top-level function (not inside a class)
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Initialize Firebase if not already initialized
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  
+  debugPrint('Background message received: ${message.messageId}');
+  debugPrint('Message data: ${message.data}');
+  debugPrint('Notification: ${message.notification?.title}');
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Register the background message handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // Seeding configuration
   // Set this to true if you want to seed data on app startup

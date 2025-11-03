@@ -33,18 +33,27 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
   @override
   void initState() {
     super.initState();
-    _initializeNotifications();
+    // Use addPostFrameCallback to ensure providers are ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeNotifications();
+    });
   }
 
   Future<void> _initializeNotifications() async {
-    // Wait for the widget to be built before accessing providers
-    await Future.delayed(Duration.zero);
+    if (!mounted) return;
+    
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user != null) {
+      debugPrint('AttendeeShell: Initializing notifications for user ${user.uid}');
       final notificationService = ref.read(notificationServiceProvider(user.uid));
       if (notificationService != null) {
         await notificationService.initialize();
+        debugPrint('AttendeeShell: Notification service initialized successfully');
+      } else {
+        debugPrint('AttendeeShell: Notification service is null');
       }
+    } else {
+      debugPrint('AttendeeShell: No authenticated user found');
     }
   }
 
