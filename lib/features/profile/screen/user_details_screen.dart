@@ -426,7 +426,9 @@ class UserDetailsScreen extends ConsumerWidget {
                         Navigator.of(context).push(MaterialPageRoute(
                           builder: (context) => DirectMessageScreen(
                             conversationId: conversationId,
+                            otherUserId: appUser.uid,
                             otherUserName: appUser.name,
+                            otherUserProfileImage: appUser.profileImageUrl,
                           ),
                         ));
                       }

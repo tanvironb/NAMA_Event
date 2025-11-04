@@ -7,6 +7,7 @@ class Message {
   final String senderName; // Denormalized for easier display
   final String senderImageUrl; // Denormalized for easier display
   final Timestamp timestamp;
+  final List<String> readBy; // List of user IDs who have read this message
 
   Message({
     required this.id,
@@ -15,7 +16,8 @@ class Message {
     required this.senderName,
     required this.senderImageUrl,
     required this.timestamp,
-  });
+    List<String>? readBy,
+  }) : readBy = readBy ?? [];
 
   factory Message.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
@@ -29,6 +31,12 @@ class Message {
       senderName: data['senderName'] as String? ?? 'User',
       senderImageUrl: data['senderImageUrl'] as String? ?? '',
       timestamp: data['timestamp'] as Timestamp,
+      readBy: List<String>.from(data['readBy'] ?? []),
     );
+  }
+  
+  /// Check if a specific user has read this message
+  bool isReadBy(String userId) {
+    return readBy.contains(userId);
   }
 }

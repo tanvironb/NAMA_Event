@@ -16,9 +16,7 @@ class ConversationsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Messages'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        elevation: 0,
+        // Using theme's default AppBar styling (navy blue)
       ),
       body: conversationsAsync.when(
         data: (conversations) {

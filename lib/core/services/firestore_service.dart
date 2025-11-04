@@ -157,12 +157,33 @@ class FirestoreService {
     final conversationRef = _db.collection('directMessages').doc(conversationId);
     final messageRef = conversationRef.collection('messages').doc();
 
+    // Add readBy field with sender's ID (sender has "read" their own message)
+    final senderId = messageData['senderId'] as String;
+    messageData['readBy'] = [senderId];
+
     await _db.runTransaction((transaction) async {
+      // Get conversation doc to read members
+      final conversationDoc = await transaction.get(conversationRef);
+      final members = List<String>.from(conversationDoc.data()?['members'] ?? []);
+      
+      // Set the message
       transaction.set(messageRef, messageData);
-      transaction.update(conversationRef, {
+      
+      // Update conversation with last message info and increment unread for other members
+      final updates = <String, dynamic>{
         'lastMessageText': messageData['text'],
         'lastMessageTimestamp': messageData['timestamp'],
-      });
+        'lastMessageSenderId': senderId,
+      };
+      
+      // Increment unread count for all members except the sender
+      for (final memberId in members) {
+        if (memberId != senderId) {
+          updates['unreadCount.$memberId'] = FieldValue.increment(1);
+        }
+      }
+      
+      transaction.update(conversationRef, updates);
     });
   }
 
@@ -183,6 +204,12 @@ class FirestoreService {
           otherUserId: {'name': otherUserDoc['name'], 'profileImageUrl': otherUserDoc['profileImageUrl']},
         },
         'lastMessageTimestamp': FieldValue.serverTimestamp(),
+        'lastMessageText': '',
+        'lastMessageSenderId': '',
+        'unreadCount': {
+          currentUserId: 0,
+          otherUserId: 0,
+        },
       });
     }
     return conversationId;

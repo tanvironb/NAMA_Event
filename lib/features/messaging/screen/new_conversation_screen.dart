@@ -182,6 +182,7 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
           MaterialPageRoute(
             builder: (context) => DirectMessageScreen(
               conversationId: conversationId,
+              otherUserId: otherUser.uid,
               otherUserName: otherUser.name,
               otherUserProfileImage: otherUser.profileImageUrl,
             ),

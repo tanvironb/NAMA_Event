@@ -80,6 +80,19 @@ class ChatBubble extends ConsumerWidget {
                     message.text,
                     style: TextStyle(color: isMe ? Colors.white : Colors.black87),
                   ),
+                  // Show "Seen" indicator for sent messages in direct messages
+                  if (isMe && message.readBy.isNotEmpty && message.readBy.length > 1) // More than just sender
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Seen',
+                        style: TextStyle(
+                          color: isMe ? Colors.white70 : Colors.black54,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

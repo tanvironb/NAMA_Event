@@ -294,6 +294,23 @@ final userSearchProvider = FutureProvider.autoDispose.family<List<AppUser>, Stri
   return ref.watch(userProfileRepositoryProvider).searchUsers(query);
 });
 
+// Provider for counting conversations with unread messages
+final unreadConversationsCountProvider = StreamProvider.autoDispose<int>((ref) {
+  final conversationsAsync = ref.watch(conversationsStreamProvider);
+  final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
+  
+  if (userId == null) return Stream.value(0);
+  
+  return conversationsAsync.when(
+    data: (conversations) {
+      final count = conversations.where((conv) => conv.getUnreadCountForUser(userId) > 0).length;
+      return Stream.value(count);
+    },
+    loading: () => Stream.value(0),
+    error: (_, __) => Stream.value(0),
+  );
+});
+
 // --- Leaderboard Providers ---
 final leaderboardRepositoryProvider = Provider((ref) => LeaderboardRepository(ref.watch(firestoreServiceProvider)));
 

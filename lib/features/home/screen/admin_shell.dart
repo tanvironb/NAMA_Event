@@ -8,6 +8,7 @@ import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
+import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
 // import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_screen.dart'; // New admin dashboard - TODO: Uncomment when created
 
 class AdminShell extends ConsumerStatefulWidget {
@@ -85,7 +86,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.message_outlined),
+            icon: const MessageIconWithBadge(),
             onPressed: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (context) => const ConversationsScreen(),

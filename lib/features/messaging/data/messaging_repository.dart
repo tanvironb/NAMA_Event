@@ -39,4 +39,38 @@ class MessagingRepository {
   Future<String> createOrGetConversation(String currentUserId, String otherUserId) async {
     return await _firestoreService.createOrGetConversation(currentUserId, otherUserId);
   }
+
+  /// Mark messages as read by adding the user ID to the readBy array
+  Future<void> markMessagesAsRead({
+    required String conversationId,
+    required String userId,
+  }) async {
+    final messagesSnapshot = await FirebaseFirestore.instance
+        .collection('directMessages')
+        .doc(conversationId)
+        .collection('messages')
+        .where('senderId', isNotEqualTo: userId) // Only mark messages not sent by current user
+        .get();
+
+    final batch = FirebaseFirestore.instance.batch();
+    
+    for (final doc in messagesSnapshot.docs) {
+      final readBy = List<String>.from(doc.data()['readBy'] ?? []);
+      if (!readBy.contains(userId)) {
+        batch.update(doc.reference, {
+          'readBy': FieldValue.arrayUnion([userId]),
+        });
+      }
+    }
+
+    // Reset unread count for this user in the conversation
+    batch.update(
+      FirebaseFirestore.instance.collection('directMessages').doc(conversationId),
+      {
+        'unreadCount.$userId': 0,
+      },
+    );
+
+    await batch.commit();
+  }
 }
