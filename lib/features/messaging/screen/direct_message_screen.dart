@@ -30,43 +30,69 @@ class DirectMessageScreen extends ConsumerStatefulWidget {
 class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
   bool _showUnreadSection = false;
   int _unreadCount = 0;
+  bool _hasCheckedUnread = false;
+  bool _hasMarkedAsRead = false;
 
   @override
   void initState() {
     super.initState();
+    // Mark as read after a delay to ensure UI is rendered first
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndMarkMessagesAsRead();
+      _scheduleMarkAsRead();
     });
   }
 
-  Future<void> _checkAndMarkMessagesAsRead() async {
-    if (!mounted) return;
+  @override
+  void dispose() {
+    // If user navigates away before marking as read completes, still mark as read
+    // This handles the case where user opens chat quickly and closes it
+    if (!_hasMarkedAsRead && _hasCheckedUnread) {
+      _markMessagesAsRead();
+    }
+    super.dispose();
+  }
+
+  void _checkUnreadMessages(List<Message> messages, String currentUserId) {
+    // Only check once when first opening the chat
+    if (_hasCheckedUnread) return;
+    
+    final unreadMessages = messages.where((m) => 
+      m.senderId != currentUserId && !m.isReadBy(currentUserId)
+    ).toList();
+    
+    if (unreadMessages.isNotEmpty) {
+      setState(() {
+        _showUnreadSection = true;
+        _unreadCount = unreadMessages.length;
+        _hasCheckedUnread = true;
+      });
+    } else {
+      _hasCheckedUnread = true;
+    }
+  }
+
+  void _scheduleMarkAsRead() {
+    // Wait for UI to render, then mark as read
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!mounted || _hasMarkedAsRead) return;
+      _markMessagesAsRead();
+    });
+  }
+
+  Future<void> _markMessagesAsRead() async {
+    if (!mounted || _hasMarkedAsRead) return;
     final currentUser = ref.read(firebaseAuthProvider).currentUser;
     if (currentUser == null) return;
 
     try {
-      // Get current messages to check unread count
-      final messagesAsync = ref.read(directMessagesStreamProvider(widget.conversationId));
-      messagesAsync.whenData((messages) {
-        final unread = messages.where((m) => 
-          m.senderId != currentUser.uid && !m.isReadBy(currentUser.uid)
-        ).length;
-        
-        if (mounted && unread > 0) {
-          setState(() {
-            _showUnreadSection = true;
-            _unreadCount = unread;
-          });
-        }
-      });
-
-      // Mark as read
+      _hasMarkedAsRead = true;
       await ref.read(messagingRepositoryProvider).markMessagesAsRead(
         conversationId: widget.conversationId,
         userId: currentUser.uid,
       );
     } catch (e) {
       debugPrint('Error marking messages as read: $e');
+      _hasMarkedAsRead = false;
     }
   }
 
@@ -75,58 +101,50 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
 
     final widgets = <Widget>[];
     final groupedByDate = <String, List<Message>>{};
-    final unreadMessages = <Message>[];
-
-    // Separate unread messages if showing unread section
-    final messagesToGroup = <Message>[];
-    if (_showUnreadSection) {
-      for (final msg in messages) {
-        if (msg.senderId != currentUserId && !msg.isReadBy(currentUserId)) {
-          unreadMessages.add(msg);
-        } else {
-          messagesToGroup.add(msg);
-        }
-      }
-    } else {
-      messagesToGroup.addAll(messages);
-    }
-
-    // Group messages by date
-    for (final message in messagesToGroup) {
+    
+    // Group ALL messages by date (keep chronological order)
+    for (final message in messages) {
       final dateKey = _getDateKey(message.timestamp.toDate());
       groupedByDate.putIfAbsent(dateKey, () => []).add(message);
     }
 
-    // Build read messages with date separators
+    // Sort dates (most recent first for reverse ListView)
     final sortedDates = groupedByDate.keys.toList()
       ..sort((a, b) {
         final dateA = groupedByDate[a]!.first.timestamp.toDate();
         final dateB = groupedByDate[b]!.first.timestamp.toDate();
-        return dateB.compareTo(dateA); // Most recent first (for reverse list)
+        return dateB.compareTo(dateA);
       });
 
+    // Track if we've added the unread separator
+    bool unreadSeparatorAdded = false;
+    
+    // Build widgets with date separators and unread separator
     for (final dateKey in sortedDates) {
       final messagesForDate = groupedByDate[dateKey]!;
       
-      // Add messages for this date (oldest first within the group)
-      for (final message in messagesForDate.reversed) {
+      // Sort messages within date group (oldest first)
+      messagesForDate.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      
+      // Process messages in reverse for ListView (newest at bottom = index 0)
+      for (int i = messagesForDate.length - 1; i >= 0; i--) {
+        final message = messagesForDate[i];
         final isMe = message.senderId == currentUserId;
+        
+        // Add unread separator BEFORE the first unread message
+        if (_showUnreadSection && 
+            !unreadSeparatorAdded && 
+            message.senderId != currentUserId && 
+            !message.isReadBy(currentUserId)) {
+          widgets.add(_buildUnreadSeparator(_unreadCount));
+          unreadSeparatorAdded = true;
+        }
+        
         widgets.add(ChatBubble(message: message, isMe: isMe));
       }
       
       // Add date separator at the end (will appear at top due to reverse)
       widgets.add(_buildDateSeparator(dateKey));
-    }
-
-    // Add unread section if exists
-    if (_showUnreadSection && unreadMessages.isNotEmpty) {
-      // Add unread messages (oldest first)
-      for (final message in unreadMessages.reversed) {
-        widgets.add(ChatBubble(message: message, isMe: false));
-      }
-      
-      // Add "UNREAD MESSAGES" separator
-      widgets.add(_buildUnreadSeparator(_unreadCount));
     }
 
     return widgets;
@@ -176,37 +194,40 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
   Widget _buildUnreadSeparator(int count) {
     return Container(
       alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.errorRed.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: AppColors.errorRed.withOpacity(0.3),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.mark_chat_unread,
-              size: 16,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        children: [
+          const Expanded(
+            child: Divider(
               color: AppColors.errorRed,
+              thickness: 1,
+              endIndent: 8,
             ),
-            const SizedBox(width: 8),
-            Text(
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: AppColors.errorRed,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
               count == 1 ? '1 UNREAD MESSAGE' : '$count UNREAD MESSAGES',
               style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.errorRed,
+                fontSize: 11,
+                color: Colors.white,
                 fontWeight: FontWeight.bold,
-                letterSpacing: 0.5,
+                letterSpacing: 0.8,
               ),
             ),
-          ],
-        ),
+          ),
+          const Expanded(
+            child: Divider(
+              color: AppColors.errorRed,
+              thickness: 1,
+              indent: 8,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -225,11 +246,15 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
               backgroundImage: widget.otherUserProfileImage.isNotEmpty
                   ? NetworkImage(widget.otherUserProfileImage)
                   : null,
-              backgroundColor: AppColors.namaLightGray,
+              backgroundColor: AppColors.avatarPlaceholder,
               child: widget.otherUserProfileImage.isEmpty
                   ? Text(
                       widget.otherUserName.isNotEmpty ? widget.otherUserName[0].toUpperCase() : 'U',
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.avatarPlaceholderText,
+                      ),
                     )
                   : null,
             ),
@@ -254,6 +279,9 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
               Expanded(
                 child: messagesAsync.when(
                   data: (messages) {
+                    // Check for unread messages on first build
+                    _checkUnreadMessages(messages, currentUser.uid);
+                    
                     if (messages.isEmpty) {
                       return Center(
                         child: Text(

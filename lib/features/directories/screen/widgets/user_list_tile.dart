@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class UserListTile extends StatelessWidget {
   final AppUser user;
@@ -16,7 +17,16 @@ class UserListTile extends StatelessWidget {
       child: ListTile(
         leading: CircleAvatar(
           backgroundImage: user.profileImageUrl.isNotEmpty ? NetworkImage(user.profileImageUrl) : null,
-          child: user.profileImageUrl.isEmpty ? Text(user.name[0].toUpperCase()) : null,
+          backgroundColor: AppColors.avatarPlaceholder,
+          child: user.profileImageUrl.isEmpty 
+            ? Text(
+                user.name[0].toUpperCase(),
+                style: const TextStyle(
+                  color: AppColors.avatarPlaceholderText,
+                  fontWeight: FontWeight.bold,
+                ),
+              )
+            : null,
         ),
         title: Text(user.name),
         subtitle: Text(user.title),

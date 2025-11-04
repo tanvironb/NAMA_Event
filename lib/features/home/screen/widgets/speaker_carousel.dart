@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:card_swiper/card_swiper.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class SpeakerCarousel extends ConsumerWidget {
   const SpeakerCarousel({super.key});
@@ -38,8 +39,15 @@ class SpeakerCarousel extends ConsumerWidget {
                       backgroundImage: speaker.profileImageUrl.isNotEmpty
                           ? NetworkImage(speaker.profileImageUrl)
                           : null,
+                      backgroundColor: AppColors.avatarPlaceholder,
                       child: speaker.profileImageUrl.isEmpty
-                          ? Text(speaker.name[0].toUpperCase(), style: Theme.of(context).textTheme.titleLarge)
+                          ? Text(
+                              speaker.name[0].toUpperCase(),
+                              style: const TextStyle(
+                                color: AppColors.avatarPlaceholderText,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
                           : null,
                     ),
                     const SizedBox(height: 8),

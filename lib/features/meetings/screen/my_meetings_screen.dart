@@ -120,11 +120,11 @@ class MyMeetingsScreen extends ConsumerWidget {
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: AppColors.namaNavyBlue.withOpacity(0.1),
+                  backgroundColor: AppColors.avatarPlaceholder,
                   child: Text(
                     otherUserName.isNotEmpty ? otherUserName[0].toUpperCase() : '?',
                     style: const TextStyle(
-                      color: AppColors.namaNavyBlue,
+                      color: AppColors.avatarPlaceholderText,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

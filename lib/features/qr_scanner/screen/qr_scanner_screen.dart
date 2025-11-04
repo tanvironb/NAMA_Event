@@ -236,8 +236,15 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
               backgroundImage: (scannedUserData['profileImageUrl'] != null && scannedUserData['profileImageUrl'].isNotEmpty)
                   ? NetworkImage(scannedUserData['profileImageUrl'])
                   : null,
+              backgroundColor: AppColors.avatarPlaceholder,
               child: (scannedUserData['profileImageUrl'] == null || scannedUserData['profileImageUrl'].isEmpty)
-                  ? Text(scannedUserData['name'][0].toUpperCase())
+                  ? Text(
+                      scannedUserData['name'][0].toUpperCase(),
+                      style: const TextStyle(
+                        color: AppColors.avatarPlaceholderText,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
                   : null,
             ),
             const SizedBox(width: 16),

@@ -154,12 +154,17 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
                       backgroundImage: widget.recipient.profileImageUrl.isNotEmpty
                           ? NetworkImage(widget.recipient.profileImageUrl)
                           : null,
+                      backgroundColor: AppColors.avatarPlaceholder,
                       child: widget.recipient.profileImageUrl.isEmpty
                           ? Text(
                               widget.recipient.name.isNotEmpty 
                                   ? widget.recipient.name[0].toUpperCase() 
                                   : '?',
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.avatarPlaceholderText,
+                              ),
                             )
                           : null,
                     ),

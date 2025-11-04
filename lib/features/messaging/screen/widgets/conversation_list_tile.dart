@@ -36,14 +36,14 @@ class ConversationListTile extends ConsumerWidget {
       leading: CircleAvatar(
         radius: 28,
         backgroundImage: otherUserImage.isNotEmpty ? NetworkImage(otherUserImage) : null,
-        backgroundColor: AppColors.namaLightGray,
+        backgroundColor: AppColors.avatarPlaceholder,
         child: otherUserImage.isEmpty 
           ? Text(
               otherUserName[0].toUpperCase(),
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: AppColors.namaNavyBlue,
+                color: AppColors.avatarPlaceholderText,
               ),
             )
           : null,

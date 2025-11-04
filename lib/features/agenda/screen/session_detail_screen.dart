@@ -81,14 +81,17 @@ class SessionDetailScreen extends ConsumerWidget {
                       child: ListTile(
                         leading: CircleAvatar(
                           radius: 24,
-                          backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                          backgroundColor: AppColors.avatarPlaceholder,
                           backgroundImage: (speaker.profileImageUrl.isNotEmpty)
                               ? NetworkImage(speaker.profileImageUrl)
                               : null,
                           child: (speaker.profileImageUrl.isEmpty)
                               ? Text(
                                   speaker.name[0].toUpperCase(),
-                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Theme.of(context).colorScheme.primary),
+                                  style: const TextStyle(
+                                    color: AppColors.avatarPlaceholderText,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 )
                               : null,
                         ),

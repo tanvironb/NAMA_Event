@@ -58,12 +58,12 @@ class ProfileTabScreen extends ConsumerWidget {
                           backgroundImage: appUser.profileImageUrl.isNotEmpty
                               ? NetworkImage(appUser.profileImageUrl)
                               : null,
-                          backgroundColor: AppColors.namaNavyBlue.withOpacity(0.1),
+                          backgroundColor: AppColors.avatarPlaceholder,
                           child: appUser.profileImageUrl.isEmpty
                               ? Icon(
                                   Icons.person,
                                   size: 60,
-                                  color: AppColors.namaNavyBlue,
+                                  color: AppColors.avatarPlaceholderText,
                                 )
                               : null,
                         ),

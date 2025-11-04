@@ -34,6 +34,10 @@ class AppColors {
   static const textPrimary = namaDarkGray; // Primary text color
   static const textSecondary = namaMediumGray; // Secondary text color
   
+  // UI Component Colors
+  static const avatarPlaceholder = namaLightGray; // Consistent avatar background color
+  static const avatarPlaceholderText = namaNavyBlue; // Consistent avatar text color
+  
   // Status colors aligned with NAMA branding
   static const successGreen = Color(0xFF2E7D32); // Success states
   static const warningAmber = Color(0xFFE65100); // Warning states  
