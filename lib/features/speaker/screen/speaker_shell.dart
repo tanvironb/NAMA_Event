@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
-import 'package:events_app_trueattempt/features/explore/screen/explore_screen.dart';
-import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
+import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
@@ -10,11 +9,13 @@ import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
-// import 'package:events_app_trueattempt/features/profile/screen/speaker_dashboard_screen.dart'; // New speaker dashboard - TODO: Uncomment when created
+import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
+import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
+import 'package:events_app_trueattempt/features/speaker/screen/speaker_dashboard_screen.dart';
 
 class SpeakerShell extends ConsumerStatefulWidget {
   const SpeakerShell({super.key});
-  
+
   @override
   ConsumerState<SpeakerShell> createState() => _SpeakerShellState();
 }
@@ -23,14 +24,12 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
   int _selectedIndex = 0;
 
   static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
-    const HomeDashboardScreen(),
-    const AgendaScreen(),
-    const DirectoriesHubScreen(),
-    const ExploreScreen(),
-    const ProfileTabScreen(), // Updated to use ProfileTabScreen
-  ];
-
-  @override
+    const HomeDashboardScreen(), // Home feed (same as attendees)
+    const AgendaScreen(), // Event agenda (same as attendees)
+    const DirectoriesHubScreen(), // Networking (same as attendees)
+    const QRHubScreen(), // QR Code Hub (replaces Explore)
+    const SpeakerDashboardScreen(), // Speaker-specific dashboard
+  ];  @override
   void initState() {
     super.initState();
     _initializeNotifications();
@@ -142,6 +141,46 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
               },
             ),
             ListTile(
+              leading: Icon(Icons.calendar_today_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('My Meetings', style: Theme.of(context).textTheme.titleMedium),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const MyMeetingsScreen(),
+                ));
+              },
+            ),
+            const Divider(),
+            // Speaker-specific drawer items
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                'Speaker Tools',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(Icons.mic_external_on_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('My Sessions', style: Theme.of(context).textTheme.titleMedium),
+              onTap: () {
+                Navigator.pop(context);
+                // Navigate to Dashboard tab which has My Sessions
+                setState(() => _selectedIndex = 4);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.analytics_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('Analytics', style: Theme.of(context).textTheme.titleMedium),
+              onTap: () {
+                Navigator.pop(context);
+                setState(() => _selectedIndex = 4);
+              },
+            ),
+            const Divider(),
+            ListTile(
               leading: Icon(Icons.settings_outlined, color: Theme.of(context).colorScheme.onSurface),
               title: Text('Settings', style: Theme.of(context).textTheme.titleMedium),
               onTap: () {
@@ -151,7 +190,6 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
                 );
               },
             ),
-            // Speaker-specific drawer items could be added here
           ],
         ),
       ),
@@ -194,9 +232,9 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
             label: 'Networking',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.explore_outlined),
-            activeIcon: Icon(Icons.explore),
-            label: 'Explore',
+            icon: Icon(Icons.qr_code_scanner),
+            activeIcon: Icon(Icons.qr_code_scanner),
+            label: 'QR',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),
