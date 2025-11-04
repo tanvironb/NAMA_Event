@@ -31,68 +31,117 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
   bool _showUnreadSection = false;
   int _unreadCount = 0;
   bool _hasCheckedUnread = false;
-  bool _hasMarkedAsRead = false;
+  
+  // Cache the unread message IDs to persist the unread section even after marking as read
+  final Set<String> _unreadMessageIds = {};
+  
+  // Track the last time we marked messages as read
+  DateTime? _lastMarkAsReadTime;
 
   @override
   void initState() {
     super.initState();
-    // Mark as read after a delay to ensure UI is rendered first
+    // Schedule initial mark as read
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scheduleMarkAsRead();
+      _scheduleInitialMarkAsRead();
     });
   }
 
   @override
   void dispose() {
-    // If user navigates away before marking as read completes, still mark as read
-    // This handles the case where user opens chat quickly and closes it
-    if (!_hasMarkedAsRead && _hasCheckedUnread) {
-      _markMessagesAsRead();
-    }
+    // Mark any remaining messages as read when leaving
+    _markMessagesAsRead();
     super.dispose();
   }
 
   void _checkUnreadMessages(List<Message> messages, String currentUserId) {
-    // Only check once when first opening the chat
-    if (_hasCheckedUnread) return;
-    
-    final unreadMessages = messages.where((m) => 
-      m.senderId != currentUserId && !m.isReadBy(currentUserId)
-    ).toList();
-    
-    if (unreadMessages.isNotEmpty) {
-      setState(() {
-        _showUnreadSection = true;
-        _unreadCount = unreadMessages.length;
+    // First time opening chat - initialize unread section
+    if (!_hasCheckedUnread) {
+      final unreadMessages = messages.where((m) => 
+        m.senderId != currentUserId && !m.isReadBy(currentUserId)
+      ).toList();
+      
+      if (unreadMessages.isNotEmpty) {
+        setState(() {
+          _showUnreadSection = true;
+          _unreadCount = unreadMessages.length;
+          _hasCheckedUnread = true;
+          // Cache the message IDs that are unread at this moment
+          _unreadMessageIds.addAll(unreadMessages.map((m) => m.id));
+        });
+      } else {
         _hasCheckedUnread = true;
-      });
-    } else {
-      _hasCheckedUnread = true;
+      }
+      return;
     }
+    
+    // After initial check, handle new messages
+    if (_showUnreadSection) {
+      // Check if current user sent any message
+      final userSentMessage = messages.any((m) => 
+        m.senderId == currentUserId && 
+        m.timestamp.toDate().isAfter(DateTime.now().subtract(const Duration(seconds: 2)))
+      );
+      
+      if (userSentMessage) {
+        // User sent a message - hide unread section but keep messages visible
+        setState(() {
+          _showUnreadSection = false;
+        });
+      } else {
+        // Check for new messages from other user and add to unread section
+        final newUnreadMessages = messages.where((m) => 
+          m.senderId != currentUserId && 
+          !m.isReadBy(currentUserId) &&
+          !_unreadMessageIds.contains(m.id)
+        ).toList();
+        
+        if (newUnreadMessages.isNotEmpty) {
+          setState(() {
+            _unreadMessageIds.addAll(newUnreadMessages.map((m) => m.id));
+            _unreadCount = _unreadMessageIds.length;
+          });
+        }
+      }
+    }
+    
+    // Continuously mark messages as read (Instagram/WhatsApp behavior)
+    _markMessagesAsReadIfNeeded();
   }
 
-  void _scheduleMarkAsRead() {
-    // Wait for UI to render, then mark as read
+  void _scheduleInitialMarkAsRead() {
+    // Wait for UI to render, then mark initial unread messages as read
     Future.delayed(const Duration(milliseconds: 800), () {
-      if (!mounted || _hasMarkedAsRead) return;
+      if (!mounted) return;
       _markMessagesAsRead();
     });
   }
 
+  void _markMessagesAsReadIfNeeded() {
+    // Continuously mark messages as read while chat is open (Instagram/WhatsApp behavior)
+    // Only mark every 500ms to avoid excessive writes
+    final now = DateTime.now();
+    if (_lastMarkAsReadTime != null && 
+        now.difference(_lastMarkAsReadTime!).inMilliseconds < 500) {
+      return;
+    }
+    
+    _lastMarkAsReadTime = now;
+    _markMessagesAsRead();
+  }
+
   Future<void> _markMessagesAsRead() async {
-    if (!mounted || _hasMarkedAsRead) return;
+    if (!mounted) return;
     final currentUser = ref.read(firebaseAuthProvider).currentUser;
     if (currentUser == null) return;
 
     try {
-      _hasMarkedAsRead = true;
       await ref.read(messagingRepositoryProvider).markMessagesAsRead(
         conversationId: widget.conversationId,
         userId: currentUser.uid,
       );
     } catch (e) {
       debugPrint('Error marking messages as read: $e');
-      _hasMarkedAsRead = false;
     }
   }
 
@@ -102,8 +151,39 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
     final widgets = <Widget>[];
     final groupedByDate = <String, List<Message>>{};
     
-    // Group ALL messages by date (keep chronological order)
-    for (final message in messages) {
+    // Separate messages based on CACHED unread IDs (not live read status)
+    final unreadMessages = <Message>[];
+    final readMessages = <Message>[];
+    
+    if (_showUnreadSection && _unreadMessageIds.isNotEmpty) {
+      // Use the cached unread message IDs to determine which messages go in unread section
+      for (final message in messages) {
+        if (_unreadMessageIds.contains(message.id)) {
+          unreadMessages.add(message);
+        } else {
+          readMessages.add(message);
+        }
+      }
+    } else {
+      readMessages.addAll(messages);
+    }
+    
+    // Add unread section FIRST (will appear at bottom/most recent due to reverse ListView)
+    if (_showUnreadSection && unreadMessages.isNotEmpty) {
+      // Sort unread messages (newest first)
+      unreadMessages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+      
+      // Add unread messages first (will appear at bottom in reverse ListView)
+      for (final message in unreadMessages) {
+        widgets.add(ChatBubble(message: message, isMe: false));
+      }
+      
+      // Add unread separator last (will appear ABOVE the unread messages in reverse ListView)
+      widgets.add(_buildUnreadSeparator(_unreadCount));
+    }
+    
+    // Group read messages by date
+    for (final message in readMessages) {
       final dateKey = _getDateKey(message.timestamp.toDate());
       groupedByDate.putIfAbsent(dateKey, () => []).add(message);
     }
@@ -115,11 +195,8 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
         final dateB = groupedByDate[b]!.first.timestamp.toDate();
         return dateB.compareTo(dateA);
       });
-
-    // Track if we've added the unread separator
-    bool unreadSeparatorAdded = false;
     
-    // Build widgets with date separators and unread separator
+    // Build read messages with date separators
     for (final dateKey in sortedDates) {
       final messagesForDate = groupedByDate[dateKey]!;
       
@@ -130,16 +207,6 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
       for (int i = messagesForDate.length - 1; i >= 0; i--) {
         final message = messagesForDate[i];
         final isMe = message.senderId == currentUserId;
-        
-        // Add unread separator BEFORE the first unread message
-        if (_showUnreadSection && 
-            !unreadSeparatorAdded && 
-            message.senderId != currentUserId && 
-            !message.isReadBy(currentUserId)) {
-          widgets.add(_buildUnreadSeparator(_unreadCount));
-          unreadSeparatorAdded = true;
-        }
-        
         widgets.add(ChatBubble(message: message, isMe: isMe));
       }
       
@@ -193,38 +260,53 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
 
   Widget _buildUnreadSeparator(int count) {
     return Container(
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      margin: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: AppColors.errorRed.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: AppColors.errorRed.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const Expanded(
-            child: Divider(
-              color: AppColors.errorRed,
-              thickness: 1,
-              endIndent: 8,
-            ),
-          ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: AppColors.errorRed,
-              borderRadius: BorderRadius.circular(12),
+              shape: BoxShape.circle,
             ),
-            child: Text(
-              count == 1 ? '1 UNREAD MESSAGE' : '$count UNREAD MESSAGES',
-              style: const TextStyle(
-                fontSize: 11,
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.8,
-              ),
+            child: const Icon(
+              Icons.fiber_manual_record,
+              size: 8,
+              color: Colors.white,
             ),
           ),
-          const Expanded(
-            child: Divider(
+          const SizedBox(width: 8),
+          Text(
+            count == 1 ? '1 UNREAD MESSAGE' : '$count UNREAD MESSAGES',
+            style: const TextStyle(
+              fontSize: 11,
               color: AppColors.errorRed,
-              thickness: 1,
-              indent: 8,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.0,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.errorRed,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.fiber_manual_record,
+              size: 8,
+              color: Colors.white,
             ),
           ),
         ],

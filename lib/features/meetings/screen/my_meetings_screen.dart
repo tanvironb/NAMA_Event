@@ -19,9 +19,6 @@ class MyMeetingsScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('My Meetings'),
-          backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-          foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
-          elevation: 0,
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Pending'),

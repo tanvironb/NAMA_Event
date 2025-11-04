@@ -135,8 +135,6 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text('Meet with ${widget.recipient.name}'),
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),

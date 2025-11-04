@@ -20,8 +20,6 @@ class AgendaScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Event Agenda'),
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
       ),
       body: sessionsAsyncValue.when(
         data: (sessions) {

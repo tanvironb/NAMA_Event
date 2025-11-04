@@ -31,8 +31,6 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('New Conversation'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        elevation: 0,
       ),
       body: Column(
         children: [

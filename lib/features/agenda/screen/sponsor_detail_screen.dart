@@ -36,8 +36,6 @@ class _SponsorDetailScreenState extends ConsumerState<SponsorDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.partnerName),
-        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
         actions: [
           if (!_isProcessing && _selectedSessionIds.isNotEmpty)
             IconButton(

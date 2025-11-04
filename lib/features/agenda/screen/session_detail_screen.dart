@@ -31,13 +31,7 @@ class SessionDetailScreen extends ConsumerWidget {
         title: Text(
           session.title,
           overflow: TextOverflow.ellipsis, // Handle long titles
-          style: Theme.of(context).appBarTheme.titleTextStyle?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface, // AppBar text in detail screen should match surface
-              ),
         ),
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        foregroundColor: Theme.of(context).colorScheme.onSurface,
-        elevation: 1, // Slight elevation for better separation
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
