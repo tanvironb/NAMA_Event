@@ -19,10 +19,12 @@ class Session {
   /// 5 = Maximum priority (keynotes, urgent updates, main event streams)
   final int priority;
   final String partnerId; // NEW (Optional): Links session to a sponsor for bulk-bookmarking
-  final bool isChatEnabled; // Whether chat is currently enabled (can be closed by speaker)
+  final bool isChatEnabled; // Whether chat is currently enabled (can be closed by speaker/admin)
+  final String closedBy; // Who closed the chat: 'speaker' or 'admin' or '' (empty if open)
   final List<String> checkedInAttendees; // List of attendee UIDs who checked in via QR
   final int totalMessages; // Total message count for analytics
   final List<String> uniqueParticipants; // List of unique user IDs who sent messages
+  final List<String> mutedUsers; // List of user IDs who are muted in this session
 
 
   Session({
@@ -39,9 +41,11 @@ class Session {
     this.priority = 3, // Default to normal priority
     this.partnerId = '', // NEW (Optional): Links session to a sponsor for bulk-bookmarking
     this.isChatEnabled = true, // Chat enabled by default
+    this.closedBy = '', // Empty means chat is open
     this.checkedInAttendees = const [],
     this.totalMessages = 0,
     this.uniqueParticipants = const [],
+    this.mutedUsers = const [],
   });
 
   factory Session.fromFirestore(DocumentSnapshot doc) {
@@ -63,9 +67,11 @@ class Session {
       priority: data['priority'] as int? ?? 3, // Default to normal priority if not specified
       partnerId: data['partnerId'] as String? ?? '', // NEW (Optional): Links session to a sponsor for bulk-bookmarking
       isChatEnabled: data['isChatEnabled'] as bool? ?? true,
+      closedBy: data['closedBy'] as String? ?? '',
       checkedInAttendees: List<String>.from(data['checkedInAttendees'] as List? ?? []),
       totalMessages: data['totalMessages'] as int? ?? 0,
       uniqueParticipants: List<String>.from(data['uniqueParticipants'] as List? ?? []),
+      mutedUsers: List<String>.from(data['mutedUsers'] as List? ?? []),
     );
   }
 
@@ -77,4 +83,10 @@ class Session {
 
   /// Check if chat is available (enabled and session hasn't ended)
   bool get isChatAvailable => isChatEnabled && !hasEnded;
+  
+  /// Check if chat was closed by admin (admin lock takes precedence)
+  bool get isAdminLocked => !isChatEnabled && closedBy == 'admin';
+  
+  /// Check if user is muted in this session
+  bool isUserMuted(String userId) => mutedUsers.contains(userId);
 }

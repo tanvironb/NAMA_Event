@@ -1,6 +1,14 @@
 USE "firebase deploy --only firestore:rules" TO DEPLOY.
 
-the following is the possible (proposed) security rules. (v2)
+⚠️ WARNING: TEST THESE RULES THOROUGHLY BEFORE DEPLOYING TO PRODUCTION ⚠️
+
+========================================
+CURRENT PRODUCTION-READY RULES (V6)
+========================================
+Last Updated: November 5, 2025
+Includes: Session chat moderation, mute functionality, admin override, speaker permissions
+
+the following is the possible (proposed) security rules. (v2) [ARCHIVED]
 
 rules_version = '2';
 

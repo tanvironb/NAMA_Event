@@ -1,0 +1,290 @@
+rules_version = '2';
+
+// ============================================================================
+// NAMA EVENTS APP - FIRESTORE SECURITY RULES V6
+// ============================================================================
+// Last Updated: November 5, 2025
+// 
+// FEATURES:
+// - User registration with pending approval
+// - Role-based access (admin, staff, speaker, attendee)
+// - Session chat with moderation (mute, delete, close chat)
+// - Admin override for speaker-locked chats
+// - Only registered session speakers can moderate
+// - Direct messaging between users
+// - Event check-in logging
+// - Notifications system
+// 
+// ⚠️ WARNING: TEST THOROUGHLY BEFORE DEPLOYING TO PRODUCTION
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ========================================================================
+    // HELPER FUNCTIONS
+    // ========================================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && getUserData().role == 'staff';
+    }
+
+    function isStaffOrAdmin() {
+      let role = getUserData().role;
+      return isAuthenticated() && (role == 'admin' || role == 'staff');
+    }
+
+    function isApproved() {
+      return isAuthenticated() && getUserData().status == 'approved';
+    }
+
+    function isSpeaker() {
+      return isAuthenticated() && getUserData().role == 'speaker';
+    }
+
+    // Check if user is a registered speaker for a specific session
+    function isSessionSpeaker(sessionId) {
+      let session = get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+      return isAuthenticated() && request.auth.uid in session.speakerIds;
+    }
+
+    // Check if user can moderate a session (admin or registered speaker)
+    function canModerateSession(sessionId) {
+      return isAdmin() || isSessionSpeaker(sessionId);
+    }
+
+    // ========================================================================
+    // DEFAULT DENY
+    // ========================================================================
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ========================================================================
+    // PUBLIC COLLECTIONS (Read-only for approved users)
+    // ========================================================================
+    
+    match /events/{eventId} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isApproved();
+      // Admins can create/delete sessions
+      allow create, delete: if isAdmin();
+      // Admins can update any field
+      // Registered speakers and admins can update chat-related fields
+      allow update: if isAdmin() || 
+                       (isSessionSpeaker(sessionId) && 
+                        request.resource.data.diff(resource.data).affectedKeys()
+                          .hasOnly(['isChatEnabled', 'closedBy', 'mutedUsers', 
+                                   'totalMessages', 'uniqueParticipants', 'checkedInAttendees']));
+    }
+
+    match /sponsors/{sponsorId} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if isApproved();
+      allow write: if isAdmin();
+    }
+
+    // ========================================================================
+    // USER PROFILES
+    // ========================================================================
+    
+    match /users/{userId} {
+      // Approved users can read any profile (for directories, networking)
+      // Pending users can only read their own profile
+      allow read: if isApproved() || (isAuthenticated() && request.auth.uid == userId);
+      
+      // New users can create their own profile with 'pending' status
+      allow create: if isAuthenticated() && 
+                       request.auth.uid == userId && 
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.role == 'attendee'; // Default to attendee
+      
+      // Users can update their own profile BUT CANNOT change:
+      // - role (only admin can change)
+      // - status (only admin can approve/reject)
+      // - qrCodePayload (only admin/staff can set)
+      allow update: if isAdmin() || 
+                       (isAuthenticated() && 
+                        request.auth.uid == userId && 
+                        !request.resource.data.diff(resource.data).affectedKeys()
+                          .hasAny(['role', 'status', 'qrCodePayload']));
+      
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+
+    // ========================================================================
+    // USER NOTIFICATIONS
+    // ========================================================================
+    
+    match /users/{userId}/notifications/{notificationId} {
+      // Users can only access their own notifications
+      allow read, update, delete: if isAuthenticated() && request.auth.uid == userId;
+      // Admins and system can create notifications for any user
+      allow create: if isAdmin();
+    }
+
+    // ========================================================================
+    // SESSION CHAT (with moderation features)
+    // ========================================================================
+    
+    match /sessions/{sessionId}/chat/{messageId} {
+      // Approved users can read session chat
+      allow read: if isApproved();
+      
+      // Users can create messages if:
+      // 1. They are the sender
+      // 2. They are not muted
+      // 3. Chat is enabled OR they are admin (admin override)
+      allow create: if isApproved() && 
+                       request.resource.data.senderId == request.auth.uid &&
+                       !(request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.mutedUsers) &&
+                       (get(/databases/$(database)/documents/sessions/$(sessionId)).data.isChatEnabled || 
+                        isAdmin());
+      
+      // Only registered speakers and admins can delete messages (moderation)
+      allow delete: if canModerateSession(sessionId);
+      
+      // No one can update messages (immutable after creation)
+      allow update: if false;
+    }
+
+    // ========================================================================
+    // SESSION CHECK-INS (QR scan tracking)
+    // ========================================================================
+    
+    match /sessions/{sessionId}/checkins/{userId} {
+      allow read: if isApproved();
+      // Users can only check themselves in
+      allow create: if isApproved() && userId == request.auth.uid;
+      // No updates or deletes
+      allow update, delete: if false;
+    }
+
+    // ========================================================================
+    // EVENT CHECK-INS (Staff/Admin logging)
+    // ========================================================================
+    
+    match /eventCheckIns/{checkInId} {
+      // Staff and admins can view check-in logs
+      allow read: if isStaffOrAdmin();
+      // Only staff/admin can create check-in logs, and they must be the scanner
+      allow create: if isStaffOrAdmin() && 
+                       request.resource.data.scannerUserId == request.auth.uid;
+      // No updates or deletes (immutable log)
+      allow update, delete: if false;
+    }
+
+    // ========================================================================
+    // DIRECT MESSAGING
+    // ========================================================================
+    
+    match /directMessages/{conversationId} {
+      // Users can read/write conversations they are a member of
+      allow read, update, create: if isApproved() && 
+                                     request.auth.uid in resource.data.members;
+    }
+
+    match /directMessages/{conversationId}/messages/{messageId} {
+      // Users can read messages in their conversations
+      allow read: if isApproved() && 
+                     request.auth.uid in get(/databases/$(database)/documents/directMessages/$(conversationId)).data.members;
+      
+      // Users can only create messages where they are the sender
+      // and are a member of the conversation
+      allow create: if isApproved() && 
+                       request.resource.data.senderId == request.auth.uid &&
+                       request.auth.uid in get(/databases/$(database)/documents/directMessages/$(conversationId)).data.members;
+      
+      // No updates or deletes for DMs (keep conversation history)
+      allow update, delete: if false;
+    }
+
+    // ========================================================================
+    // BOOKMARKS (User-specific)
+    // ========================================================================
+    
+    match /users/{userId}/bookmarks/{bookmarkId} {
+      // Users can only manage their own bookmarks
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ========================================================================
+    // ANALYTICS & LOGS (Admin only)
+    // ========================================================================
+    
+    match /analytics/{document=**} {
+      allow read, write: if isAdmin();
+    }
+
+    match /logs/{document=**} {
+      allow read: if isAdmin();
+      allow write: if false; // Logs are write-once via server
+    }
+  }
+}
+
+// ============================================================================
+// TESTING CHECKLIST BEFORE DEPLOYMENT
+// ============================================================================
+// 
+// ✅ User Registration:
+//    [ ] New user can create pending profile
+//    [ ] New user cannot set role to anything except attendee
+//    [ ] Pending user can only see their own profile
+//    [ ] Admin can approve/reject users
+// 
+// ✅ Session Chat:
+//    [ ] Approved user can send message when chat is open
+//    [ ] Muted user CANNOT send message
+//    [ ] Admin CAN send message even when chat is closed
+//    [ ] Regular user CANNOT send when chat is closed
+//    [ ] Registered speaker can delete messages
+//    [ ] Non-registered speaker CANNOT delete messages
+//    [ ] Admin can delete any message
+// 
+// ✅ Chat Moderation:
+//    [ ] Registered speaker can mute/unmute users
+//    [ ] Registered speaker can close/open chat
+//    [ ] Admin can override speaker-closed chat
+//    [ ] Speaker CANNOT override admin-closed chat
+//    [ ] Non-registered speaker CANNOT moderate
+// 
+// ✅ Session Updates:
+//    [ ] Admin can update any session field
+//    [ ] Registered speaker can only update chat fields
+//    [ ] Non-registered speaker CANNOT update session
+//    [ ] Regular user CANNOT update session
+// 
+// ✅ Direct Messages:
+//    [ ] User can only read their own DM conversations
+//    [ ] User can only send messages they author
+//    [ ] User CANNOT read others' DM conversations
+// 
+// ✅ Event Check-ins:
+//    [ ] Only staff/admin can create check-in logs
+//    [ ] Scanner must be the authenticated user
+//    [ ] Check-in logs are immutable
+// 
+// ============================================================================

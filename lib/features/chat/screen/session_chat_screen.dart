@@ -17,16 +17,29 @@ class SessionChatScreen extends ConsumerStatefulWidget {
 }
 
 class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
-  void _toggleChatEnabled() async {
+  void _toggleChatEnabled(Session currentSession, String userRole) async {
     final chatRepo = ref.read(chatRepositoryProvider);
-    final newState = !widget.session.isChatEnabled;
+    final newState = !currentSession.isChatEnabled;
+    
+    // Check if admin is trying to override speaker lock
+    if (currentSession.isAdminLocked && userRole == 'speaker') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot override admin lock'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+    
+    final closedByRole = userRole == 'admin' ? 'admin' : 'speaker';
     
     try {
-      await chatRepo.toggleChatEnabled(widget.session.id, newState);
+      await chatRepo.toggleChatEnabled(currentSession.id, newState, closedByRole);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(newState ? 'Chat enabled' : 'Chat closed'),
+            content: Text(newState ? 'Chat opened' : 'Chat closed'),
             backgroundColor: newState ? AppColors.successGreen : AppColors.errorRed,
           ),
         );
@@ -40,16 +53,39 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
     }
   }
 
+  void _muteUser(String userId) async {
+    final chatRepo = ref.read(chatRepositoryProvider);
+    
+    try {
+      await chatRepo.muteUser(widget.session.id, userId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mute user: $e')),
+        );
+      }
+    }
+  }
+
+  void _unmuteUser(String userId) async {
+    final chatRepo = ref.read(chatRepositoryProvider);
+    
+    try {
+      await chatRepo.unmuteUser(widget.session.id, userId);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to unmute user: $e')),
+        );
+      }
+    }
+  }
+
   void _deleteMessage(String messageId) async {
     final chatRepo = ref.read(chatRepositoryProvider);
     
     try {
       await chatRepo.deleteMessage(widget.session.id, messageId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message deleted')),
-        );
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -84,27 +120,27 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
               );
             }
 
-            // Check if user is speaker or admin
-            final bool isSpeakerOrAdmin = currentUser.role == 'admin' || 
-                currentUser.role == 'speaker' ||
-                currentSession.speakerIds.contains(currentUser.uid);
+            // Check permissions
+            final bool isAdmin = currentUser.role == 'admin';
+            final bool isSessionSpeaker = currentSession.speakerIds.contains(currentUser.uid);
+            final bool canModerate = isAdmin || isSessionSpeaker;
 
             return Scaffold(
               appBar: AppBar(
                 title: Text(currentSession.title, overflow: TextOverflow.ellipsis),
                 actions: [
                   // Speaker/Admin controls
-                  if (isSpeakerOrAdmin)
+                  if (canModerate)
                     IconButton(
                       icon: Icon(
                         currentSession.isChatEnabled ? Icons.lock_open : Icons.lock,
                         color: currentSession.isChatEnabled ? AppColors.successGreen : AppColors.errorRed,
                       ),
-                      onPressed: _toggleChatEnabled,
+                      onPressed: () => _toggleChatEnabled(currentSession, currentUser.role),
                       tooltip: currentSession.isChatEnabled ? 'Close Chat' : 'Open Chat',
                     ),
                   // Analytics icon
-                  if (isSpeakerOrAdmin)
+                  if (canModerate)
                     IconButton(
                       icon: const Icon(Icons.analytics_outlined),
                       onPressed: () {
@@ -120,6 +156,9 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                                 Text('Total Messages: ${currentSession.totalMessages}'),
                                 Text('Unique Participants: ${currentSession.uniqueParticipants.length}'),
                                 Text('Checked-in Attendees: ${currentSession.checkedInAttendees.length}'),
+                                Text('Muted Users: ${currentSession.mutedUsers.length}'),
+                                if (currentSession.closedBy.isNotEmpty)
+                                  Text('Chat closed by: ${currentSession.closedBy}'),
                               ],
                             ),
                             actions: [
@@ -168,13 +207,16 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                         children: [
                           Icon(Icons.lock, size: 16, color: AppColors.warningAmber),
                           const SizedBox(width: 8),
-                          Text(
-                            isSpeakerOrAdmin 
-                                ? 'Chat is closed (you can still view messages)'
-                                : 'Chat is closed by speaker',
-                            style: TextStyle(
-                              color: AppColors.warningAmber,
-                              fontWeight: FontWeight.w500,
+                          Flexible(
+                            child: Text(
+                              currentSession.closedBy.isNotEmpty
+                                  ? 'Chat closed by ${currentSession.closedBy}'
+                                  : 'Chat is closed',
+                              style: TextStyle(
+                                color: AppColors.warningAmber,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
                             ),
                           ),
                         ],
@@ -220,14 +262,21 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                           itemBuilder: (context, index) {
                             final message = messages[index];
                             final isMe = message.senderId == currentUser.uid;
+                            final isMessageSenderMuted = currentSession.isUserMuted(message.senderId);
                             
                             return ChatBubble(
                               message: message,
                               isMe: isMe,
-                              sessionSpeakerId: currentSession.speakerIds.isNotEmpty 
-                                  ? currentSession.speakerIds.first 
+                              sessionSpeakerIds: currentSession.speakerIds,
+                              isUserMuted: isMessageSenderMuted,
+                              isSessionChat: true,
+                              onMuteUser: canModerate && !isMe
+                                  ? () => _muteUser(message.senderId)
                                   : null,
-                              onDeleteMessage: isSpeakerOrAdmin && !isMe
+                              onUnmuteUser: canModerate && !isMe
+                                  ? () => _unmuteUser(message.senderId)
+                                  : null,
+                              onDeleteMessage: canModerate && !isMe
                                   ? () => _deleteMessage(message.id)
                                   : null,
                             );

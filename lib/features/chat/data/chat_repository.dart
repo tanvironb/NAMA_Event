@@ -71,11 +71,31 @@ class ChatRepository {
   }
 
   /// Toggle chat availability for a session (speaker/admin only)
-  Future<void> toggleChatEnabled(String sessionId, bool enabled) async {
+  /// closedByRole: 'speaker' or 'admin' to track who closed it
+  Future<void> toggleChatEnabled(String sessionId, bool enabled, String closedByRole) async {
     final sessionRef = FirebaseFirestore.instance.collection('sessions').doc(sessionId);
     
     await sessionRef.update({
       'isChatEnabled': enabled,
+      'closedBy': enabled ? '' : closedByRole, // Clear closedBy when reopening
+    });
+  }
+
+  /// Mute a user in a specific session (speaker/admin only)
+  Future<void> muteUser(String sessionId, String userId) async {
+    final sessionRef = FirebaseFirestore.instance.collection('sessions').doc(sessionId);
+    
+    await sessionRef.update({
+      'mutedUsers': FieldValue.arrayUnion([userId]),
+    });
+  }
+
+  /// Unmute a user in a specific session (speaker/admin only)
+  Future<void> unmuteUser(String sessionId, String userId) async {
+    final sessionRef = FirebaseFirestore.instance.collection('sessions').doc(sessionId);
+    
+    await sessionRef.update({
+      'mutedUsers': FieldValue.arrayRemove([userId]),
     });
   }
 
