@@ -103,6 +103,15 @@ final sessionsStreamProvider = StreamProvider.autoDispose<List<Session>>((ref) {
   return Stream.value([]); // Return empty list if no active event is found
 });
 
+// Provides a stream for a single session by ID (for real-time updates)
+final sessionStreamProvider = StreamProvider.autoDispose.family<Session?, String>((ref, sessionId) {
+  return FirebaseFirestore.instance
+      .collection('sessions')
+      .doc(sessionId)
+      .snapshots()
+      .map((doc) => doc.exists ? Session.fromFirestore(doc) : null);
+});
+
 // Provides a stream of sessions where a specific user is a speaker.
 final speakerSessionsProvider = Provider.autoDispose.family<AsyncValue<List<Session>>, String>((ref, speakerId) {
   final allSessionsAsync = ref.watch(sessionsStreamProvider);

@@ -18,6 +18,21 @@ class ChatBubble extends ConsumerWidget {
     this.onDeleteMessage,
   });
 
+  /// Get color for user role name display
+  Color _getRoleColor(String role) {
+    switch (role.toLowerCase()) {
+      case 'admin':
+        return AppColors.adminColor;
+      case 'speaker':
+        return AppColors.speakerColor;
+      case 'staff':
+        return AppColors.staffColor;
+      case 'attendee':
+      default:
+        return AppColors.attendeeColor;
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(userAppProfileStreamProvider).asData?.value;
@@ -67,12 +82,13 @@ class ChatBubble extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
+                  // Show sender name and role for others' messages (WhatsApp style)
                   if (!isMe)
                     Text(
                       message.senderName,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             fontWeight: FontWeight.bold,
-                            color: AppColors.navyBlue,
+                            color: _getRoleColor(message.senderRole),
                           ),
                     ),
                   if (!isMe) const SizedBox(height: 4),
@@ -80,19 +96,6 @@ class ChatBubble extends ConsumerWidget {
                     message.text,
                     style: TextStyle(color: isMe ? Colors.white : Colors.black87),
                   ),
-                  // Show "Seen" indicator for sent messages in direct messages
-                  if (isMe && message.readBy.isNotEmpty && message.readBy.length > 1) // More than just sender
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Seen',
-                        style: TextStyle(
-                          color: isMe ? Colors.white70 : Colors.black54,
-                          fontSize: 10,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),

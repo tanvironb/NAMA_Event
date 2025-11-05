@@ -6,6 +6,7 @@ class Message {
   final String senderId;
   final String senderName; // Denormalized for easier display
   final String senderImageUrl; // Denormalized for easier display
+  final String senderRole; // User role (attendee, speaker, staff, admin) for color coding
   final Timestamp timestamp;
   final List<String> readBy; // List of user IDs who have read this message
 
@@ -15,6 +16,7 @@ class Message {
     required this.senderId,
     required this.senderName,
     required this.senderImageUrl,
+    required this.senderRole,
     required this.timestamp,
     List<String>? readBy,
   }) : readBy = readBy ?? [];
@@ -30,6 +32,7 @@ class Message {
       senderId: data['senderId'] as String,
       senderName: data['senderName'] as String? ?? 'User',
       senderImageUrl: data['senderImageUrl'] as String? ?? '',
+      senderRole: data['senderRole'] as String? ?? 'attendee',
       timestamp: data['timestamp'] as Timestamp,
       readBy: List<String>.from(data['readBy'] ?? []),
     );
