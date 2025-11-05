@@ -4,14 +4,14 @@ import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
-import 'package:events_app_trueattempt/features/home/screen/widgets/home_dashboard_screen.dart';
+import 'package:events_app_trueattempt/features/home/screen/speaker_home_dashboard.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live_player.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
-import 'package:events_app_trueattempt/features/speaker/screen/speaker_dashboard_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 
 class SpeakerShell extends ConsumerStatefulWidget {
   const SpeakerShell({super.key});
@@ -24,11 +24,11 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
   int _selectedIndex = 0;
 
   static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
-    const HomeDashboardScreen(), // Home feed (same as attendees)
+    const SpeakerHomeDashboard(), // Speaker-specific home with action cards
     const AgendaScreen(), // Event agenda (same as attendees)
     const DirectoriesHubScreen(), // Networking (same as attendees)
     const QRHubScreen(), // QR Code Hub (replaces Explore)
-    const SpeakerDashboardScreen(), // Speaker-specific dashboard
+    const ProfileTabScreen(), // Profile screen (same as attendees)
   ];  @override
   void initState() {
     super.initState();
@@ -77,7 +77,7 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.message_outlined),
+            icon: const MessageIconWithBadge(),
             onPressed: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (context) => const ConversationsScreen(),
@@ -167,8 +167,8 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
               title: Text('My Sessions', style: Theme.of(context).textTheme.titleMedium),
               onTap: () {
                 Navigator.pop(context);
-                // Navigate to Dashboard tab which has My Sessions
-                setState(() => _selectedIndex = 4);
+                // Navigate to Home tab where speaker actions are
+                setState(() => _selectedIndex = 0);
               },
             ),
             ListTile(
@@ -176,7 +176,8 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
               title: Text('Analytics', style: Theme.of(context).textTheme.titleMedium),
               onTap: () {
                 Navigator.pop(context);
-                setState(() => _selectedIndex = 4);
+                // Navigate to Home tab where speaker actions are
+                setState(() => _selectedIndex = 0);
               },
             ),
             const Divider(),
@@ -237,9 +238,9 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
             label: 'QR',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_outlined),
-            activeIcon: Icon(Icons.dashboard),
-            label: 'Dashboard',
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profile',
           ),
         ],
         currentIndex: _selectedIndex,
