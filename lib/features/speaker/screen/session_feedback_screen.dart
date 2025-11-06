@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/features/speaker/screen/session_feedback_detail_screen.dart';
 
 /// Session Feedback Screen
 /// Shows ratings and feedback from attendees for speaker's sessions
@@ -166,91 +167,137 @@ class SessionFeedbackScreen extends ConsumerWidget {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Session title
-                          Text(
-                            session.title,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.namaNavyBlue,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        // Navigate to detail screen
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SessionFeedbackDetailScreen(
+                              session: session,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          
-                          // Feedback stats
-                          Row(
-                            children: [
-                              if (session.totalFeedbacks > 0) ...[
-                                Icon(
-                                  Icons.star,
-                                  size: 20,
-                                  color: AppColors.namaGoldenYellow,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  session.averageRating.toStringAsFixed(1),
-                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.namaNavyBlue,
+                        );
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Session title with chevron
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    session.title,
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.namaNavyBlue,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '(${session.totalFeedbacks} ${session.totalFeedbacks == 1 ? 'review' : 'reviews'})',
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: AppColors.namaMediumGray,
-                                  ),
-                                ),
-                              ] else ...[
                                 Icon(
-                                  Icons.feedback_outlined,
-                                  size: 20,
+                                  Icons.chevron_right,
                                   color: AppColors.namaMediumGray,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  'No feedback yet',
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: AppColors.namaMediumGray,
-                                  ),
+                                  size: 24,
                                 ),
                               ],
-                            ],
-                          ),
-                          
-                          const SizedBox(height: 8),
-                          
-                          // Attendee stats
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.people_outline,
-                                size: 16,
-                                color: AppColors.namaMediumGray,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${session.checkedInAttendees.length} attendees',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            ),
+                            const SizedBox(height: 8),
+                            
+                            // Feedback stats
+                            Row(
+                              children: [
+                                if (session.totalFeedbacks > 0) ...[
+                                  Icon(
+                                    Icons.star,
+                                    size: 20,
+                                    color: AppColors.namaGoldenYellow,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    session.averageRating.toStringAsFixed(1),
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.namaNavyBlue,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '(${session.totalFeedbacks} ${session.totalFeedbacks == 1 ? 'review' : 'reviews'})',
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: AppColors.namaMediumGray,
+                                    ),
+                                  ),
+                                ] else ...[
+                                  Icon(
+                                    Icons.feedback_outlined,
+                                    size: 20,
+                                    color: AppColors.namaMediumGray,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'No feedback yet',
+                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: AppColors.namaMediumGray,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            
+                            const SizedBox(height: 8),
+                            
+                            // Attendee stats
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.people_outline,
+                                  size: 16,
                                   color: AppColors.namaMediumGray,
                                 ),
-                              ),
-                              if (session.checkedInAttendees.isNotEmpty && session.totalFeedbacks > 0) ...[
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 4),
                                 Text(
-                                  '• ${((session.totalFeedbacks / session.checkedInAttendees.length) * 100).toStringAsFixed(0)}% response rate',
+                                  '${session.checkedInAttendees.length} attendees',
                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: AppColors.namaMediumGray,
                                   ),
                                 ),
+                                if (session.checkedInAttendees.isNotEmpty && session.totalFeedbacks > 0) ...[
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '• ${((session.totalFeedbacks / session.checkedInAttendees.length) * 100).toStringAsFixed(0)}% response rate',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: AppColors.namaMediumGray,
+                                    ),
+                                  ),
+                                ],
                               ],
+                            ),
+                            
+                            // Hint text to tap
+                            if (session.totalFeedbacks > 0) ...[
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.touch_app,
+                                    size: 14,
+                                    color: AppColors.namaNavyBlue.withOpacity(0.6),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Tap to view reviews',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: AppColors.namaNavyBlue.withOpacity(0.6),
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ],
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   );

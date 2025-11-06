@@ -299,7 +299,7 @@ export const logSessionCheckIn = onCall(
 
 /**
  * NEW: Triggered when a new direct message is created.
- * Sends a push notification to the recipient.
+ * Sends a push notification ONLY to the recipient (NOT the sender).
  */
 export const onNewDirectMessage = onDocumentCreated(
   {
@@ -311,20 +311,35 @@ export const onNewDirectMessage = onDocumentCreated(
     if (!messageData) return null;
 
     const conversationId = event.params.conversationId;
+    const senderId = messageData.senderId;
 
     // Get the conversation members from the parent document
     const conversationDoc = await db.collection("directMessages")
       .doc(conversationId).get();
     const members = conversationDoc.data()?.members as string[];
 
-    // Find the recipient's ID
-    const recipientId = members.find(
-      (id: string) => id !== messageData.senderId
-    );
+    if (!members || members.length !== 2) {
+      console.log("Invalid conversation members.");
+      return null;
+    }
+
+    // Find the recipient's ID (the OTHER person, not the sender)
+    const recipientId = members.find((id: string) => id !== senderId);
     if (!recipientId) {
       console.log("Recipient not found.");
       return null;
     }
+
+    // CRITICAL: Double-check that recipient is NOT the sender
+    if (recipientId === senderId) {
+      console.log("ERROR: Recipient is same as sender. Skipping notification.");
+      return null;
+    }
+
+    console.log(
+      `Processing DM notification - 
+       Sender: ${senderId}, Recipient: ${recipientId}`
+    );
 
     // Get recipient's user document to find their FCM token
     const recipientDoc = await db.collection("users").doc(recipientId).get();
@@ -338,13 +353,15 @@ export const onNewDirectMessage = onDocumentCreated(
     // Get sender's full profile for deep linking
     const senderDoc = await db
       .collection("users")
-      .doc(messageData.senderId)
+      .doc(senderId)
       .get();
     const senderData = senderDoc.data();
 
     const tokenPreview = fcmToken.substring(0, 20);
-    console.log(`Sending DM notification to user ${recipientId} ` +
-      `with token: ${tokenPreview}...`);
+    console.log(
+      `Sending DM notification from ${senderId} to user ${recipientId} ` +
+      `with token: ${tokenPreview}...`
+    );
 
     // Construct the notification message using FCM HTTP v1 API
     const message = {
@@ -356,8 +373,8 @@ export const onNewDirectMessage = onDocumentCreated(
       data: {
         type: "dm",
         conversationId: conversationId,
-        senderId: messageData.senderId,
-        otherUserId: messageData.senderId,
+        senderId: senderId,
+        otherUserId: senderId,
         otherUserName: messageData.senderName,
         otherUserProfileImage: senderData?.profileImageUrl || "",
       },
@@ -520,6 +537,7 @@ export const onSessionEnd = onDocumentWritten(
 /**
  * NEW: Triggered on any write to the meetings collection.
  * Sends a notification for new requests or status updates.
+ * ONLY sends to the affected party (NOT the action initiator).
  */
 export const onMeetingWrite = onDocumentWritten(
   {document: "meetings/{meetingId}", region: FUNCTION_REGION},
@@ -535,8 +553,25 @@ export const onMeetingWrite = onDocumentWritten(
     let payload: admin.messaging.MessagingPayload;
 
     // Case 1: A new meeting is created (a new request is sent)
+    // Notify the RECIPIENT (person receiving the request), NOT the requester
     if (!beforeData && afterData) {
-      recipientId = afterData.recipientId;
+      const requesterId = afterData.requesterId;
+      const potentialRecipientId = afterData.recipientId;
+
+      // CRITICAL: Ensure we're NOT notifying the person who sent the request
+      if (potentialRecipientId === requesterId) {
+        console.log(
+          "Skipping notification: New meeting requester is same as recipient."
+        );
+        return null;
+      }
+
+      recipientId = potentialRecipientId;
+      console.log(
+        `New meeting request - Requester: ${requesterId}, ` +
+        `Notifying recipient: ${recipientId}`
+      );
+
       payload = {
         notification: {
           title: "New Meeting Request",
@@ -555,7 +590,24 @@ export const onMeetingWrite = onDocumentWritten(
       afterData.status !== "pending"
     ) {
       // Case 2: An existing meeting is updated (accepted/rejected)
-      recipientId = afterData.requesterId; // Notify requester
+      // Notify the REQUESTER (original person who sent the request)
+      const requesterId = afterData.requesterId;
+      const responderId = afterData.recipientId;
+
+      // CRITICAL: Ensure we're NOT notifying the person who just responded
+      if (requesterId === responderId) {
+        console.log(
+          "Skipping notification: Meeting requester is same as responder."
+        );
+        return null;
+      }
+
+      recipientId = requesterId;
+      console.log(
+        `Meeting status update - Responder: ${responderId}, ` +
+        `Notifying requester: ${recipientId}`
+      );
+
       payload = {
         notification: {
           title: `Meeting Request ${afterData.status}`,
