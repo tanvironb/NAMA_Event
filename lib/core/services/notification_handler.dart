@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
@@ -13,16 +14,27 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 class NotificationHandler {
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
+  /// Get current user ID safely
+  static String? get _currentUserId => FirebaseAuth.instance.currentUser?.uid;
+
   /// Handle notification tap and navigate to appropriate screen
   static void handleNotificationTap(RemoteMessage message) {
     debugPrint('NotificationHandler: Handling notification tap');
     debugPrint('Notification data: ${message.data}');
 
     final type = message.data['type'];
+    final senderId = message.data['senderId'];
+    final currentUserId = _currentUserId;
     final context = navigatorKey.currentContext;
 
     if (context == null) {
       debugPrint('NotificationHandler: Navigator context is null');
+      return;
+    }
+
+    // CRITICAL: Skip handling if current user is the sender (shouldn't happen, but double-check)
+    if (currentUserId != null && senderId != null && currentUserId == senderId) {
+      debugPrint('NotificationHandler: Skipping tap handling - user is the sender');
       return;
     }
 
@@ -269,8 +281,17 @@ class NotificationHandler {
     final title = message.notification?.title ?? 'Notification';
     final body = message.notification?.body ?? '';
     final type = message.data['type'];
+    final senderId = message.data['senderId'];
+    final currentUserId = _currentUserId;
 
     debugPrint('NotificationHandler: Foreground message received, type: $type');
+    debugPrint('NotificationHandler: Sender: $senderId, Current User: $currentUserId');
+
+    // CRITICAL: Skip notification if current user is the sender
+    if (currentUserId != null && senderId != null && currentUserId == senderId) {
+      debugPrint('NotificationHandler: Skipping notification - user is the sender');
+      return;
+    }
 
     // Show in-app banner with appropriate action
     showInAppBanner(

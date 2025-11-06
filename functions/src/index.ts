@@ -308,64 +308,101 @@ export const onNewDirectMessage = onDocumentCreated(
   },
   async (event) => {
     const messageData = event.data?.data();
-    if (!messageData) return null;
+    if (!messageData) {
+      console.log("No message data found.");
+      return null;
+    }
 
     const conversationId = event.params.conversationId;
     const senderId = messageData.senderId;
 
+    console.log("\n=== DM Notification Triggered ===");
+    console.log(`Conversation: ${conversationId}`);
+    console.log(`Sender: ${senderId}`);
+
     // Get the conversation members from the parent document
     const conversationDoc = await db.collection("directMessages")
       .doc(conversationId).get();
-    const members = conversationDoc.data()?.members as string[];
 
-    if (!members || members.length !== 2) {
-      console.log("Invalid conversation members.");
+    if (!conversationDoc.exists) {
+      console.log("ERROR: Conversation document does not exist.");
       return null;
     }
+
+    const conversationData = conversationDoc.data();
+    const members = conversationData?.members as string[];
+
+    if (!members || members.length !== 2) {
+      console.log(`ERROR: Invalid members array: ${JSON.stringify(members)}`);
+      return null;
+    }
+
+    console.log(`Conversation members: ${JSON.stringify(members)}`);
 
     // Find the recipient's ID (the OTHER person, not the sender)
     const recipientId = members.find((id: string) => id !== senderId);
+
     if (!recipientId) {
-      console.log("Recipient not found.");
+      console.log("ERROR: Could not find recipient ID (different from sender)");
       return null;
     }
 
-    // CRITICAL: Double-check that recipient is NOT the sender
+    // CRITICAL: Triple-check that recipient is NOT the sender
     if (recipientId === senderId) {
-      console.log("ERROR: Recipient is same as sender. Skipping notification.");
+      console.log(`ERROR: Recipient equals sender (${recipientId}). ABORTING.`);
       return null;
     }
 
-    console.log(
-      `Processing DM notification - 
-       Sender: ${senderId}, Recipient: ${recipientId}`
-    );
+    console.log(`✓ Recipient identified: ${recipientId}`);
+    console.log(`✓ Sender: ${senderId}`);
+    console.log(`✓ Recipient ≠ Sender: ${recipientId !== senderId}`);
 
     // Get recipient's user document to find their FCM token
     const recipientDoc = await db.collection("users").doc(recipientId).get();
-    const fcmToken = recipientDoc.data()?.fcmToken;
 
-    if (!fcmToken) {
+    if (!recipientDoc.exists) {
+      console.log("ERROR: Recipient user document does not exist.");
+      return null;
+    }
+
+    const recipientData = recipientDoc.data();
+    const recipientFcmToken = recipientData?.fcmToken;
+
+    if (!recipientFcmToken) {
       console.log(`Recipient ${recipientId} does not have an FCM token.`);
       return null;
     }
 
-    // Get sender's full profile for deep linking
-    const senderDoc = await db
-      .collection("users")
-      .doc(senderId)
-      .get();
+    // CRITICAL: Get sender's FCM token to compare
+    const senderDoc = await db.collection("users").doc(senderId).get();
     const senderData = senderDoc.data();
+    const senderFcmToken = senderData?.fcmToken;
 
-    const tokenPreview = fcmToken.substring(0, 20);
+    const senderTokenPreview =
+      senderFcmToken?.substring(0, 20) || "none";
     console.log(
-      `Sending DM notification from ${senderId} to user ${recipientId} ` +
-      `with token: ${tokenPreview}...`
+      `Sender FCM token (first 20 chars): ${senderTokenPreview}...`
     );
+    const recipientTokenPreview = recipientFcmToken.substring(0, 20);
+    console.log(
+      `Recipient FCM token (first 20 chars): ${recipientTokenPreview}...`
+    );
+
+    // CRITICAL: If both users have the SAME FCM token, don't send notification
+    // This happens when testing with same device logged into multiple accounts
+    if (senderFcmToken && recipientFcmToken === senderFcmToken) {
+      console.log("WARNING: Sender and recipient have the SAME FCM token!");
+      console.log("This means that...");
+      console.log("you are testing with the same device for 2 accs");
+      console.log("SKIPPING notification to prevent self-notification.");
+      return null;
+    }
+
+    console.log("✓ FCM tokens are different. Safe to send notification.");
 
     // Construct the notification message using FCM HTTP v1 API
     const message = {
-      token: fcmToken,
+      token: recipientFcmToken,
       notification: {
         title: `New message from ${messageData.senderName}`,
         body: messageData.text,
@@ -395,10 +432,12 @@ export const onNewDirectMessage = onDocumentCreated(
 
     try {
       const response = await admin.messaging().send(message);
-      console.log(`Successfully sent DM notification: ${response}`);
+      console.log(`✓ SUCCESS: Notification sent to ${recipientId}`);
+      console.log(`Response: ${response}`);
+      console.log("=== End DM Notification ===\n");
       return response;
     } catch (error) {
-      console.error("Error sending DM notification:", error);
+      console.error("ERROR sending DM notification:", error);
 
       // If token is invalid, remove it from the user document
       if (error instanceof Error &&
@@ -549,7 +588,16 @@ export const onMeetingWrite = onDocumentWritten(
       event.data.after.data() :
       null;
 
+    if (!afterData) {
+      console.log("No after data in meeting write.");
+      return null;
+    }
+
+    console.log("\n=== Meeting Notification Triggered ===");
+    console.log(`Meeting ID: ${event.params.meetingId}`);
+
     let recipientId: string | null = null;
+    let senderId: string | null = null;
     let payload: admin.messaging.MessagingPayload;
 
     // Case 1: A new meeting is created (a new request is sent)
@@ -558,19 +606,21 @@ export const onMeetingWrite = onDocumentWritten(
       const requesterId = afterData.requesterId;
       const potentialRecipientId = afterData.recipientId;
 
+      console.log("Case: New meeting request");
+      console.log(`Requester: ${requesterId}`);
+      console.log(`Recipient: ${potentialRecipientId}`);
+
       // CRITICAL: Ensure we're NOT notifying the person who sent the request
       if (potentialRecipientId === requesterId) {
-        console.log(
-          "Skipping notification: New meeting requester is same as recipient."
-        );
+        console.log("ERROR: Requester equals recipient. ABORTING.");
         return null;
       }
 
       recipientId = potentialRecipientId;
-      console.log(
-        `New meeting request - Requester: ${requesterId}, ` +
-        `Notifying recipient: ${recipientId}`
-      );
+      senderId = requesterId;
+
+      console.log(`✓ Will notify: ${recipientId} (recipient)`);
+      console.log(`✓ Won't notify: ${senderId} (requester)`);
 
       payload = {
         notification: {
@@ -580,6 +630,7 @@ export const onMeetingWrite = onDocumentWritten(
         data: {
           type: "meeting_request",
           meetingId: event.params.meetingId,
+          senderId: requesterId, // Who sent the request
           requesterName: afterData.requesterInfo.name,
           proposedTime: afterData.proposedTime.toDate().toISOString(),
         },
@@ -594,19 +645,21 @@ export const onMeetingWrite = onDocumentWritten(
       const requesterId = afterData.requesterId;
       const responderId = afterData.recipientId;
 
+      console.log(`Case: Meeting status updated to ${afterData.status}`);
+      console.log(`Original requester: ${requesterId}`);
+      console.log(`Responder: ${responderId}`);
+
       // CRITICAL: Ensure we're NOT notifying the person who just responded
       if (requesterId === responderId) {
-        console.log(
-          "Skipping notification: Meeting requester is same as responder."
-        );
+        console.log("ERROR: Requester equals responder. ABORTING.");
         return null;
       }
 
       recipientId = requesterId;
-      console.log(
-        `Meeting status update - Responder: ${responderId}, ` +
-        `Notifying requester: ${recipientId}`
-      );
+      senderId = responderId;
+
+      console.log(`✓ Will notify: ${recipientId} (original requester)`);
+      console.log(`✓ Won't notify: ${senderId} (responder)`);
 
       payload = {
         notification: {
@@ -617,33 +670,58 @@ export const onMeetingWrite = onDocumentWritten(
         data: {
           type: "meeting_update",
           meetingId: event.params.meetingId,
+          senderId: responderId, // Who responded to the request
           status: afterData.status,
         },
       };
     } else {
-      return null; // No notification needed
-    }
-
-    if (!recipientId) {
-      console.log("No recipient ID found.");
+      console.log("No notification needed for this meeting change.");
       return null;
     }
 
-    // Get recipient's FCM token and send the notification
+    if (!recipientId) {
+      console.log("ERROR: No recipient ID determined.");
+      return null;
+    }
+
+    // Get recipient's FCM token
     const recipientDoc = await db.collection("users").doc(recipientId).get();
-    const fcmToken = recipientDoc.data()?.fcmToken;
-    if (!fcmToken) {
+
+    if (!recipientDoc.exists) {
+      console.log(`ERROR: Recipient user ${recipientId} does not exist.`);
+      return null;
+    }
+
+    const recipientData = recipientDoc.data();
+    const recipientFcmToken = recipientData?.fcmToken;
+
+    if (!recipientFcmToken) {
       console.log(`Recipient ${recipientId} does not have an FCM token.`);
       return null;
     }
 
-    const tokenPreview = fcmToken.substring(0, 20);
-    console.log(`Sending meeting notification to user ${recipientId} ` +
-      `with token: ${tokenPreview}...`);
+    // CRITICAL: Get sender's FCM token to compare (if sender exists)
+    if (senderId) {
+      const senderDoc = await db.collection("users").doc(senderId).get();
+      const senderData = senderDoc.data();
+      const senderFcmToken = senderData?.fcmToken;
+
+      console.log(`Sndr FCM: ${senderFcmToken?.substring(0, 20) || "none"}...`);
+      console.log(`Recipient FCM: ${recipientFcmToken.substring(0, 20)}...`);
+
+      // If both users have the SAME FCM token, don't send
+      if (senderFcmToken && recipientFcmToken === senderFcmToken) {
+        console.log("WARNING: Sender and recipient have SAME FCM token!");
+        console.log("Testing with same device. SKIPPING notification.");
+        return null;
+      }
+
+      console.log("✓ FCM tokens are different. Safe to send.");
+    }
 
     // Construct the notification message using FCM HTTP v1 API
     const message = {
-      token: fcmToken,
+      token: recipientFcmToken,
       notification: payload.notification,
       data: payload.data,
       android: {
@@ -663,10 +741,12 @@ export const onMeetingWrite = onDocumentWritten(
 
     try {
       const response = await admin.messaging().send(message);
-      console.log(`Successfully sent meeting notification: ${response}`);
+      console.log(`✓ SUCCESS: Meeting notification sent to ${recipientId}`);
+      console.log(`Response: ${response}`);
+      console.log("=== End Meeting Notification ===\n");
       return response;
     } catch (error) {
-      console.error("Error sending meeting notification:", error);
+      console.error("ERROR sending meeting notification:", error);
 
       // If token is invalid, remove it from the user document
       if (error instanceof Error &&
