@@ -33,12 +33,13 @@ class ChatRepository {
     };
     await _firestoreService.addChatMessage(sessionId, messageData);
     
-    // Update session analytics
-    await _updateSessionAnalytics(sessionId, senderId);
+    // Update session analytics with role information
+    await _updateSessionAnalytics(sessionId, senderId, senderRole);
   }
 
-  Future<void> _updateSessionAnalytics(String sessionId, String senderId) async {
+  Future<void> _updateSessionAnalytics(String sessionId, String senderId, String senderRole) async {
     final sessionRef = FirebaseFirestore.instance.collection('sessions').doc(sessionId);
+    final now = FieldValue.serverTimestamp();
     
     // Use transaction to safely update analytics
     await FirebaseFirestore.instance.runTransaction((transaction) async {
@@ -48,16 +49,31 @@ class ChatRepository {
       
       final data = sessionDoc.data()!;
       final participants = List<String>.from(data['uniqueParticipants'] ?? []);
+      final messagesByRole = Map<String, int>.from(data['messagesByRole'] ?? {});
+      final isFirstMessage = data['firstMessageAt'] == null;
       
       // Add sender to unique participants if not already there
       if (!participants.contains(senderId)) {
         participants.add(senderId);
       }
       
-      transaction.update(sessionRef, {
+      // Increment role-specific message count
+      messagesByRole[senderRole] = (messagesByRole[senderRole] ?? 0) + 1;
+      
+      // Build update map
+      final updates = <String, dynamic>{
         'totalMessages': FieldValue.increment(1),
         'uniqueParticipants': participants,
-      });
+        'messagesByRole': messagesByRole,
+        'lastMessageAt': now,
+      };
+      
+      // Set firstMessageAt only if it's the first message
+      if (isFirstMessage) {
+        updates['firstMessageAt'] = now;
+      }
+      
+      transaction.update(sessionRef, updates);
     });
   }
 
@@ -87,6 +103,8 @@ class ChatRepository {
     
     await sessionRef.update({
       'mutedUsers': FieldValue.arrayUnion([userId]),
+      'muteHistory': FieldValue.arrayUnion([userId]), // Track for analytics
+      'totalMuteActions': FieldValue.increment(1),
     });
   }
 
@@ -101,5 +119,11 @@ class ChatRepository {
 
   Future<void> deleteMessage(String sessionId, String messageId) async {
     await _firestoreService.deleteChatMessage(sessionId, messageId);
+    
+    // Track deleted message in analytics
+    final sessionRef = FirebaseFirestore.instance.collection('sessions').doc(sessionId);
+    await sessionRef.update({
+      'deletedMessagesCount': FieldValue.increment(1),
+    });
   }
 }

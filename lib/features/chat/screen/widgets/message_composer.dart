@@ -43,15 +43,29 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
       return;
     }
     
-    // Session ended - no one can send (including admins/speakers)
+    // Session ended - check grace period for speakers, admins always allowed
     if (widget.session.hasEnded) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Session has ended'),
-          backgroundColor: AppColors.errorRed,
-        ),
-      );
-      return;
+      if (isAdmin) {
+        // Admins can always send
+      } else if (isSessionSpeaker && widget.session.isWithinGracePeriod) {
+        // Speakers can send within 35 minutes after session ends
+      } else {
+        // Grace period expired or not a speaker/admin
+        final gracePeriodEnd = widget.session.endTime.add(const Duration(minutes: 35));
+        final minutesRemaining = gracePeriodEnd.difference(DateTime.now()).inMinutes;
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isSessionSpeaker && minutesRemaining <= 0
+                  ? 'Speaker grace period (35 minutes) has expired'
+                  : 'Session has ended',
+            ),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+        return;
+      }
     }
     
     // Check if chat is closed (admins and session speakers can override)
@@ -96,11 +110,22 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     final bool canOverrideClosedChat = isAdmin || isSessionSpeaker;
     final bool isMuted = widget.session.isUserMuted(widget.currentUser.uid);
     
+    // Check session ended status with grace period
+    final bool sessionEndedForUser = widget.session.hasEnded && 
+                                      !isAdmin && 
+                                      !(isSessionSpeaker && widget.session.isWithinGracePeriod);
+    
     // Show banner if chat is closed but user can still send (moderator override)
-    final bool showModeratorOverrideBanner = !widget.session.hasEnded && 
+    final bool showModeratorOverrideBanner = !sessionEndedForUser && 
                                               !widget.session.isChatEnabled && 
                                               canOverrideClosedChat && 
                                               !isMuted;
+    
+    // Show grace period banner for speakers
+    final bool showGracePeriodBanner = widget.session.hasEnded && 
+                                        isSessionSpeaker && 
+                                        widget.session.isWithinGracePeriod && 
+                                        !isMuted;
 
     // User is muted - show muted message
     if (isMuted) {
@@ -131,8 +156,8 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
       );
     }
 
-    // Session ended - no one can send
-    if (widget.session.hasEnded) {
+    // Session ended - check if user can still send
+    if (sessionEndedForUser) {
       return Container(
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
@@ -189,10 +214,50 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
       );
     }
 
-    // Show input field with optional moderator override banner
+    // Show input field with optional banners
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Show grace period banner for speakers after session ends
+        if (showGracePeriodBanner)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+            decoration: BoxDecoration(
+              color: AppColors.infoBlue.withOpacity(0.1),
+              border: Border(
+                top: BorderSide(color: AppColors.infoBlue.withOpacity(0.3)),
+                bottom: BorderSide(color: AppColors.infoBlue.withOpacity(0.3)),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.access_time,
+                  color: AppColors.infoBlue,
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Builder(
+                    builder: (context) {
+                      final gracePeriodEnd = widget.session.endTime.add(const Duration(minutes: 35));
+                      final minutesLeft = gracePeriodEnd.difference(DateTime.now()).inMinutes + 1;
+                      return Text(
+                        'Session ended - Grace period: $minutesLeft min remaining',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppColors.infoBlue,
+                              fontWeight: FontWeight.w500,
+                            ),
+                        textAlign: TextAlign.center,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        
         // Show banner for moderators when chat is closed (they can still send)
         if (showModeratorOverrideBanner)
           Container(

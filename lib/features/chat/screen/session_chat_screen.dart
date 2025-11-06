@@ -144,22 +144,106 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                     IconButton(
                       icon: const Icon(Icons.analytics_outlined),
                       onPressed: () {
-                        // Show analytics info
+                        // Show enhanced analytics info
                         showDialog(
                           context: context,
                           builder: (context) => AlertDialog(
-                            title: const Text('Session Analytics'),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Total Messages: ${currentSession.totalMessages}'),
-                                Text('Unique Participants: ${currentSession.uniqueParticipants.length}'),
-                                Text('Checked-in Attendees: ${currentSession.checkedInAttendees.length}'),
-                                Text('Muted Users: ${currentSession.mutedUsers.length}'),
-                                if (currentSession.closedBy.isNotEmpty)
-                                  Text('Chat closed by: ${currentSession.closedBy}'),
-                              ],
+                            title: const Text('Session Chat Analytics'),
+                            content: SingleChildScrollView(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Basic Stats
+                                  Text(
+                                    'Overview',
+                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.navyBlue,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildAnalyticsRow('Total Messages', '${currentSession.totalMessages}'),
+                                  _buildAnalyticsRow('Deleted Messages', '${currentSession.deletedMessagesCount}'),
+                                  _buildAnalyticsRow('Unique Participants', '${currentSession.uniqueParticipants.length}'),
+                                  _buildAnalyticsRow('Checked-in Attendees', '${currentSession.checkedInAttendees.length}'),
+                                  if (currentSession.checkedInAttendees.isNotEmpty)
+                                    _buildAnalyticsRow(
+                                      'Engagement Rate',
+                                      '${currentSession.engagementRate.toStringAsFixed(1)}%',
+                                    ),
+                                  
+                                  const Divider(height: 20),
+                                  
+                                  // Messages by Role
+                                  Text(
+                                    'Messages by Role',
+                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.navyBlue,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  if (currentSession.messagesByRole.isEmpty)
+                                    const Text('No messages yet', style: TextStyle(color: AppColors.textSecondary))
+                                  else
+                                    ...currentSession.messagesByRole.entries.map((entry) =>
+                                      _buildAnalyticsRow(
+                                        entry.key.capitalize(),
+                                        '${entry.value} (${((entry.value / currentSession.totalMessages) * 100).toStringAsFixed(0)}%)',
+                                      ),
+                                    ),
+                                  
+                                  const Divider(height: 20),
+                                  
+                                  // Activity Stats
+                                  Text(
+                                    'Activity',
+                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.navyBlue,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  if (currentSession.firstMessageAt != null)
+                                    _buildAnalyticsRow(
+                                      'First Message',
+                                      _formatTime(currentSession.firstMessageAt!),
+                                    ),
+                                  if (currentSession.lastMessageAt != null)
+                                    _buildAnalyticsRow(
+                                      'Last Message',
+                                      _formatTime(currentSession.lastMessageAt!),
+                                    ),
+                                  if (currentSession.chatDurationMinutes > 0)
+                                    _buildAnalyticsRow(
+                                      'Chat Duration',
+                                      '${currentSession.chatDurationMinutes} min',
+                                    ),
+                                  if (currentSession.uniqueParticipants.isNotEmpty)
+                                    _buildAnalyticsRow(
+                                      'Avg Messages/User',
+                                      currentSession.averageMessagesPerParticipant.toStringAsFixed(1),
+                                    ),
+                                  
+                                  const Divider(height: 20),
+                                  
+                                  // Moderation Stats
+                                  Text(
+                                    'Moderation',
+                                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.navyBlue,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildAnalyticsRow('Currently Muted', '${currentSession.mutedUsers.length}'),
+                                  _buildAnalyticsRow('Total Mute Actions', '${currentSession.totalMuteActions}'),
+                                  _buildAnalyticsRow('Unique Users Muted', '${currentSession.muteHistory.length}'),
+                                  if (currentSession.closedBy.isNotEmpty)
+                                    _buildAnalyticsRow('Chat Status', 'Closed by ${currentSession.closedBy}'),
+                                ],
+                              ),
                             ),
                             actions: [
                               TextButton(
@@ -327,5 +411,52 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
         body: Center(child: Text('Error: $err')),
       ),
     );
+  }
+  
+  // Helper method to build analytics row
+  Widget _buildAnalyticsRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(color: AppColors.textSecondary),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Helper method to format time
+  String _formatTime(DateTime time) {
+    final now = DateTime.now();
+    final difference = now.difference(time);
+    
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else {
+      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+    }
+  }
+}
+
+// Extension to capitalize first letter
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return '${this[0].toUpperCase()}${substring(1)}';
   }
 }

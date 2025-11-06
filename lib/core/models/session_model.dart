@@ -25,6 +25,14 @@ class Session {
   final int totalMessages; // Total message count for analytics
   final List<String> uniqueParticipants; // List of unique user IDs who sent messages
   final List<String> mutedUsers; // List of user IDs who are muted in this session
+  
+  // Enhanced Analytics Fields
+  final DateTime? firstMessageAt; // When the first message was sent
+  final DateTime? lastMessageAt; // When the most recent message was sent
+  final int deletedMessagesCount; // Number of deleted messages (for moderation tracking)
+  final Map<String, int> messagesByRole; // Count of messages by role (attendee, speaker, admin, staff)
+  final List<String> muteHistory; // Track users who were muted (for analytics)
+  final int totalMuteActions; // Total number of mute actions performed
 
 
   Session({
@@ -46,6 +54,12 @@ class Session {
     this.totalMessages = 0,
     this.uniqueParticipants = const [],
     this.mutedUsers = const [],
+    this.firstMessageAt,
+    this.lastMessageAt,
+    this.deletedMessagesCount = 0,
+    this.messagesByRole = const {},
+    this.muteHistory = const [],
+    this.totalMuteActions = 0,
   });
 
   factory Session.fromFirestore(DocumentSnapshot doc) {
@@ -72,11 +86,28 @@ class Session {
       totalMessages: data['totalMessages'] as int? ?? 0,
       uniqueParticipants: List<String>.from(data['uniqueParticipants'] as List? ?? []),
       mutedUsers: List<String>.from(data['mutedUsers'] as List? ?? []),
+      firstMessageAt: data['firstMessageAt'] != null 
+          ? (data['firstMessageAt'] as Timestamp).toDate() 
+          : null,
+      lastMessageAt: data['lastMessageAt'] != null 
+          ? (data['lastMessageAt'] as Timestamp).toDate() 
+          : null,
+      deletedMessagesCount: data['deletedMessagesCount'] as int? ?? 0,
+      messagesByRole: Map<String, int>.from(data['messagesByRole'] as Map? ?? {}),
+      muteHistory: List<String>.from(data['muteHistory'] as List? ?? []),
+      totalMuteActions: data['totalMuteActions'] as int? ?? 0,
     );
   }
 
   /// Check if the session has ended (based on end time)
   bool get hasEnded => DateTime.now().isAfter(endTime);
+  
+  /// Check if we're within 35 minutes after session ended (grace period for speakers)
+  bool get isWithinGracePeriod {
+    if (!hasEnded) return false;
+    final gracePeriodEnd = endTime.add(const Duration(minutes: 35));
+    return DateTime.now().isBefore(gracePeriodEnd);
+  }
 
   /// Check if the session is currently active (between start and end time)
   bool get isActive => DateTime.now().isAfter(startTime) && DateTime.now().isBefore(endTime);
@@ -89,4 +120,27 @@ class Session {
   
   /// Check if user is muted in this session
   bool isUserMuted(String userId) => mutedUsers.contains(userId);
+  
+  /// Check if a speaker can still send messages (within grace period)
+  bool canSpeakerSendAfterEnd(String userId) {
+    return speakerIds.contains(userId) && isWithinGracePeriod;
+  }
+  
+  /// Calculate average messages per participant
+  double get averageMessagesPerParticipant {
+    if (uniqueParticipants.isEmpty) return 0.0;
+    return totalMessages / uniqueParticipants.length;
+  }
+  
+  /// Calculate chat duration in minutes
+  int get chatDurationMinutes {
+    if (firstMessageAt == null || lastMessageAt == null) return 0;
+    return lastMessageAt!.difference(firstMessageAt!).inMinutes;
+  }
+  
+  /// Get engagement rate (unique participants / checked in attendees)
+  double get engagementRate {
+    if (checkedInAttendees.isEmpty) return 0.0;
+    return (uniqueParticipants.length / checkedInAttendees.length) * 100;
+  }
 }
