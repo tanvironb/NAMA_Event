@@ -5,6 +5,8 @@ import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/chat/screen/widgets/chat_bubble.dart';
 import 'package:events_app_trueattempt/features/chat/screen/widgets/message_composer.dart';
+import 'package:events_app_trueattempt/features/feedback/widgets/session_feedback_dialog.dart';
+import 'package:events_app_trueattempt/features/feedback/data/feedback_repository.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class SessionChatScreen extends ConsumerStatefulWidget {
@@ -17,6 +19,7 @@ class SessionChatScreen extends ConsumerStatefulWidget {
 }
 
 class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
+  bool _hasShownFeedbackOnce = false; // Track if feedback was shown this session
   void _toggleChatEnabled(Session currentSession, String userRole) async {
     final chatRepo = ref.read(chatRepositoryProvider);
     final newState = !currentSession.isChatEnabled;
@@ -95,6 +98,60 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
     }
   }
 
+  Future<void> _checkAndShowFeedbackDialog(Session session, String userId) async {
+    // Only show feedback if:
+    // 1. Session has ended
+    // 2. User is checked in
+    // 3. User is not a moderator (admin or session speaker)
+    // 4. Haven't shown feedback in this screen session
+    
+    if (!session.hasEnded) return;
+    if (_hasShownFeedbackOnce) return;
+    
+    final isAdmin = ref.read(userAppProfileStreamProvider).asData?.value?.role == 'admin';
+    final isSessionSpeaker = session.speakerIds.contains(userId);
+    if (isAdmin == true || isSessionSpeaker) return;
+    
+    if (!session.checkedInAttendees.contains(userId)) return;
+    
+    // Check feedback status
+    final feedbackRepo = FeedbackRepository();
+    final feedbackStatus = await feedbackRepo.getFeedbackStatus(
+      userId: userId,
+      sessionId: session.id,
+    );
+    
+    if (!feedbackStatus.shouldShowPrompt) return;
+    
+    // Mark as shown for this screen session to prevent loops
+    _hasShownFeedbackOnce = true;
+    
+    // Show dialog after a brief delay to let the screen settle
+    if (mounted) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        final currentUser = ref.read(userAppProfileStreamProvider).asData?.value;
+        if (currentUser != null) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => SessionFeedbackDialog(
+              sessionId: session.id,
+              sessionTitle: session.title,
+              currentUser: currentUser,
+              onDismissed: () {
+                // Feedback was dismissed
+              },
+              onSubmitted: () {
+                // Feedback was submitted
+              },
+            ),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Watch for real-time session updates
@@ -124,6 +181,11 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
             final bool isAdmin = currentUser.role == 'admin';
             final bool isSessionSpeaker = currentSession.speakerIds.contains(currentUser.uid);
             final bool canModerate = isAdmin || isSessionSpeaker;
+
+            // Check and show feedback dialog if appropriate
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _checkAndShowFeedbackDialog(currentSession, currentUser.uid);
+            });
 
             return Scaffold(
               appBar: AppBar(

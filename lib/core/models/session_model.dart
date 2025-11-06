@@ -33,6 +33,11 @@ class Session {
   final Map<String, int> messagesByRole; // Count of messages by role (attendee, speaker, admin, staff)
   final List<String> muteHistory; // Track users who were muted (for analytics)
   final int totalMuteActions; // Total number of mute actions performed
+  
+  // Feedback Analytics Fields
+  final int totalFeedbacks; // Total number of feedbacks received
+  final int totalRating; // Sum of all ratings (for average calculation)
+  final double averageRating; // Average rating (1-5 stars)
 
 
   Session({
@@ -60,6 +65,9 @@ class Session {
     this.messagesByRole = const {},
     this.muteHistory = const [],
     this.totalMuteActions = 0,
+    this.totalFeedbacks = 0,
+    this.totalRating = 0,
+    this.averageRating = 0.0,
   });
 
   factory Session.fromFirestore(DocumentSnapshot doc) {
@@ -96,6 +104,9 @@ class Session {
       messagesByRole: Map<String, int>.from(data['messagesByRole'] as Map? ?? {}),
       muteHistory: List<String>.from(data['muteHistory'] as List? ?? []),
       totalMuteActions: data['totalMuteActions'] as int? ?? 0,
+      totalFeedbacks: data['totalFeedbacks'] as int? ?? 0,
+      totalRating: data['totalRating'] as int? ?? 0,
+      averageRating: (data['averageRating'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
