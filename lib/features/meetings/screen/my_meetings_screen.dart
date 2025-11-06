@@ -8,7 +8,9 @@ import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:intl/intl.dart';
 
 class MyMeetingsScreen extends ConsumerWidget {
-  const MyMeetingsScreen({super.key});
+  final int initialTab;
+
+  const MyMeetingsScreen({super.key, this.initialTab = 0});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -16,6 +18,7 @@ class MyMeetingsScreen extends ConsumerWidget {
 
     return DefaultTabController(
       length: 3,
+      initialIndex: initialTab,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('My Meetings'),

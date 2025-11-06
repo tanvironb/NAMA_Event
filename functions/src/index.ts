@@ -335,6 +335,13 @@ export const onNewDirectMessage = onDocumentCreated(
       return null;
     }
 
+    // Get sender's full profile for deep linking
+    const senderDoc = await db
+      .collection("users")
+      .doc(messageData.senderId)
+      .get();
+    const senderData = senderDoc.data();
+
     const tokenPreview = fcmToken.substring(0, 20);
     console.log(`Sending DM notification to user ${recipientId} ` +
       `with token: ${tokenPreview}...`);
@@ -350,6 +357,9 @@ export const onNewDirectMessage = onDocumentCreated(
         type: "dm",
         conversationId: conversationId,
         senderId: messageData.senderId,
+        otherUserId: messageData.senderId,
+        otherUserName: messageData.senderName,
+        otherUserProfileImage: senderData?.profileImageUrl || "",
       },
       android: {
         notification: {
@@ -389,6 +399,125 @@ export const onNewDirectMessage = onDocumentCreated(
 );
 
 /**
+ * NEW: Triggered when a session ends.
+ * Sends feedback request notifications to-
+ * all checked-in attendees (excluding speakers).
+ */
+export const onSessionEnd = onDocumentWritten(
+  {document: "sessions/{sessionId}", region: FUNCTION_REGION},
+  async (event) => {
+    const beforeData = event.data?.before?.exists ?
+      event.data.before.data() :
+      null;
+    const afterData = event.data?.after?.exists ?
+      event.data.after.data() :
+      null;
+
+    // Only proceed if this is an update (not creation or deletion)
+    if (!beforeData || !afterData) return null;
+
+    const sessionId = event.params.sessionId;
+    const endTime = (afterData.endTime as admin.firestore.Timestamp).toDate();
+    const now = new Date();
+
+    // Check if session just ended (within last 5 minutes)
+    const timeSinceEnd = now.getTime() - endTime.getTime();
+    if (timeSinceEnd < 0 || timeSinceEnd > 5 * 60 * 1000) {
+      return null; // Session hasn't ended yet or ended more than 5 minutes ago
+    }
+
+    // Get checked-in attendees (excluding speakers)
+    const checkedInAttendees = afterData.checkedInAttendees || [];
+    const speakerIds = afterData.speakerIds || [];
+    const sessionTitle = afterData.title || "Session";
+    const eventId = afterData.eventId;
+
+    // Filter out speakers from attendees
+    const attendeesToNotify = checkedInAttendees.filter(
+      (uid: string) => !speakerIds.includes(uid)
+    );
+
+    if (attendeesToNotify.length === 0) {
+      console.log(`No attendees to notify for session ${sessionId}`);
+      return null;
+    }
+
+    console.log(
+      `Sending feedback notifications for session ${sessionId} ` +
+      `to ${attendeesToNotify.length} attendees`
+    );
+
+    // Send notifications to all attendees
+    const notificationPromises = attendeesToNotify.map(
+      async (attendeeId: string) => {
+        try {
+          const userDoc = await db.collection("users").doc(attendeeId).get();
+          const fcmToken = userDoc.data()?.fcmToken;
+
+          if (!fcmToken) {
+            console.log(`Attendee ${attendeeId} does not have an FCM token.`);
+            return null;
+          }
+
+          const message = {
+            token: fcmToken,
+            notification: {
+              title: "How was the session?",
+              body: `Share your feedback for "${sessionTitle}"`,
+            },
+            data: {
+              type: "session_feedback",
+              sessionId: sessionId,
+              eventId: eventId,
+              sessionTitle: sessionTitle,
+            },
+            android: {
+              notification: {
+                sound: "default",
+                clickAction: "FLUTTER_NOTIFICATION_CLICK",
+              },
+            },
+            apns: {
+              payload: {
+                aps: {
+                  sound: "default",
+                },
+              },
+            },
+          };
+
+          const response = await admin.messaging().send(message);
+          console.log(
+            `Sent feedback notification to ${attendeeId}: ${response}`
+          );
+          return response;
+        } catch (error) {
+          console.error(
+            `Error sending feedback notification to ${attendeeId}:`,
+            error
+          );
+
+          // If token is invalid, remove it
+          if (error instanceof Error &&
+              (error.message.includes("registration-token-not-registered") ||
+               error.message.includes("invalid-registration-token"))) {
+            console.log(`Removing invalid FCM token for user ${attendeeId}`);
+            await db.collection("users").doc(attendeeId).update({
+              fcmToken: admin.firestore.FieldValue.delete(),
+            });
+          }
+
+          return null;
+        }
+      }
+    );
+
+    await Promise.all(notificationPromises);
+    return null;
+  }
+);
+
+/**
  * NEW: Triggered on any write to the meetings collection.
  * Sends a notification for new requests or status updates.
  */
@@ -413,7 +542,12 @@ export const onMeetingWrite = onDocumentWritten(
           title: "New Meeting Request",
           body: `${afterData.requesterInfo.name} wants to meet with you.`,
         },
-        data: {type: "meeting_request", meetingId: event.params.meetingId},
+        data: {
+          type: "meeting_request",
+          meetingId: event.params.meetingId,
+          requesterName: afterData.requesterInfo.name,
+          proposedTime: afterData.proposedTime.toDate().toISOString(),
+        },
       };
     } else if (
       beforeData && afterData &&
@@ -428,7 +562,11 @@ export const onMeetingWrite = onDocumentWritten(
           body: `${afterData.recipientInfo.name} has ` +
             `${afterData.status} your meeting request.`,
         },
-        data: {type: "meeting_update", meetingId: event.params.meetingId},
+        data: {
+          type: "meeting_update",
+          meetingId: event.params.meetingId,
+          status: afterData.status,
+        },
       };
     } else {
       return null; // No notification needed

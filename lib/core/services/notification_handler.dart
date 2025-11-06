@@ -1,7 +1,12 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
+import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
+import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
+import 'package:events_app_trueattempt/core/models/session_model.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
 
 /// Centralized notification handler for all app notifications
 /// Handles deep linking and navigation based on notification type
@@ -49,21 +54,23 @@ class NotificationHandler {
   /// Handle session feedback notification
   static void _handleSessionFeedback(BuildContext context, Map<String, dynamic> data) {
     final sessionId = data['sessionId'];
+    final eventId = data['eventId'];
 
     if (sessionId == null) {
       debugPrint('NotificationHandler: Missing sessionId for feedback notification');
       return;
     }
 
-    debugPrint('NotificationHandler: Navigating to session chat for feedback: $sessionId');
+    debugPrint('NotificationHandler: Navigating to session for feedback: $sessionId');
     
-    // Navigate to session chat - it will handle showing the feedback dialog
-    _navigateToSession(context, sessionId);
+    // Navigate to session chat - it will show the feedback dialog
+    _navigateToSession(context, sessionId, eventId ?? '');
   }
 
   /// Handle session chat notification
   static void _handleSessionChat(BuildContext context, Map<String, dynamic> data) {
     final sessionId = data['sessionId'];
+    final eventId = data['eventId'];
 
     if (sessionId == null) {
       debugPrint('NotificationHandler: Missing sessionId for chat notification');
@@ -72,21 +79,60 @@ class NotificationHandler {
 
     debugPrint('NotificationHandler: Navigating to session chat: $sessionId');
     
-    _navigateToSession(context, sessionId);
+    _navigateToSession(context, sessionId, eventId ?? '');
   }
 
   /// Navigate to session chat screen by fetching session data
-  static void _navigateToSession(BuildContext context, String sessionId) async {
-    // TODO: Fetch session from Firestore and navigate
-    // For now, show a message that this requires session data
-    debugPrint('NotificationHandler: Session navigation requires Firestore integration');
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening session...'),
-        duration: Duration(seconds: 2),
-      ),
-    );
+  static void _navigateToSession(BuildContext context, String sessionId, String eventId) async {
+    try {
+      // Show loading
+      showInAppBanner(
+        context,
+        title: 'Loading session...',
+        body: 'Please wait',
+        showAction: false,
+      );
+
+      // Fetch session from Firestore
+      final sessionDoc = await FirebaseFirestore.instance
+          .collection('sessions')
+          .doc(sessionId)
+          .get();
+
+      if (!sessionDoc.exists) {
+        if (context.mounted) {
+          showInAppBanner(
+            context,
+            title: 'Error',
+            body: 'Session not found',
+            showAction: false,
+            backgroundColor: AppColors.errorRed,
+          );
+        }
+        return;
+      }
+
+      final session = Session.fromFirestore(sessionDoc);
+
+      if (context.mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SessionChatScreen(session: session),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('NotificationHandler: Error loading session: $e');
+      if (context.mounted) {
+        showInAppBanner(
+          context,
+          title: 'Error',
+          body: 'Failed to load session',
+          showAction: false,
+          backgroundColor: AppColors.errorRed,
+        );
+      }
+    }
   }
 
   /// Handle direct message notification
@@ -120,25 +166,17 @@ class NotificationHandler {
     );
   }
 
-  /// Handle meeting notification
+  /// Handle meeting notification - Navigate to pending tab in My Meetings
   static void _handleMeeting(BuildContext context, Map<String, dynamic> data) {
     final meetingId = data['meetingId'];
+    final type = data['type'];
     
-    debugPrint('NotificationHandler: Meeting notification received: $meetingId');
+    debugPrint('NotificationHandler: Meeting notification received: $meetingId, type: $type');
     
-    // TODO: Navigate to specific meeting screen when available
-    // For now, show a dialog
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Meeting Notification'),
-        content: Text(data['body'] ?? 'You have a meeting notification'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
+    // Navigate to My Meetings screen with pending tab selected
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const MyMeetingsScreen(initialTab: 0), // 0 = Pending tab
       ),
     );
   }
@@ -160,40 +198,86 @@ class NotificationHandler {
     );
   }
 
-  /// Show in-app banner for foreground notifications
-  static void showInAppBanner(BuildContext context, RemoteMessage message) {
-    final title = message.notification?.title ?? 'Notification';
-    final body = message.notification?.body ?? '';
-
+  /// Show in-app banner for foreground notifications (reusable)
+  /// This is the gray popup that appears when notifications arrive in foreground
+  static void showInAppBanner(
+    BuildContext context, {
+    required String title,
+    required String body,
+    VoidCallback? onTap,
+    bool showAction = true,
+    Color? backgroundColor,
+    Duration duration = const Duration(seconds: 4),
+  }) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-            ),
-            if (body.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                body,
-                style: const TextStyle(fontSize: 12),
+        content: InkWell(
+          onTap: onTap,
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: AppColors.namaWhite,
+                      ),
+                    ),
+                    if (body.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        body,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.namaWhite,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
-          ],
+          ),
         ),
-        action: SnackBarAction(
-          label: 'View',
-          onPressed: () => handleNotificationTap(message),
-        ),
-        duration: const Duration(seconds: 4),
+        action: showAction && onTap != null
+            ? SnackBarAction(
+                label: 'View',
+                textColor: AppColors.namaGoldenYellow,
+                onPressed: onTap,
+              )
+            : null,
+        duration: duration,
         behavior: SnackBarBehavior.floating,
+        backgroundColor: backgroundColor ?? AppColors.namaDarkGray,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        margin: const EdgeInsets.all(16),
       ),
+    );
+  }
+
+  /// Handle foreground message with in-app banner
+  static void handleForegroundMessage(BuildContext context, RemoteMessage message) {
+    final title = message.notification?.title ?? 'Notification';
+    final body = message.notification?.body ?? '';
+    final type = message.data['type'];
+
+    debugPrint('NotificationHandler: Foreground message received, type: $type');
+
+    // Show in-app banner with appropriate action
+    showInAppBanner(
+      context,
+      title: title,
+      body: body,
+      onTap: () => handleNotificationTap(message),
     );
   }
 }

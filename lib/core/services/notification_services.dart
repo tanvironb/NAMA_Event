@@ -78,7 +78,10 @@ class NotificationService {
       RemoteMessage? initialMessage = await _firebaseMessaging.getInitialMessage();
       if (initialMessage != null) {
         debugPrint('App opened from notification!');
-        NotificationHandler.handleNotificationTap(initialMessage);
+        // Delay slightly to ensure context is ready
+        Future.delayed(const Duration(milliseconds: 500), () {
+          NotificationHandler.handleNotificationTap(initialMessage);
+        });
       }
       
       debugPrint('NotificationService: Message handlers setup completed');
@@ -89,10 +92,10 @@ class NotificationService {
   }
 
   void _showInAppNotification(RemoteMessage message) {
-    // Show a snackbar or banner for foreground notifications
+    // Show a banner for foreground notifications using the reusable handler
     final context = NotificationHandler.navigatorKey.currentContext;
     if (context != null) {
-      NotificationHandler.showInAppBanner(context, message);
+      NotificationHandler.handleForegroundMessage(context, message);
     }
   }
 }
