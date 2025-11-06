@@ -2,9 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/features/profile/data/profile_repository.dart';
-
-// A top-level navigator key is needed to navigate from a background service
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 
 class NotificationService {
   final FirebaseMessaging _firebaseMessaging = FirebaseMessaging.instance;
@@ -73,14 +71,14 @@ class NotificationService {
       // Handle when a user taps a notification and the app opens from the background
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         debugPrint('A new onMessageOpenedApp event was published!');
-        _handleMessage(message);
+        NotificationHandler.handleNotificationTap(message);
       });
 
       // Handle when a user taps a notification and the app opens from a terminated state
       RemoteMessage? initialMessage = await _firebaseMessaging.getInitialMessage();
       if (initialMessage != null) {
         debugPrint('App opened from notification!');
-        _handleMessage(initialMessage);
+        NotificationHandler.handleNotificationTap(initialMessage);
       }
       
       debugPrint('NotificationService: Message handlers setup completed');
@@ -92,48 +90,9 @@ class NotificationService {
 
   void _showInAppNotification(RemoteMessage message) {
     // Show a snackbar or banner for foreground notifications
-    if (navigatorKey.currentContext != null) {
-      // TODO: Replace with your actual NotificationHandler when available
-      // NotificationHandler.showInAppBanner(navigatorKey.currentContext!, message);
-      
-      // Temporary simple snackbar implementation
-      ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
-        SnackBar(
-          content: Text(message.notification?.body ?? 'New notification'),
-          action: SnackBarAction(
-            label: 'View',
-            onPressed: () => _handleMessage(message),
-          ),
-        ),
-      );
-    }
-  }
-
-  void _handleMessage(RemoteMessage message) {
-    debugPrint('Handling a tapped notification: ${message.data}');
-    final type = message.data['type'];
-
-    // --- DEEP LINKING LOGIC ---
-    if (type == 'dm') {
-      final conversationId = message.data['conversationId'];
-      debugPrint('Navigating to direct message: $conversationId');
-      // TODO: Navigate to DirectMessageScreen(conversationId: conversationId)
-      // This requires more context (other user's name), which is a good enhancement for later.
-      // For now, we can navigate to the main conversations list.
-      
-      // Uncomment when ConversationsScreen is available:
-      // navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const ConversationsScreen()));
-      
-    } else if (type == 'meeting_request' || type == 'meeting_update') {
-      final meetingId = message.data['meetingId'];
-      debugPrint('Navigating to meeting: $meetingId');
-      // Navigate to the My Meetings screen
-      
-      // Uncomment when MyMeetingsScreen is available:
-      // navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const MyMeetingsScreen()));
-      
-    } else {
-      debugPrint('Unknown notification type: $type');
+    final context = NotificationHandler.navigatorKey.currentContext;
+    if (context != null) {
+      NotificationHandler.showInAppBanner(context, message);
     }
   }
 }

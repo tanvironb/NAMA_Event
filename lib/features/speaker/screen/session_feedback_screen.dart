@@ -61,6 +61,18 @@ class SessionFeedbackScreen extends ConsumerWidget {
             );
           }
 
+          // Calculate overall stats
+          final totalFeedbacks = mySessions.fold<int>(
+            0,
+            (sum, s) => sum + s.totalFeedbacks,
+          );
+          final avgRating = mySessions.where((s) => s.totalFeedbacks > 0).isEmpty
+            ? 0.0
+            : (mySessions
+                .where((s) => s.totalFeedbacks > 0)
+                .fold<double>(0, (sum, s) => sum + s.averageRating) /
+                mySessions.where((s) => s.totalFeedbacks > 0).length);
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -83,7 +95,7 @@ class SessionFeedbackScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 24),
 
-                // Overall Rating Card (Placeholder)
+                // Overall Rating Card
                 Card(
                   elevation: 2,
                   color: AppColors.namaLightBlue,
@@ -112,14 +124,16 @@ class SessionFeedbackScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'N/A', // TODO: Calculate from feedback
+                                totalFeedbacks > 0 
+                                  ? avgRating.toStringAsFixed(1)
+                                  : 'No ratings yet',
                                 style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.namaNavyBlue,
                                 ),
                               ),
                               Text(
-                                'Based on ${mySessions.length} sessions',
+                                'Based on $totalFeedbacks ${totalFeedbacks == 1 ? 'feedback' : 'feedbacks'} from ${mySessions.length} ${mySessions.length == 1 ? 'session' : 'sessions'}',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: AppColors.namaMediumGray,
                                 ),
@@ -144,49 +158,105 @@ class SessionFeedbackScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 12),
 
-                // Placeholder message
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      children: [
-                        Icon(
-                          Icons.feedback_outlined,
-                          size: 56,
-                          color: AppColors.namaNavyBlue.withOpacity(0.5),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Feedback System Coming Soon',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.namaNavyBlue,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Attendees will be able to rate and review your sessions. Feedback will be displayed here.',
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.namaMediumGray,
-                          ),
-                        ),
-                      ],
+                // List sessions with feedback
+                ...mySessions.map((session) {
+                  return Card(
+                    elevation: 2,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  ),
-                ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Session title
+                          Text(
+                            session.title,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.namaNavyBlue,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          
+                          // Feedback stats
+                          Row(
+                            children: [
+                              if (session.totalFeedbacks > 0) ...[
+                                Icon(
+                                  Icons.star,
+                                  size: 20,
+                                  color: AppColors.namaGoldenYellow,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  session.averageRating.toStringAsFixed(1),
+                                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.namaNavyBlue,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '(${session.totalFeedbacks} ${session.totalFeedbacks == 1 ? 'review' : 'reviews'})',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppColors.namaMediumGray,
+                                  ),
+                                ),
+                              ] else ...[
+                                Icon(
+                                  Icons.feedback_outlined,
+                                  size: 20,
+                                  color: AppColors.namaMediumGray,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'No feedback yet',
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppColors.namaMediumGray,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          
+                          const SizedBox(height: 8),
+                          
+                          // Attendee stats
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.people_outline,
+                                size: 16,
+                                color: AppColors.namaMediumGray,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${session.checkedInAttendees.length} attendees',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: AppColors.namaMediumGray,
+                                ),
+                              ),
+                              if (session.checkedInAttendees.isNotEmpty && session.totalFeedbacks > 0) ...[
+                                const SizedBox(width: 8),
+                                Text(
+                                  '• ${((session.totalFeedbacks / session.checkedInAttendees.length) * 100).toStringAsFixed(0)}% response rate',
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: AppColors.namaMediumGray,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
 
                 const SizedBox(height: 16),
-
-                // TODO: Implement actual feedback display
-                // - List of sessions with ratings
-                // - Individual feedback/comments
-                // - Filter by session or rating
-                // - Export feedback reports
               ],
             ),
           );

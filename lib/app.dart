@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'features/auth/screen/auth_gate.dart';
 import 'config/app_themes.dart';
-import 'package:events_app_trueattempt/core/services/notification_services.dart';
+import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/splash_screen.dart';
 
@@ -15,7 +15,7 @@ class MyApp extends ConsumerWidget {
     final appInitialization = ref.watch(appInitializationProvider);
 
     return MaterialApp(
-      navigatorKey: navigatorKey, // Use the global navigatorKey from notification_services.dart
+      navigatorKey: NotificationHandler.navigatorKey, // Use the global navigatorKey from notification_handler.dart
       title: 'NAMA Foundation Event App',
       theme: AppTheme.lightTheme, // Default to light theme reflecting company brand
       darkTheme: AppTheme.darkTheme,
