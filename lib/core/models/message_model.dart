@@ -26,6 +26,13 @@ class Message {
     if (data == null) {
       throw StateError('Missing data for message ${doc.id}');
     }
+    
+    // Handle null timestamp (serverTimestamp() is null until written)
+    final timestampData = data['timestamp'];
+    final timestamp = timestampData is Timestamp 
+        ? timestampData 
+        : Timestamp.now(); // Fallback for pending messages
+    
     return Message(
       id: doc.id,
       text: data['text'] as String,
@@ -33,7 +40,7 @@ class Message {
       senderName: data['senderName'] as String? ?? 'User',
       senderImageUrl: data['senderImageUrl'] as String? ?? '',
       senderRole: data['senderRole'] as String? ?? 'attendee',
-      timestamp: data['timestamp'] as Timestamp,
+      timestamp: timestamp,
       readBy: List<String>.from(data['readBy'] ?? []),
     );
   }

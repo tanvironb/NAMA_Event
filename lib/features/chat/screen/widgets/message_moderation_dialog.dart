@@ -46,9 +46,9 @@ class MessageModerationDialog {
                       const SizedBox(height: 4),
                       Text(
                         'Message from ${message.senderName}',
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 14,
-                          color: Colors.grey[600],
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],
@@ -65,7 +65,7 @@ class MessageModerationDialog {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: AppColors.surface,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Column(
@@ -84,9 +84,9 @@ class MessageModerationDialog {
                       ),
                       Text(
                         DateFormat('HH:mm:ss').format(message.timestamp.toDate()),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[600],
+                          color: AppColors.textSecondary,
                         ),
                       ),
                     ],
@@ -119,7 +119,7 @@ class MessageModerationDialog {
                 isUserMuted
                     ? 'Allow ${message.senderName} to send messages'
                     : 'Prevent ${message.senderName} from sending messages',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
               onTap: () {
                 Navigator.pop(context); // Close bottom sheet
@@ -141,9 +141,9 @@ class MessageModerationDialog {
                 'Delete Message',
                 style: TextStyle(fontWeight: FontWeight.w500),
               ),
-              subtitle: Text(
+              subtitle: const Text(
                 'Remove this message from the chat',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
               onTap: () {
                 Navigator.pop(context); // Close bottom sheet

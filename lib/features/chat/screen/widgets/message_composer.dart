@@ -29,6 +29,8 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
     if (_controller.text.trim().isEmpty) return;
     
     final bool isAdmin = widget.currentUser.role == 'admin';
+    final bool isSessionSpeaker = widget.session.speakerIds.contains(widget.currentUser.uid);
+    final bool canOverrideClosedChat = isAdmin || isSessionSpeaker;
     
     // Check if user is muted
     if (widget.session.isUserMuted(widget.currentUser.uid)) {
@@ -41,10 +43,24 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
       return;
     }
     
-    // Check if chat is still available (admins can override closed chat)
-    if (!widget.session.isChatAvailable && !isAdmin) {
+    // Session ended - no one can send (including admins/speakers)
+    if (widget.session.hasEnded) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chat has been closed for this session')),
+        const SnackBar(
+          content: Text('Session has ended'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+    
+    // Check if chat is closed (admins and session speakers can override)
+    if (!widget.session.isChatEnabled && !canOverrideClosedChat) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chat has been closed for this session'),
+          backgroundColor: AppColors.errorRed,
+        ),
       );
       return;
     }
@@ -76,19 +92,23 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
   @override
   Widget build(BuildContext context) {
     final bool isAdmin = widget.currentUser.role == 'admin';
+    final bool isSessionSpeaker = widget.session.speakerIds.contains(widget.currentUser.uid);
+    final bool canOverrideClosedChat = isAdmin || isSessionSpeaker;
     final bool isMuted = widget.session.isUserMuted(widget.currentUser.uid);
     
-    // Check if chat is available (admins can override closed chat but still see banner)
-    final bool canSendMessages = widget.session.isChatAvailable || isAdmin;
-    final bool showClosedBanner = !widget.session.isChatAvailable && isAdmin;
+    // Show banner if chat is closed but user can still send (moderator override)
+    final bool showModeratorOverrideBanner = !widget.session.hasEnded && 
+                                              !widget.session.isChatEnabled && 
+                                              canOverrideClosedChat && 
+                                              !isMuted;
 
     // User is muted - show muted message
     if (isMuted) {
       return Container(
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          border: Border(top: BorderSide(color: Colors.grey[200]!)),
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.lightGray)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -111,29 +131,27 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
       );
     }
 
-    // Chat closed and user is not admin
-    if (!canSendMessages) {
+    // Session ended - no one can send
+    if (widget.session.hasEnded) {
       return Container(
         padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          border: Border(top: BorderSide(color: Colors.grey[200]!)),
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.lightGray)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.info_outline,
-              color: Theme.of(context).colorScheme.error,
+            const Icon(
+              Icons.event_busy,
+              color: AppColors.errorRed,
               size: 20,
             ),
             const SizedBox(width: 8),
             Text(
-              widget.session.hasEnded 
-                  ? 'Session ended' 
-                  : 'Chat has been closed',
+              'Session has ended',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
+                    color: AppColors.errorRed,
                     fontWeight: FontWeight.w500,
                   ),
             ),
@@ -142,11 +160,41 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
       );
     }
 
+    // Chat closed and user cannot override
+    if (!widget.session.isChatEnabled && !canOverrideClosedChat) {
+      return Container(
+        padding: const EdgeInsets.all(16.0),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.lightGray)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.lock,
+              color: AppColors.errorRed,
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Chat has been closed',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.errorRed,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Show input field with optional moderator override banner
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Show closed banner for admins (they can still send messages)
-        if (showClosedBanner)
+        // Show banner for moderators when chat is closed (they can still send)
+        if (showModeratorOverrideBanner)
           Container(
             padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
             decoration: BoxDecoration(
@@ -160,14 +208,14 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 const Icon(
-                  Icons.lock,
+                  Icons.lock_open,
                   color: AppColors.warningAmber,
                   size: 16,
                 ),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text(
-                    'Chat is closed by ${widget.session.closedBy} (you can still send messages)',
+                    'Chat closed by ${widget.session.closedBy} (you can still send as ${isAdmin ? 'admin' : 'speaker'})',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppColors.warningAmber,
                           fontWeight: FontWeight.w500,
@@ -179,12 +227,12 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
             ),
           ),
         
-        // Message input
+        // Message input field
         Container(
           padding: const EdgeInsets.all(8.0),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            border: Border(top: BorderSide(color: Colors.grey[200]!)),
+            color: AppColors.surface,
+            border: Border(top: BorderSide(color: AppColors.lightGray)),
           ),
           child: Row(
             children: [

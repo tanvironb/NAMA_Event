@@ -129,8 +129,8 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
               appBar: AppBar(
                 title: Text(currentSession.title, overflow: TextOverflow.ellipsis),
                 actions: [
-                  // Speaker/Admin controls
-                  if (canModerate)
+                  // Speaker/Admin controls - only show if session hasn't ended
+                  if (canModerate && !currentSession.hasEnded)
                     IconButton(
                       icon: Icon(
                         currentSession.isChatEnabled ? Icons.lock_open : Icons.lock,

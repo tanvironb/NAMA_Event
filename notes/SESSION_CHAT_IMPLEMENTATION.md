@@ -202,3 +202,97 @@ print('Checked-in Attendees: ${session.checkedInAttendees.length}');
 - Role colors use existing `AppColors` constants
 - WhatsApp-style UI: minimal, clean, role-based colors only
 - Speaker controls are permission-checked server-side (implement Firestore rules)
+#fix:2
+
+
+
+### **1. Fixed Timestamp Null Error** ✅
+**File:** message_model.dart
+- **Problem:** `serverTimestamp()` returns null initially, causing "type 'null' is not a subtype of 'Timestamp'" error
+- **Solution:** Added null-safe handling in `Message.fromFirestore()`:
+  ```dart
+  final timestampData = data['timestamp'];
+  final timestamp = timestampData is Timestamp 
+      ? timestampData 
+      : Timestamp.now(); // Fallback for pending messages
+  ```
+- **Result:** Messages display instantly without errors, using current time as fallback until server timestamp is set
+
+### **2. Fixed Lock Icon Color When Session Ended** ✅
+**File:** session_chat_screen.dart
+- **Problem:** Lock icon appeared green when session ended (misleading UI)
+- **Solution:** Hide lock icon completely when session has ended:
+  ```dart
+  if (canModerate && !currentSession.hasEnded)  // Added hasEnded check
+  ```
+- **Result:** Lock icon only appears when session is active and can be toggled
+
+### **3. Fixed Speakers/Admins Can't Send When Chat Closed** ✅
+**Files:** message_composer.dart (2 changes)
+
+**Change 1 - Updated send logic:**
+```dart
+final bool isSessionSpeaker = widget.session.speakerIds.contains(widget.currentUser.uid);
+final bool canOverrideClosedChat = isAdmin || isSessionSpeaker;
+
+// Now speakers AND admins can send when chat is closed
+if (!widget.session.isChatEnabled && !canOverrideClosedChat) {
+  // Block regular users
+}
+```
+
+**Change 2 - Updated UI to show different states:**
+- **Muted users:** "You have been muted" banner (no input field)
+- **Session ended:** "Session has ended" banner (blocks everyone including admins/speakers)
+- **Chat closed + regular user:** "Chat has been closed" banner (no input field)
+- **Chat closed + moderator:** Shows input field WITH override banner:
+  ```
+  "Chat closed by [speaker/admin] (you can still send as [admin/speaker])"
+  ```
+
+- **Result:** Admins and session speakers can now send messages even when chat is closed, with clear visual feedback
+
+### **4. Used Constants Throughout for Theme Support** ✅
+**Files:** message_composer.dart, message_moderation_dialog.dart
+
+Replaced all hardcoded colors with `AppColors` constants:
+- ✅ `Colors.grey[200]` → `AppColors.lightGray`
+- ✅ `Colors.grey[100]` → `AppColors.surface`
+- ✅ `Colors.grey[600]` → `AppColors.textSecondary`
+- ✅ `Theme.of(context).colorScheme.surface` → `AppColors.surface`
+- ✅ All error/warning/success colors already using constants
+
+**Result:** Full theme support ready (dark mode will work when implemented)
+
+---
+
+## **Complete Permission Matrix:**
+
+| User Type | Can Send When Open | Can Send When Closed | Can Toggle Chat | Can Moderate | Shows Override Banner |
+|-----------|-------------------|---------------------|-----------------|--------------|----------------------|
+| **Regular Attendee** | ✅ Yes (if not muted) | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Muted User** | ❌ No | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Non-Session Speaker** | ✅ Yes (if not muted) | ❌ No | ❌ No | ❌ No | ❌ No |
+| **Session Speaker** | ✅ Yes (if not muted) | ✅ **Yes** | ✅ Yes (unless admin locked) | ✅ Yes | ✅ Yes |
+| **Admin** | ✅ Yes (if not muted) | ✅ **Yes** | ✅ Yes (overrides all) | ✅ Yes | ✅ Yes |
+| **Anyone (session ended)** | ❌ No | ❌ No | ❌ No | Varies | ❌ No |
+
+---
+
+## **Visual States Now Working Correctly:**
+
+### **Lock Icon:**
+- 🟢 Green `lock_open` = Chat is open (clickable)
+- 🔴 Red `lock` = Chat is closed (clickable if you're moderator)
+- ⚫ Hidden = Session has ended (not clickable)
+
+### **Message Composer Banners:**
+1. **Muted:** Orange warning banner with volume_off icon
+2. **Session Ended:** Red banner with event_busy icon (blocks everyone)
+3. **Chat Closed (regular user):** Red banner with lock icon (no input)
+4. **Chat Closed (moderator):** Orange warning banner + input field showing who closed it
+
+### **Chat Bubble:**
+- Orange border + mute icon = User is muted (only moderators see this)
+- Uses role colors for sender names
+- Long-press shows moderation dialog (only for moderators)
