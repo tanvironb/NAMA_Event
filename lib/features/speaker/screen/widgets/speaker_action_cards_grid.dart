@@ -6,6 +6,7 @@ import 'package:events_app_trueattempt/features/speaker/screen/my_sessions_scree
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_analytics_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_audience_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/session_feedback_screen.dart';
+import 'package:events_app_trueattempt/features/speaker/screen/test_analytics_screen.dart';
 
 /// Grid of action cards for quick access to speaker features
 class SpeakerActionCardsGrid extends ConsumerWidget {
@@ -93,6 +94,20 @@ class SpeakerActionCardsGrid extends ConsumerWidget {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Q&A feature coming soon!')),
               );
+            },
+          ),
+
+          // TEST Analytics Dashboard - For supervisor demo
+          SpeakerActionCard(
+            icon: Icons.bar_chart_outlined,
+            title: 'Charts Demo',
+            subtitle: 'Test analytics',
+            color: Colors.teal,
+            isEnabled: true,
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => const TestAnalyticsScreen(),
+              ));
             },
           ),
 
