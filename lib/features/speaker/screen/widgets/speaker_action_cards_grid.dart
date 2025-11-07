@@ -6,7 +6,6 @@ import 'package:events_app_trueattempt/features/speaker/screen/my_sessions_scree
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_analytics_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_audience_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/session_feedback_screen.dart';
-import 'package:events_app_trueattempt/features/speaker/screen/widgets/session_selection_screen.dart';
 
 /// Grid of action cards for quick access to speaker features
 class SpeakerActionCardsGrid extends ConsumerWidget {
@@ -79,21 +78,6 @@ class SpeakerActionCardsGrid extends ConsumerWidget {
             onTap: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (context) => const SessionFeedbackScreen(),
-              ));
-            },
-          ),
-
-          // Session Chat Card
-          SpeakerActionCard(
-            icon: Icons.chat_outlined,
-            title: 'Session Chat',
-            subtitle: 'Engage audience',
-            color: Colors.green,
-            isEnabled: isChatEnabled,
-            onTap: () {
-              // Navigate to session selection for chat
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (context) => const SessionSelectionScreen(feature: 'chat'),
               ));
             },
           ),

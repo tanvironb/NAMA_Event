@@ -70,6 +70,97 @@ export const onSessionCreate = onDocumentCreated(
 );
 
 /**
+ * Manual QR generation for sessions.
+ * Called by speakers when auto-generation fails or QR is missing.
+ */
+export const generateSessionQR = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    console.log("=== Start Generate Session QR ===");
+
+    if (!request.auth || !request.auth.uid) {
+      throw new HttpsError("unauthenticated", "Authentication is required.");
+    }
+
+    const sessionId = request.data.sessionId;
+    console.log(
+      `User ${request.auth.uid} requesting QR for session ${sessionId}`
+    );
+
+    if (!sessionId || typeof sessionId !== "string") {
+      throw new HttpsError(
+        "invalid-argument",
+        "A 'sessionId' string must be provided."
+      );
+    }
+
+    try {
+      // Get session document
+      const sessionRef = db.collection("sessions").doc(sessionId);
+      const sessionDoc = await sessionRef.get();
+
+      if (!sessionDoc.exists) {
+        throw new HttpsError("not-found", "Session not found.");
+      }
+
+      const sessionData = sessionDoc.data();
+
+      // Verify user is a speaker for this session
+      if (!sessionData?.speakerIds?.includes(request.auth.uid)) {
+        throw new HttpsError(
+          "permission-denied",
+          "Only speakers can generate QR codes for their sessions."
+        );
+      }
+
+      // Check if QR already exists
+      if (
+        sessionData.qrCodePayload &&
+        sessionData.qrCodePayload.trim() !== ""
+      ) {
+        console.log("QR already exists, returning existing payload");
+        return {
+          success: true,
+          qrCodePayload: sessionData.qrCodePayload,
+          message: "QR code already exists",
+        };
+      }
+
+      // Generate new QR payload
+      const randomBytes = crypto.randomBytes(8).toString("hex");
+      const uniquePayload = `session::${sessionId}_${randomBytes}`;
+
+      console.log(`Generated new QR payload for session ${sessionId}`);
+
+      // Update session with QR payload
+      await sessionRef.update({qrCodePayload: uniquePayload});
+
+      console.log("=== End Generate Session QR (Success) ===");
+
+      return {
+        success: true,
+        qrCodePayload: uniquePayload,
+        message: "QR code generated successfully",
+      };
+    } catch (error: unknown) {
+      console.error("Error generating session QR:", error);
+      console.log("=== End Generate Session QR (Error) ===");
+
+      if (error instanceof HttpsError) {
+        throw error;
+      }
+
+      const errorMessage = error instanceof Error ?
+        error.message : "Unknown error";
+      throw new HttpsError(
+        "internal",
+        `Failed to generate QR: ${errorMessage}`
+      );
+    }
+  }
+);
+
+/**
  * Securely validates ANY QR code payload (user or session).
  * Returns the type of code and the minimal public data.
  */
