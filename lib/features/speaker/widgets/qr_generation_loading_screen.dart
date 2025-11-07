@@ -4,9 +4,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/features/speaker/widgets/session_qr_viewer_screen.dart';
 
-/// Loading screen for QR code generation with rate limiting and auto-navigation
+/// Loading screen for QR code generation with rate limiting
 class QRGenerationLoadingScreen extends ConsumerStatefulWidget {
   final Session session;
 
@@ -68,51 +67,17 @@ class _QRGenerationLoadingScreenState extends ConsumerState<QRGenerationLoadingS
       final qrPayload = sessionData?['qrCodePayload'] as String?;
 
       if (qrPayload != null && qrPayload.isNotEmpty) {
-        // QR already exists, navigate to viewer
+        // QR already exists, return it to previous screen
         setState(() {
-          _statusMessage = 'QR code found! Loading viewer...';
+          _statusMessage = 'QR code found!';
         });
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 300));
         
         if (!mounted) return;
         
-        // Create updated session with QR payload
-        final updatedSession = Session(
-          id: widget.session.id,
-          eventId: widget.session.eventId,
-          title: widget.session.title,
-          description: widget.session.description,
-          startTime: widget.session.startTime,
-          endTime: widget.session.endTime,
-          location: widget.session.location,
-          speakerIds: widget.session.speakerIds,
-          liveStreamUrl: widget.session.liveStreamUrl,
-          qrCodePayload: qrPayload,
-          priority: widget.session.priority,
-          partnerId: widget.session.partnerId,
-          isChatEnabled: widget.session.isChatEnabled,
-          closedBy: widget.session.closedBy,
-          checkedInAttendees: widget.session.checkedInAttendees,
-          totalMessages: widget.session.totalMessages,
-          uniqueParticipants: widget.session.uniqueParticipants,
-          mutedUsers: widget.session.mutedUsers,
-          firstMessageAt: widget.session.firstMessageAt,
-          lastMessageAt: widget.session.lastMessageAt,
-          deletedMessagesCount: widget.session.deletedMessagesCount,
-          messagesByRole: widget.session.messagesByRole,
-          muteHistory: widget.session.muteHistory,
-          totalMuteActions: widget.session.totalMuteActions,
-          totalFeedbacks: widget.session.totalFeedbacks,
-          totalRating: widget.session.totalRating,
-          averageRating: widget.session.averageRating,
-        );
-
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => SessionQRViewerScreen(session: updatedSession),
-          ),
-        );
+        // Return QR payload to previous screen
+        Navigator.of(context).pop(qrPayload);
         return;
       }
 
@@ -134,49 +99,15 @@ class _QRGenerationLoadingScreenState extends ConsumerState<QRGenerationLoadingS
         final generatedQR = data['qrCodePayload'] as String;
 
         setState(() {
-          _statusMessage = 'QR code generated successfully!\nLoading viewer...';
+          _statusMessage = 'QR code generated successfully!';
         });
 
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 300));
 
         if (!mounted) return;
 
-        // Create updated session with generated QR
-        final updatedSession = Session(
-          id: widget.session.id,
-          eventId: widget.session.eventId,
-          title: widget.session.title,
-          description: widget.session.description,
-          startTime: widget.session.startTime,
-          endTime: widget.session.endTime,
-          location: widget.session.location,
-          speakerIds: widget.session.speakerIds,
-          liveStreamUrl: widget.session.liveStreamUrl,
-          qrCodePayload: generatedQR,
-          priority: widget.session.priority,
-          partnerId: widget.session.partnerId,
-          isChatEnabled: widget.session.isChatEnabled,
-          closedBy: widget.session.closedBy,
-          checkedInAttendees: widget.session.checkedInAttendees,
-          totalMessages: widget.session.totalMessages,
-          uniqueParticipants: widget.session.uniqueParticipants,
-          mutedUsers: widget.session.mutedUsers,
-          firstMessageAt: widget.session.firstMessageAt,
-          lastMessageAt: widget.session.lastMessageAt,
-          deletedMessagesCount: widget.session.deletedMessagesCount,
-          messagesByRole: widget.session.messagesByRole,
-          muteHistory: widget.session.muteHistory,
-          totalMuteActions: widget.session.totalMuteActions,
-          totalFeedbacks: widget.session.totalFeedbacks,
-          totalRating: widget.session.totalRating,
-          averageRating: widget.session.averageRating,
-        );
-
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => SessionQRViewerScreen(session: updatedSession),
-          ),
-        );
+        // Return generated QR payload to previous screen
+        Navigator.of(context).pop(generatedQR);
       } else {
         throw Exception('QR generation failed: ${data['message']}');
       }
