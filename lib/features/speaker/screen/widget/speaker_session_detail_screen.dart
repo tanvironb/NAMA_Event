@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/speaker/widgets/session_qr_viewer_screen.dart';
+import 'package:events_app_trueattempt/features/speaker/widgets/qr_generation_loading_screen.dart';
 import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
 import 'package:intl/intl.dart';
 
@@ -17,80 +18,23 @@ class SpeakerSessionDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _SpeakerSessionDetailScreenState extends ConsumerState<SpeakerSessionDetailScreen> {
-  bool _isGeneratingQR = false;
-
-  void _showQRCodeDialog(BuildContext context) {
+  void _handleQRAction(BuildContext context) {
     final qrData = widget.session.qrCodePayload;
+    
     if (qrData.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('QR Code is not yet generated for this session.')),
+      // Navigate to loading screen which will handle generation
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => QRGenerationLoadingScreen(session: widget.session),
+        ),
       );
-      return;
-    }
-
-    // Navigate to styled QR viewer screen
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => SessionQRViewerScreen(session: widget.session),
-      ),
-    );
-  }
-
-  Future<void> _generateQRCodeManually() async {
-    if (_isGeneratingQR) return;
-
-    setState(() {
-      _isGeneratingQR = true;
-    });
-
-    try {
-      // Call Cloud Function directly (matching existing pattern in the app)
-      final functions = FirebaseFunctions.instanceFor(region: 'asia-southeast1');
-      final callable = functions.httpsCallable('generateSessionQR');
-      final result = await callable.call<Map<String, dynamic>>({
-        'sessionId': widget.session.id,
-      });
-
-      if (mounted) {
-        final data = result.data;
-        if (data['success'] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(data['message'] ?? 'QR code generated successfully'),
-              backgroundColor: AppColors.successGreen,
-            ),
-          );
-
-          // Show QR viewer after successful generation
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => SessionQRViewerScreen(session: widget.session),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to generate QR code'),
-              backgroundColor: AppColors.errorRed,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: AppColors.errorRed,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isGeneratingQR = false;
-        });
-      }
+    } else {
+      // Navigate to styled QR viewer screen
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => SessionQRViewerScreen(session: widget.session),
+        ),
+      );
     }
   }
 
@@ -128,15 +72,7 @@ class _SpeakerSessionDetailScreenState extends ConsumerState<SpeakerSessionDetai
                 label: Text(widget.session.qrCodePayload.isEmpty 
                   ? 'Generate Check-in QR' 
                   : 'View Check-in QR'),
-                onPressed: _isGeneratingQR
-                  ? null
-                  : () {
-                      if (widget.session.qrCodePayload.isEmpty) {
-                        _generateQRCodeManually();
-                      } else {
-                        _showQRCodeDialog(context);
-                      }
-                    },
+                onPressed: () => _handleQRAction(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.namaGoldenYellow,
                   foregroundColor: AppColors.navyBlue,

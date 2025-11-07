@@ -211,19 +211,94 @@ Implemented a comprehensive session QR code system with auto-generation, manual 
 
 ## Known Limitations
 
-1. **Download Functionality**: Currently opens a new page for screenshot. Future enhancement could use image capture libraries for actual file download.
+1. ~~**Download Functionality**: Currently opens a new page for screenshot. Future enhancement could use image capture libraries for actual file download.~~ ✅ **FIXED** - Now exports actual PNG file with share functionality
 
 2. **Logo Asset**: Uses fallback icon if `assets/icons/app_icon.png` doesn't exist. Verify asset exists in project.
 
 3. **Cloud Functions Service**: Created but not integrated. Will require refactor of existing Cloud Function calls if used project-wide.
 
+4. **Rate Limiting Storage**: Rate limit data is in-memory only (resets on app restart). Could be persisted to SharedPreferences if needed.
+
+## Recent Updates (Phase 22)
+
+### QR Generation Flow Improvements ✅
+**Date**: Current Session
+
+**Changes**:
+1. **Loading Screen with Rate Limiting** (`qr_generation_loading_screen.dart`):
+   - Static map tracks last generation attempt per session
+   - 1-minute cooldown between attempts
+   - Real-time Firestore check before Cloud Function call
+   - Smooth auto-navigation to viewer when QR appears
+   - User-friendly error messages with retry options
+   - Loading indicators with status updates
+
+2. **Actual Download Functionality** (`session_qr_download_page.dart`):
+   - Uses `RepaintBoundary` to capture widget as high-res image (3.0x pixel ratio)
+   - Exports PNG file using `RenderRepaintBoundary.toImage()`
+   - Uses `share_plus` for native share dialog
+   - Saves to temporary directory with `path_provider`
+   - Floating action button for easy download
+   - Loading state during export
+   - Success/error feedback via SnackBar
+
+3. **Refactored Session Detail Screen** (`speaker_session_detail_screen.dart`):
+   - Removed inline generation logic (70+ lines)
+   - Added `_handleQRAction()` method to delegate to loading screen
+   - Simplified button logic (single onPressed handler)
+   - Cleaner separation of concerns
+
+4. **Dependencies Added** (`pubspec.yaml`):
+   ```yaml
+   screenshot: ^3.0.0      # Added but not used (RepaintBoundary preferred)
+   share_plus: ^10.1.3     # For sharing exported image
+   path_provider: ^2.1.5   # For temporary file storage
+   ```
+
+**Flow Changes**:
+
+Before:
+```
+Button → Inline Generation → Loading State → Success/Error → Navigate
+```
+
+After:
+```
+Button → Navigate to Loading Screen → Loading Screen Handles Everything
+```
+
+**Rate Limiting Logic**:
+- Per-session cooldown (not global)
+- 1-minute duration
+- In-memory storage (static map)
+- Countdown display for user feedback
+
+**Export Process**:
+1. User taps "Download QR" button
+2. Widget captures as image (3x resolution for print quality)
+3. PNG saved to temporary directory
+4. Native share dialog opens
+5. User can save to gallery or share
+6. Success feedback shown
+
+**Benefits**:
+- ✅ No more broken "Generate QR" flow
+- ✅ Prevents duplicate generation spam
+- ✅ Smooth transitions and loading states
+- ✅ Actual file download (not just screenshot hint)
+- ✅ Print-ready quality (high resolution)
+- ✅ Native share integration
+
 ## Future Enhancements
 
-1. **Image Export**: Implement actual image file download instead of screenshot
-2. **QR Customization**: Allow speakers to customize QR colors/styles
-3. **Analytics**: Track QR scan metrics
-4. **Sharing**: Direct share functionality for QR codes
-5. **Service Layer**: Integrate `CloudFunctionsService` project-wide for better architecture
+1. ~~**Image Export**: Implement actual image file download instead of screenshot~~ ✅ **COMPLETED**
+2. **PDF Export**: Add PDF option alongside PNG export
+3. **QR Customization**: Allow speakers to customize QR colors/styles
+4. **Analytics**: Track QR scan metrics
+5. **Batch Generation**: Generate QR codes for multiple sessions at once
+6. **Email QR**: Send QR directly from app
+7. **Service Layer**: Integrate `CloudFunctionsService` project-wide for better architecture
+8. **Persistent Rate Limiting**: Store rate limit data in SharedPreferences
 
 ## Files Created
 1. `lib/features/speaker/widgets/session_card_widget.dart`
