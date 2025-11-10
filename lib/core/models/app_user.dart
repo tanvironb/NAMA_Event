@@ -19,7 +19,13 @@ class AppUser {
   final String medium;
   final String instagram;
   final String qrCodePayload;
-  final bool visibleInDirectory;
+  
+  // Privacy & Connection Fields
+  final String profileVisibility; // 'anonymous', 'minimal', 'full'
+  final List<String> usersIScanned; // User IDs I scanned via QR
+  final List<String> scannedByUsers; // User IDs who scanned my QR
+  final DateTime? privacySelectedAt; // When privacy level was selected
+  
   final List<String> bookmarkedSessions;
   final int points;
   final bool notificationsEnabled;
@@ -47,7 +53,10 @@ class AppUser {
     this.medium = '',
     this.instagram = '',
     this.qrCodePayload = '',
-    this.visibleInDirectory = true,
+    this.profileVisibility = 'minimal', // Default for new users
+    this.usersIScanned = const [],
+    this.scannedByUsers = const [],
+    this.privacySelectedAt,
     this.bookmarkedSessions = const [],
     this.points = 0,
     this.notificationsEnabled = true,
@@ -81,7 +90,10 @@ class AppUser {
       medium: data['medium'] as String? ?? '',
       instagram: data['instagram'] as String? ?? '',
       qrCodePayload: data['qrCodePayload'] as String? ?? '',
-      visibleInDirectory: data['visibleInDirectory'] as bool? ?? true,
+      profileVisibility: data['profileVisibility'] as String? ?? 'minimal',
+      usersIScanned: List<String>.from(data['usersIScanned'] as List? ?? []),
+      scannedByUsers: List<String>.from(data['scannedByUsers'] as List? ?? []),
+      privacySelectedAt: data['privacySelectedAt'] != null ? (data['privacySelectedAt'] as Timestamp).toDate() : null,
       bookmarkedSessions: List<String>.from(data['bookmarkedSessions'] as List? ?? []),
       points: data['points'] as int? ?? 0,
       notificationsEnabled: data['notificationsEnabled'] as bool? ?? true,
@@ -111,7 +123,10 @@ class AppUser {
       'medium': medium,
       'instagram': instagram,
       'qrCodePayload': qrCodePayload,
-      'visibleInDirectory': visibleInDirectory,
+      'profileVisibility': profileVisibility,
+      'usersIScanned': usersIScanned,
+      'scannedByUsers': scannedByUsers,
+      'privacySelectedAt': privacySelectedAt != null ? Timestamp.fromDate(privacySelectedAt!) : null,
       'bookmarkedSessions': bookmarkedSessions,
       'points': points,
       'notificationsEnabled': notificationsEnabled,
@@ -120,5 +135,58 @@ class AppUser {
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : null,
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
+  }
+
+  // Helper methods for privacy checks
+  
+  /// Check if this user is anonymous
+  bool get isAnonymous => profileVisibility == 'anonymous';
+  
+  /// Check if this user has minimal privacy
+  bool get isMinimal => profileVisibility == 'minimal';
+  
+  /// Check if this user has full data visibility
+  bool get isFull => profileVisibility == 'full';
+  
+  /// Check if the current user (viewerId) can see this user's full profile
+  /// Returns true if:
+  /// - Viewer is admin
+  /// - This user has 'full' or 'minimal' visibility
+  /// - Viewer has scanned this user's QR
+  bool canBeViewedBy(String viewerId, bool viewerIsAdmin) {
+    if (viewerIsAdmin) return true;
+    if (isFull || isMinimal) return true;
+    if (isAnonymous && scannedByUsers.contains(viewerId)) return true;
+    return false;
+  }
+  
+  /// Check if viewer can see this user's full data (beyond name/email)
+  bool canViewFullDataBy(String viewerId, bool viewerIsAdmin) {
+    if (viewerIsAdmin) return true;
+    if (isFull) return true;
+    if (isAnonymous && scannedByUsers.contains(viewerId)) return true;
+    return false;
+  }
+  
+  /// Check if this user needs to select privacy level
+  bool get needsPrivacySelection => privacySelectedAt == null;
+  
+  /// Get display name based on viewer permissions
+  String getDisplayNameFor(String viewerId, bool viewerIsAdmin) {
+    if (viewerIsAdmin) return name;
+    if (isAnonymous && !scannedByUsers.contains(viewerId)) return 'Anonymous';
+    return name;
+  }
+  
+  /// Get display email based on viewer permissions
+  String getDisplayEmailFor(String viewerId, bool viewerIsAdmin) {
+    if (viewerIsAdmin) return email;
+    if (isAnonymous && !scannedByUsers.contains(viewerId)) return '';
+    return email;
+  }
+  
+  /// Check if viewer is connected to this user via QR scan
+  bool isConnectedWith(String viewerId) {
+    return scannedByUsers.contains(viewerId);
   }
 }

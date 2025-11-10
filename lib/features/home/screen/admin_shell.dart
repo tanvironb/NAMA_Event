@@ -13,6 +13,7 @@ import 'package:events_app_trueattempt/common_widgets/notification_icon_with_bad
 import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
+import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 
 class AdminShell extends ConsumerStatefulWidget {
   const AdminShell({super.key});
@@ -187,13 +188,13 @@ class _AdminShellState extends ConsumerState<AdminShell> {
               },
             ),
             ListTile(
-              leading: Icon(Icons.settings_outlined, color: Theme.of(context).colorScheme.onSurface),
-              title: Text('Settings', style: Theme.of(context).textTheme.titleMedium),
+              leading: Icon(Icons.privacy_tip_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('Privacy & Settings', style: Theme.of(context).textTheme.titleMedium),
               onTap: () {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Settings page is coming soon!')),
-                );
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const PrivacyScreen(),
+                ));
               },
             ),
           ],

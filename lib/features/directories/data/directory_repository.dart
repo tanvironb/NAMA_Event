@@ -10,9 +10,8 @@ class DirectoryRepository {
   // Fetches all users with the role 'attendee' who have opted in.
   Future<List<AppUser>> getAttendees() async {
     final docs = await _firestoreService.getUsersByRole('attendee');
-    return docs.where((doc) => AppUser.fromFirestore(doc).visibleInDirectory)
-               .map((doc) => AppUser.fromFirestore(doc))
-               .toList();
+    // Privacy filtering will be handled at the UI level
+    return docs.map((doc) => AppUser.fromFirestore(doc)).toList();
   }
 
   // Fetches all users with the role 'speaker'.

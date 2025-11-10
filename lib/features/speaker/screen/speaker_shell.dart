@@ -13,6 +13,7 @@ import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_scre
 import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
 import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
+import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 
 class SpeakerShell extends ConsumerStatefulWidget {
   const SpeakerShell({super.key});
@@ -187,13 +188,13 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
             ),
             const Divider(),
             ListTile(
-              leading: Icon(Icons.settings_outlined, color: Theme.of(context).colorScheme.onSurface),
-              title: Text('Settings', style: Theme.of(context).textTheme.titleMedium),
+              leading: Icon(Icons.privacy_tip_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('Privacy & Settings', style: Theme.of(context).textTheme.titleMedium),
               onTap: () {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Settings page is coming soon!')),
-                );
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const PrivacyScreen(),
+                ));
               },
             ),
           ],

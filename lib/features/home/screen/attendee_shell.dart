@@ -13,6 +13,7 @@ import 'package:events_app_trueattempt/features/messaging/screen/conversations_s
 import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
 import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
+import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 
 class AttendeeShell extends ConsumerStatefulWidget {
   const AttendeeShell({super.key});
@@ -172,13 +173,13 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
               },
             ),
             ListTile(
-              leading: Icon(Icons.settings_outlined, color: Theme.of(context).colorScheme.onSurface),
-              title: Text('Settings', style: Theme.of(context).textTheme.titleMedium),
+              leading: Icon(Icons.privacy_tip_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('Privacy & Settings', style: Theme.of(context).textTheme.titleMedium),
               onTap: () {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Settings page is coming soon!')),
-                );
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const PrivacyScreen(),
+                ));
               },
             ),
             // TODO: Add more drawer items for other features in later phases (e.g., Leaderboard, Support)
