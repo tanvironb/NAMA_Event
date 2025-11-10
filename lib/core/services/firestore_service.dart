@@ -216,13 +216,23 @@ class FirestoreService {
   }
 
   Future<List<DocumentSnapshot>> searchUsersByName(String query) async {
+    // Get all users and filter client-side for better search (name only)
+    // For production, consider using Algolia or similar for better performance
     final snapshot = await _db
         .collection('users')
-        .where('name', isGreaterThanOrEqualTo: query)
-        .where('name', isLessThanOrEqualTo: '$query\uf8ff')
-        .limit(10)
+        .where('status', isEqualTo: 'approved') // Only show approved users
+        .limit(100)
         .get();
-    return snapshot.docs;
+    
+    final queryLower = query.toLowerCase();
+    return snapshot.docs.where((doc) {
+      final data = doc.data() as Map<String, dynamic>?;
+      if (data == null) return false;
+      
+      final name = (data['name'] as String? ?? '').toLowerCase();
+      
+      return name.contains(queryLower);
+    }).toList();
   }
 
   Future<void> deleteChatMessage(String sessionId, String messageId) async {
