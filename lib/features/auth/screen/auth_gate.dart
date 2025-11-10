@@ -5,6 +5,7 @@ import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/main_hub/screen/main_hub_screen.dart';
 import 'package:events_app_trueattempt/features/auth/screen/pending_approval_screen.dart';
+import 'package:events_app_trueattempt/features/auth/screen/blocked_screen.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 
 // AuthGate handles the initial routing based on user's authentication state.
@@ -69,6 +70,8 @@ class AuthGate extends ConsumerWidget {
                       ),
                     ),
                   );
+                case 'blocked':
+                  return const BlockedScreen();
                 case 'pending':
                 default:
                   return const PendingApprovalScreen();

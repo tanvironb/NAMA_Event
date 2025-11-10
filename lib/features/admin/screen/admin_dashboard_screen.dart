@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/features/admin/screen/user_management_screen.dart';
+import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
+import 'package:events_app_trueattempt/features/admin/screen/send_notification_screen.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -20,10 +22,9 @@ class AdminDashboardScreen extends ConsumerWidget {
             title: 'Send Push Notification',
             subtitle: 'Broadcast a message to all attendees.',
             onTap: () {
-              // TODO: Implement notification sending UI
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Notification sending UI coming soon!')),
-              );
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => const SendNotificationScreen(),
+              ));
             },
           ),
           // Example Admin Action: View Users
@@ -34,6 +35,17 @@ class AdminDashboardScreen extends ConsumerWidget {
             onTap: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (context) => const UserManagementScreen(),
+              ));
+            },
+          ),
+          // Example Admin Action: Manage Sessions
+          _AdminActionCard(
+            icon: Icons.event_note,
+            title: 'Manage Sessions',
+            subtitle: 'View and manage all event sessions.',
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => const AdminSessionManagementScreen(),
               ));
             },
           ),

@@ -5,12 +5,38 @@ import 'config/app_themes.dart';
 import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/splash_screen.dart';
+import 'package:events_app_trueattempt/features/notifications/services/alert_notification_service.dart';
 
-class MyApp extends ConsumerWidget {
+class MyApp extends ConsumerStatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  final _alertService = AlertNotificationService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize alert service after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && NotificationHandler.navigatorKey.currentContext != null) {
+        _alertService.initialize(NotificationHandler.navigatorKey.currentContext!);
+        _alertService.checkForUnshownAlerts(NotificationHandler.navigatorKey.currentContext!);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _alertService.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     // A future that represents all necessary initializations
     final appInitialization = ref.watch(appInitializationProvider);
 

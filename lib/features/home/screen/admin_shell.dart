@@ -9,7 +9,10 @@ import 'package:events_app_trueattempt/features/directories/screen/directories_h
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
-// import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_screen.dart'; // New admin dashboard - TODO: Uncomment when created
+import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
+import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.dart';
+import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_screen.dart';
+import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
 
 class AdminShell extends ConsumerStatefulWidget {
   const AdminShell({super.key});
@@ -22,11 +25,11 @@ class _AdminShellState extends ConsumerState<AdminShell> {
   int _selectedIndex = 0;
 
   static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
-    // TODO: Replace with AdminDashboardScreen() when created
-    const Center(child: Text('Admin Dashboard Coming Soon')), // Temporary placeholder
+    const AdminDashboardScreen(), // Admin Dashboard with quick actions
     const AgendaScreen(), // Can still view the agenda
     const DirectoriesHubScreen(), // Can still network
-    const ProfileTabScreen(), // Updated to use ProfileTabScreen
+    const QRHubScreen(), // QR Scanner and My QR
+    const ProfileTabScreen(), // Profile
   ];
 
   @override
@@ -94,7 +97,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
+            icon: const NotificationIconWithBadge(),
             onPressed: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (context) => const NotificationsScreen(),
@@ -147,6 +150,16 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('Admin Settings coming soon!')),
                 );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.event_note_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('Manage Sessions', style: Theme.of(context).textTheme.titleMedium),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const AdminSessionManagementScreen(),
+                ));
               },
             ),
             ListTile(
@@ -208,7 +221,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
           BottomNavigationBarItem(
             icon: Icon(Icons.admin_panel_settings_outlined),
             activeIcon: Icon(Icons.admin_panel_settings),
-            label: 'Admin Panel',
+            label: 'Admin',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.calendar_month_outlined),
@@ -219,6 +232,11 @@ class _AdminShellState extends ConsumerState<AdminShell> {
             icon: Icon(Icons.people_outline),
             activeIcon: Icon(Icons.people),
             label: 'Network',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.qr_code_scanner),
+            activeIcon: Icon(Icons.qr_code_scanner),
+            label: 'QR',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),

@@ -15,6 +15,7 @@ import 'package:events_app_trueattempt/core/models/message_model.dart';
 import 'package:events_app_trueattempt/features/qr_scanner/data/checkin_repository.dart';
 import 'package:events_app_trueattempt/features/notifications/data/notification_repository.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
+import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:events_app_trueattempt/core/services/remote_config_service.dart';
 import 'package:events_app_trueattempt/features/admin/data/admin_repository.dart';
@@ -270,6 +271,22 @@ final notificationsStreamProvider = StreamProvider.autoDispose<List<AppNotificat
     return ref.watch(notificationRepositoryProvider).getNotificationsStream(userId);
   }
   return Stream.value([]);
+});
+
+// Unread notifications count (excluding chat messages)
+final unreadNotificationsCountProvider = StreamProvider.autoDispose<int>((ref) {
+  return ref.watch(notificationsStreamProvider).when(
+    data: (notifications) {
+      // Exclude chat messages and count unread
+      return Stream.value(
+        notifications
+            .where((n) => !n.isRead && n.type != AppNotificationType.chat)
+            .length,
+      );
+    },
+    loading: () => Stream.value(0),
+    error: (_, __) => Stream.value(0),
+  );
 });
 
 // --- Remote Config Providers ---

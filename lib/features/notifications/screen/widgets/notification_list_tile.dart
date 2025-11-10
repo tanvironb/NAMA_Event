@@ -5,10 +5,45 @@ import 'package:intl/intl.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/enums/notification_type.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/features/notifications/screen/widgets/notification_detail_view.dart';
+import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
+import 'package:events_app_trueattempt/core/models/session_model.dart';
 
 class NotificationListTile extends ConsumerWidget {
   final AppNotification notification;
   const NotificationListTile({super.key, required this.notification});
+
+  String _formatTimeRange(DateTime from, DateTime? to) {
+    final dateFormat = DateFormat('MMM d, h:mm a');
+    if (to == null) {
+      return 'From: ${dateFormat.format(from)}';
+    }
+    
+    // If same day, show date once
+    if (from.year == to.year && from.month == to.month && from.day == to.day) {
+      final dayFormat = DateFormat('MMM d, yyyy');
+      final timeFormat = DateFormat('h:mm a');
+      return '${dayFormat.format(from)} • ${timeFormat.format(from)} - ${timeFormat.format(to)}';
+    } else {
+      return '${dateFormat.format(from)} - ${dateFormat.format(to)}';
+    }
+  }
+
+  Color _getPriorityColor(String priority) {
+    switch (priority) {
+      case 'high':
+        return AppColors.errorRed;
+      case 'medium':
+        return AppColors.warningAmber;
+      case 'low':
+        return AppColors.infoBlue;
+      default:
+        return Colors.grey;
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -22,6 +57,7 @@ class NotificationListTile extends ConsumerWidget {
         : Colors.white;
 
     final timeAgo = DateFormat.yMMMd().add_jm().format(notification.timestamp.toDate());
+    final priorityColor = _getPriorityColor(notification.priority);
     
     return Container(
       color: notification.isRead 
@@ -32,45 +68,235 @@ class NotificationListTile extends ConsumerWidget {
           backgroundColor: iconBackgroundColor,
           child: Icon(iconData, color: iconColor),
         ),
-      title: Text(
-        notification.title,
-        style: TextStyle(
-          fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
-          color: notification.isRead 
-            ? Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
-            : Theme.of(context).colorScheme.onSurface,
+        title: Text(
+          notification.title,
+          style: TextStyle(
+            fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
+            color: notification.isRead 
+              ? Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
+              : Theme.of(context).colorScheme.onSurface,
+          ),
         ),
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            notification.body,
-            style: TextStyle(
-              color: notification.isRead 
-                ? Theme.of(context).colorScheme.onSurface.withOpacity(0.5)
-                : Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Subtitle (if present)
+            if (notification.subtitle != null && notification.subtitle!.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                notification.subtitle!,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontStyle: FontStyle.italic,
+                  color: notification.isRead 
+                    ? Colors.grey.shade500
+                    : Colors.grey.shade700,
+                ),
+              ),
+            ],
+            const SizedBox(height: 4),
+            // Body
+            Text(
+              notification.body,
+              style: TextStyle(
+                color: notification.isRead 
+                  ? Theme.of(context).colorScheme.onSurface.withOpacity(0.5)
+                  : Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            timeAgo, 
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: notification.isRead 
-                ? Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
-                : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+            const SizedBox(height: 6),
+            // Time range (if present)
+            if (notification.timeFrom != null) ...[
+              Row(
+                children: [
+                  Icon(Icons.event, size: 14, color: Colors.grey.shade600),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      _formatTimeRange(notification.timeFrom!, notification.timeTo),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: notification.isRead 
+                          ? Colors.grey.shade500
+                          : AppColors.namaDeepNavy.withOpacity(0.7),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+            ],
+            // Priority badge and timestamp row
+            Row(
+              children: [
+                // Priority badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: notification.isRead 
+                      ? Colors.grey.shade300
+                      : priorityColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: notification.isRead 
+                        ? Colors.grey.shade400
+                        : priorityColor.withOpacity(0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        notification.priority == 'high' 
+                          ? Icons.priority_high 
+                          : notification.priority == 'medium' 
+                            ? Icons.circle 
+                            : Icons.keyboard_arrow_down,
+                        size: 12,
+                        color: notification.isRead 
+                          ? Colors.grey.shade600
+                          : priorityColor,
+                      ),
+                      const SizedBox(width: 2),
+                      Text(
+                        notification.priority.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: notification.isRead 
+                            ? Colors.grey.shade600
+                            : priorityColor,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Timestamp
+                Expanded(
+                  child: Text(
+                    timeAgo, 
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: notification.isRead 
+                        ? Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
+                        : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
+        onTap: () {
+          final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
+          if (userId != null && !notification.isRead) {
+            ref.read(notificationRepositoryProvider).markAsRead(userId, notification.id);
+          }
+          
+          // Navigate based on notification type
+          _handleNotificationTap(context, notification);
+        },
       ),
-      onTap: () {
-        final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
-        if (userId != null && !notification.isRead) {
-          ref.read(notificationRepositoryProvider).markAsRead(userId, notification.id);
+    );
+  }
+
+  /// Handle notification tap and navigate to appropriate screen
+  void _handleNotificationTap(BuildContext context, AppNotification notification) {
+    switch (notification.type) {
+      case AppNotificationType.chat:
+        _navigateToSessionChat(context, notification);
+        break;
+      
+      case AppNotificationType.meetingRequest:
+        _navigateToMeetings(context);
+        break;
+      
+      case AppNotificationType.alert:
+      case AppNotificationType.announcement:
+      case AppNotificationType.information:
+      case AppNotificationType.maintenance:
+        // Admin-sent notifications - show detail view
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => NotificationDetailView(notification: notification),
+          ),
+        );
+        break;
+      
+      case AppNotificationType.generic:
+      default:
+        // Generic or unknown types - show detail view
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => NotificationDetailView(notification: notification),
+          ),
+        );
+        break;
+    }
+  }
+
+  /// Navigate to session chat
+  void _navigateToSessionChat(BuildContext context, AppNotification notification) async {
+    final sessionId = notification.data['sessionId'];
+    
+    if (sessionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Session information not available')),
+      );
+      return;
+    }
+
+    try {
+      // Show loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Loading session...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+
+      // Fetch session from Firestore
+      final sessionDoc = await FirebaseFirestore.instance
+          .collection('sessions')
+          .doc(sessionId)
+          .get();
+
+      if (!sessionDoc.exists) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Session not found')),
+          );
         }
-        // TODO: Add deep linking logic based on notification.data
-      },
-    ),
+        return;
+      }
+
+      final session = Session.fromFirestore(sessionDoc);
+
+      if (context.mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SessionChatScreen(session: session),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading session: $e')),
+        );
+      }
+    }
+  }
+
+  /// Navigate to meetings screen
+  void _navigateToMeetings(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const MyMeetingsScreen(initialTab: 0), // Pending tab
+      ),
     );
   }
 }

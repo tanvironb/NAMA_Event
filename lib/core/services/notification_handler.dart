@@ -8,6 +8,8 @@ import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_scre
 import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/core/models/notification_model.dart';
+import 'package:events_app_trueattempt/features/notifications/screen/widgets/notification_detail_view.dart';
 
 /// Centralized notification handler for all app notifications
 /// Handles deep linking and navigation based on notification type
@@ -57,9 +59,66 @@ class NotificationHandler {
         _handleMeeting(context, message.data);
         break;
       
+      case 'admin_notification':
+        // Handle admin-sent notifications (alert, announcement, information, maintenance)
+        _handleAdminNotification(context, message.data);
+        break;
+      
       default:
         debugPrint('NotificationHandler: Unknown notification type: $type');
         _showGenericNotificationDialog(context, message);
+    }
+  }
+
+  /// Handle admin-sent notifications by showing detail view
+  static void _handleAdminNotification(BuildContext context, Map<String, dynamic> data) async {
+    final notificationId = data['notificationId'];
+    
+    if (notificationId == null) {
+      debugPrint('NotificationHandler: Missing notificationId for admin notification');
+      return;
+    }
+
+    try {
+      final userId = _currentUserId;
+      if (userId == null) {
+        debugPrint('NotificationHandler: No current user for admin notification');
+        return;
+      }
+
+      // Fetch notification from Firestore
+      final notificationDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .doc(notificationId)
+          .get();
+
+      if (!notificationDoc.exists) {
+        debugPrint('NotificationHandler: Notification not found');
+        return;
+      }
+
+      final notification = AppNotification.fromFirestore(notificationDoc);
+
+      if (context.mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => NotificationDetailView(notification: notification),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('NotificationHandler: Error loading admin notification: $e');
+      if (context.mounted) {
+        showInAppBanner(
+          context,
+          title: 'Error',
+          body: 'Failed to load notification',
+          showAction: false,
+          backgroundColor: AppColors.errorRed,
+        );
+      }
     }
   }
 

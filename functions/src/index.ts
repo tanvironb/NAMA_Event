@@ -546,8 +546,110 @@ export const onNewDirectMessage = onDocumentCreated(
 );
 
 /**
- * NEW: Triggered when a session ends.
- * Sends feedback request notifications to-
+ * NEW: Triggered when a new notification is created.
+ * Sends FCM push notification for admin-sent notifications
+ * (alert, announcement, information, maintenance).
+ */
+export const onNotificationCreate = onDocumentCreated(
+  {
+    document: "users/{userId}/notifications/{notificationId}",
+    region: FUNCTION_REGION,
+  },
+  async (event) => {
+    const userId = event.params.userId;
+    const notificationId = event.params.notificationId;
+    const notificationData = event.data?.data();
+
+    if (!notificationData) {
+      console.log("No notification data found.");
+      return null;
+    }
+
+    const notificationType = notificationData.type;
+
+    // Only send FCM for admin-sendable types
+    const adminTypes = ["alert", "announcement", "information", "maintenance"];
+    if (!adminTypes.includes(notificationType)) {
+      console.log(`Skipping FCM for type: ${notificationType}`);
+      return null;
+    }
+
+    console.log("\n=== Admin Notification FCM Triggered ===");
+    console.log(`User: ${userId}, Type: ${notificationType}`);
+
+    // Get user's FCM token
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists) {
+      console.log(`ERROR: User ${userId} does not exist.`);
+      return null;
+    }
+
+    const userData = userDoc.data();
+    const fcmToken = userData?.fcmToken;
+
+    if (!fcmToken) {
+      console.log(`User ${userId} does not have an FCM token.`);
+      return null;
+    }
+
+    // Construct FCM message
+    const message = {
+      token: fcmToken,
+      notification: {
+        title: notificationData.title || "New Notification",
+        body: notificationData.subtitle || notificationData.body || "",
+      },
+      data: {
+        type: "admin_notification",
+        notificationId: notificationId,
+        notificationType: notificationType,
+        priority: notificationData.priority || "low",
+      },
+      android: {
+        notification: {
+          sound: "default",
+          clickAction: "FLUTTER_NOTIFICATION_CLICK",
+          priority: notificationType === "alert" ?
+            "high" as const :
+            "default" as const,
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: "default",
+            contentAvailable: true,
+          },
+        },
+      },
+    };
+
+    try {
+      const response = await admin.messaging().send(message);
+      console.log(`✓ SUCCESS: FCM sent to ${userId}`);
+      console.log(`Response: ${response}`);
+      console.log("=== End Admin Notification FCM ===\n");
+      return response;
+    } catch (error) {
+      console.error("ERROR sending FCM:", error);
+
+      // If token is invalid, remove it
+      if (error instanceof Error &&
+          (error.message.includes("registration-token-not-registered") ||
+           error.message.includes("invalid-registration-token"))) {
+        console.log(`Removing invalid FCM token for user ${userId}`);
+        await db.collection("users").doc(userId).update({
+          fcmToken: admin.firestore.FieldValue.delete(),
+        });
+      }
+
+      throw error;
+    }
+  }
+);
+
+/**
+ * Sends feedback request notifications to
  * all checked-in attendees (excluding speakers).
  */
 export const onSessionEnd = onDocumentWritten(

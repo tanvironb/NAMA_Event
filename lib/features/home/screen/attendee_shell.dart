@@ -12,6 +12,7 @@ import 'package:events_app_trueattempt/features/notifications/screen/notificatio
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
+import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
 
 class AttendeeShell extends ConsumerStatefulWidget {
   const AttendeeShell({super.key});
@@ -101,7 +102,7 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
+            icon: const NotificationIconWithBadge(),
             onPressed: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (context) => const NotificationsScreen(),

@@ -1,23 +1,44 @@
 // lib/features/admin/screen/user_detail_admin_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/features/admin/screen/manage_user_profile_screen.dart';
 import 'package:intl/intl.dart';
 
-class UserDetailAdminScreen extends ConsumerWidget {
+class UserDetailAdminScreen extends ConsumerStatefulWidget {
   final AppUser user;
   const UserDetailAdminScreen({super.key, required this.user});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UserDetailAdminScreen> createState() => _UserDetailAdminScreenState();
+}
+
+class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
+  final TextEditingController _pointsController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _pointsController.text = widget.user.points.toString();
+  }
+
+  @override
+  void dispose() {
+    _pointsController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final possibleRoles = ['attendee', 'staff', 'speaker', 'admin'];
-    final possibleStatuses = ['pending', 'approved', 'rejected'];
+    final possibleStatuses = ['pending', 'approved', 'rejected', 'blocked'];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(user.name),
+        title: Text(widget.user.name),
         backgroundColor: Theme.of(context).colorScheme.surface,
       ),
       body: Padding(
@@ -40,19 +61,18 @@ class UserDetailAdminScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      _buildInfoRow('Email', user.email),
-                      _buildInfoRow('Name', user.name),
-                      _buildInfoRow('Company', user.company.isEmpty ? 'Not provided' : user.company),
-                      _buildInfoRow('Title', user.title.isEmpty ? 'Not provided' : user.title),
-                      _buildInfoRow('Phone', user.phone.isEmpty ? 'Not provided' : user.phone),
-                      _buildInfoRow('Points', user.points.toString()),
-                      _buildInfoRow('Created', user.createdAt != null 
-                          ? DateFormat('MMM dd, yyyy HH:mm').format(user.createdAt!) 
+                      _buildInfoRow('Email', widget.user.email),
+                      _buildInfoRow('Name', widget.user.name),
+                      _buildInfoRow('Company', widget.user.company.isEmpty ? 'Not provided' : widget.user.company),
+                      _buildInfoRow('Title', widget.user.title.isEmpty ? 'Not provided' : widget.user.title),
+                      _buildInfoRow('Phone', widget.user.phone.isEmpty ? 'Not provided' : widget.user.phone),
+                      _buildInfoRow('Created', widget.user.createdAt != null 
+                          ? DateFormat('MMM dd, yyyy HH:mm').format(widget.user.createdAt!) 
                           : 'Unknown'),
-                      _buildInfoRow('Last Seen', user.lastSeen != null 
-                          ? DateFormat('MMM dd, yyyy HH:mm').format(user.lastSeen!) 
+                      _buildInfoRow('Last Seen', widget.user.lastSeen != null 
+                          ? DateFormat('MMM dd, yyyy HH:mm').format(widget.user.lastSeen!) 
                           : 'Never'),
-                      _buildInfoRow('Online Status', user.isOnline ? 'Online' : 'Offline'),
+                      _buildInfoRow('Online Status', widget.user.isOnline ? 'Online' : 'Offline'),
                     ],
                   ),
                 ),
@@ -77,31 +97,14 @@ class UserDetailAdminScreen extends ConsumerWidget {
                       
                       // Role Changer
                       DropdownButtonFormField<String>(
-                        value: user.role,
+                        value: widget.user.role,
                         items: possibleRoles.map((role) => 
                           DropdownMenuItem(
                             value: role, 
                             child: Text(role.toUpperCase()),
                           )
                         ).toList(),
-                        onChanged: (newRole) {
-                          if (newRole != null && newRole != user.role) {
-                            _showConfirmationDialog(
-                              context,
-                              'Change Role',
-                              'Are you sure you want to change this user\'s role to ${newRole.toUpperCase()}?',
-                              () {
-                                ref.read(userProfileRepositoryProvider).updateUserProfile(
-                                  user.uid, 
-                                  {'role': newRole, 'updatedAt': DateTime.now()}
-                                );
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Role updated to ${newRole.toUpperCase()}')),
-                                );
-                              },
-                            );
-                          }
-                        },
+                        onChanged: (newRole) => _handleRoleChange(newRole),
                         decoration: const InputDecoration(
                           labelText: 'Change Role',
                           border: OutlineInputBorder(),
@@ -112,7 +115,7 @@ class UserDetailAdminScreen extends ConsumerWidget {
                       
                       // Status Changer
                       DropdownButtonFormField<String>(
-                        value: user.status,
+                        value: widget.user.status,
                         items: possibleStatuses.map((status) => 
                           DropdownMenuItem(
                             value: status, 
@@ -129,27 +132,39 @@ class UserDetailAdminScreen extends ConsumerWidget {
                             ),
                           )
                         ).toList(),
-                        onChanged: (newStatus) {
-                          if (newStatus != null && newStatus != user.status) {
-                            _showConfirmationDialog(
-                              context,
-                              'Change Status',
-                              'Are you sure you want to change this user\'s status to ${newStatus.toUpperCase()}?',
-                              () {
-                                ref.read(userProfileRepositoryProvider).updateUserProfile(
-                                  user.uid, 
-                                  {'status': newStatus, 'updatedAt': DateTime.now()}
-                                );
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Status updated to ${newStatus.toUpperCase()}')),
-                                );
-                              },
-                            );
-                          }
-                        },
+                        onChanged: (newStatus) => _handleStatusChange(newStatus),
                         decoration: const InputDecoration(
                           labelText: 'Change Status',
                           border: OutlineInputBorder(),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Points Editor
+                      _buildPointsEditor(),
+
+                      const SizedBox(height: 16),
+
+                      // Manage User's Profile Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(MaterialPageRoute(
+                              builder: (context) => ManageUserProfileScreen(user: widget.user),
+                            ));
+                          },
+                          icon: const Icon(Icons.edit_note),
+                          label: const Text('Manage User\'s Profile'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.namaNavyBlue,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
                         ),
                       ),
                     ],
@@ -161,6 +176,291 @@ class UserDetailAdminScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildPointsEditor() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'User Points',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            // Minus Button
+            IconButton(
+              onPressed: () => _adjustPoints(-1),
+              icon: const Icon(Icons.remove_circle),
+              color: AppColors.errorRed,
+              iconSize: 32,
+            ),
+            // Points Input
+            Expanded(
+              child: TextField(
+                controller: _pointsController,
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            // Plus Button
+            IconButton(
+              onPressed: () => _adjustPoints(1),
+              icon: const Icon(Icons.add_circle),
+              color: AppColors.successGreen,
+              iconSize: 32,
+            ),
+            // Update Button
+            ElevatedButton(
+              onPressed: _updatePoints,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.namaNavyBlue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: const Text('Update'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _adjustPoints(int delta) {
+    final currentPoints = int.tryParse(_pointsController.text) ?? widget.user.points;
+    final newPoints = (currentPoints + delta).clamp(0, 999999);
+    setState(() {
+      _pointsController.text = newPoints.toString();
+    });
+  }
+
+  Future<void> _updatePoints() async {
+    final newPoints = int.tryParse(_pointsController.text);
+    if (newPoints == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid number'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
+    if (newPoints == widget.user.points) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Points value hasn\'t changed'),
+          backgroundColor: AppColors.warningAmber,
+        ),
+      );
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Update Points'),
+          content: Text(
+            'Change user points from ${widget.user.points} to $newPoints?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.namaNavyBlue,
+              ),
+              child: const Text('Confirm'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+
+      try {
+        await ref.read(userProfileRepositoryProvider).updateUserProfile(
+          widget.user.uid,
+          {'points': newPoints},
+        );
+
+        if (mounted) {
+          Navigator.of(context).pop(); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Points updated to $newPoints'),
+              backgroundColor: AppColors.successGreen,
+            ),
+          );
+          Navigator.of(context).pop(); // Go back to user list
+        }
+      } catch (e) {
+        if (mounted) {
+          Navigator.of(context).pop(); // Close loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to update points: $e'),
+              backgroundColor: AppColors.errorRed,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _handleRoleChange(String? newRole) async {
+    if (newRole != null && newRole != widget.user.role) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Change Role'),
+            content: Text('Are you sure you want to change this user\'s role to ${newRole.toUpperCase()}?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.namaNavyBlue,
+                ),
+                child: const Text('Confirm'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed == true && mounted) {
+        // Show loading dialog
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+
+        try {
+          await ref.read(userProfileRepositoryProvider).updateUserProfile(
+            widget.user.uid, 
+            {'role': newRole}
+          );
+          
+          if (mounted) {
+            Navigator.of(context).pop(); // Close loading
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Role updated to ${newRole.toUpperCase()}'),
+                backgroundColor: AppColors.successGreen,
+              ),
+            );
+            Navigator.of(context).pop(); // Go back to user list
+          }
+        } catch (e) {
+          if (mounted) {
+            Navigator.of(context).pop(); // Close loading
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to update role: $e'),
+                backgroundColor: AppColors.errorRed,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  Future<void> _handleStatusChange(String? newStatus) async {
+    if (newStatus != null && newStatus != widget.user.status) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext dialogContext) {
+          return AlertDialog(
+            title: const Text('Change Status'),
+            content: Text('Are you sure you want to change this user\'s status to ${newStatus.toUpperCase()}?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.namaNavyBlue,
+                ),
+                child: const Text('Confirm'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (confirmed == true && mounted) {
+        // Show loading dialog
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator()),
+        );
+
+        try {
+          await ref.read(userProfileRepositoryProvider).updateUserProfile(
+            widget.user.uid, 
+            {'status': newStatus}
+          );
+          
+          if (mounted) {
+            Navigator.of(context).pop(); // Close loading
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Status updated to ${newStatus.toUpperCase()}'),
+                backgroundColor: AppColors.successGreen,
+              ),
+            );
+            Navigator.of(context).pop(); // Go back to user list
+          }
+        } catch (e) {
+          if (mounted) {
+            Navigator.of(context).pop(); // Close loading
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to update status: $e'),
+                backgroundColor: AppColors.errorRed,
+              ),
+            );
+          }
+        }
+      }
+    }
   }
 
   Widget _buildInfoRow(String label, String value) {
@@ -190,6 +490,8 @@ class UserDetailAdminScreen extends ConsumerWidget {
         return Icons.check_circle;
       case 'rejected':
         return Icons.cancel;
+      case 'blocked':
+        return Icons.block;
       case 'pending':
       default:
         return Icons.schedule;
@@ -202,42 +504,11 @@ class UserDetailAdminScreen extends ConsumerWidget {
         return AppColors.successGreen;
       case 'rejected':
         return AppColors.errorRed;
+      case 'blocked':
+        return AppColors.errorRed;
       case 'pending':
       default:
         return AppColors.warningAmber;
     }
-  }
-
-  void _showConfirmationDialog(
-    BuildContext context,
-    String title,
-    String message,
-    VoidCallback onConfirm,
-  ) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(title),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                onConfirm();
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.primary,
-              ),
-              child: const Text('Confirm'),
-            ),
-          ],
-        );
-      },
-    );
   }
 }
