@@ -251,9 +251,11 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
                             final confirmed = await _showAlertTypeConfirmation();
                             if (confirmed) {
                               setState(() => _selectedType = value);
-                            } else {
-                              // If user cancels, reset to Information type
-                              setState(() => _selectedType = AppNotificationType.information);
+                            }
+                            // If user cancels, _selectedType stays as it was (not alert)
+                            // Force rebuild to show correct value in dropdown
+                            else {
+                              setState(() {}); // Force rebuild without changing _selectedType
                             }
                           } else {
                             setState(() => _selectedType = value);
