@@ -41,3 +41,19 @@ Batch updates/deletes across ALL users
     ↓
 Shows success message with count
 ```
+
+User A sends meeting request
+    ↓
+Meeting document created in Firestore
+    ↓
+Cloud Function onMeetingWrite triggered
+    ↓
+Step 1: Validates (prevents self-notification)
+    ↓
+Step 2: Creates in-app notification in users/{userId}/notifications
+    ↓
+Step 3: Sends FCM push notification
+    ↓
+User B receives both in-app AND push notification
+    ↓
+Tapping notification → My Meetings screen (Pending tab)
