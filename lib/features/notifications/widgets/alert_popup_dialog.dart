@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/features/notifications/screen/widgets/notification_detail_view.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Alert popup dialog that shows for high-priority notifications
 /// Displays with 3-second timer and red outline styling
+/// Tracks dismissed warnings to prevent re-showing
 class AlertPopupDialog extends StatefulWidget {
   final AppNotification notification;
   final VoidCallback? onDismiss;
@@ -14,6 +17,18 @@ class AlertPopupDialog extends StatefulWidget {
     required this.notification,
     this.onDismiss,
   });
+
+  /// Check if a warning has been dismissed before
+  static Future<bool> hasBeenDismissed(String notificationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('dismissed_warning_$notificationId') ?? false;
+  }
+
+  /// Save that a warning has been dismissed
+  static Future<void> markAsDismissed(String notificationId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('dismissed_warning_$notificationId', true);
+  }
 
   @override
   State<AlertPopupDialog> createState() => _AlertPopupDialogState();
@@ -125,9 +140,15 @@ class _AlertPopupDialogState extends State<AlertPopupDialog> with SingleTickerPr
                   // Close button (disabled for 3 seconds)
                   IconButton(
                     icon: const Icon(Icons.close),
-                    onPressed: canDismiss ? () {
+                    onPressed: canDismiss ? () async {
+                      // Mark as dismissed before closing
+                      final notificationId = widget.notification.data['notificationId'] ?? 
+                                             widget.notification.id;
+                      await AlertPopupDialog.markAsDismissed(notificationId);
                       widget.onDismiss?.call();
-                      Navigator.of(context).pop();
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                      }
                     } : null,
                     color: canDismiss ? AppColors.namaDeepNavy : Colors.grey,
                   ),
@@ -160,7 +181,7 @@ class _AlertPopupDialogState extends State<AlertPopupDialog> with SingleTickerPr
               
               const SizedBox(height: 12),
               
-              // Body
+              // Body (truncated to 30-50 chars)
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -168,13 +189,42 @@ class _AlertPopupDialogState extends State<AlertPopupDialog> with SingleTickerPr
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppColors.errorRed.withOpacity(0.2)),
                 ),
-                child: Text(
-                  widget.notification.body,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    height: 1.5,
-                    color: AppColors.namaDeepNavy,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.notification.body.length > 50
+                          ? '${widget.notification.body.substring(0, 47)}...'
+                          : widget.notification.body,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        height: 1.5,
+                        color: AppColors.namaDeepNavy,
+                      ),
+                    ),
+                    // View More button if text is truncated
+                    if (widget.notification.body.length > 50) ...[
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => NotificationDetailView(
+                                notification: widget.notification,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.open_in_new, size: 16),
+                        label: const Text('View More'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppColors.errorRed,
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               
@@ -234,9 +284,15 @@ class _AlertPopupDialogState extends State<AlertPopupDialog> with SingleTickerPr
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
+                      // Mark as dismissed before closing
+                      final notificationId = widget.notification.data['notificationId'] ?? 
+                                             widget.notification.id;
+                      await AlertPopupDialog.markAsDismissed(notificationId);
                       widget.onDismiss?.call();
-                      Navigator.of(context).pop();
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.errorRed,

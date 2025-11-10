@@ -48,7 +48,7 @@ class AlertNotificationService {
   }
 
   /// Handle an alert notification by showing popup
-  void _handleAlertNotification(BuildContext context, AppNotification notification) {
+  Future<void> _handleAlertNotification(BuildContext context, AppNotification notification) async {
     // Skip if already shown
     if (_shownAlertIds.contains(notification.id)) {
       debugPrint('AlertNotificationService: Alert ${notification.id} already shown');
@@ -58,6 +58,14 @@ class AlertNotificationService {
     // Skip if not a popup type
     if (!notification.showsPopup) {
       debugPrint('AlertNotificationService: Notification ${notification.id} is not a popup type');
+      return;
+    }
+
+    // Check if user has already dismissed this warning
+    final notificationId = notification.data['notificationId'] ?? notification.id;
+    final wasDismissed = await AlertPopupDialog.hasBeenDismissed(notificationId);
+    if (wasDismissed) {
+      debugPrint('AlertNotificationService: Alert $notificationId was previously dismissed');
       return;
     }
 

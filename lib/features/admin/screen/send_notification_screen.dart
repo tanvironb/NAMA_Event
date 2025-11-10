@@ -154,6 +154,7 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
       context: context,
       barrierDismissible: false,
       builder: (context) => _AlertConfirmationDialog(
+        targetAudience: _selectedAudience,
         onConfirm: () {
           confirmed = true;
           Navigator.of(context).pop();
@@ -250,6 +251,9 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
                             final confirmed = await _showAlertTypeConfirmation();
                             if (confirmed) {
                               setState(() => _selectedType = value);
+                            } else {
+                              // If user cancels, reset to Information type
+                              setState(() => _selectedType = AppNotificationType.information);
                             }
                           } else {
                             setState(() => _selectedType = value);
@@ -630,10 +634,12 @@ class _AlertTypeSelectionDialogState extends State<_AlertTypeSelectionDialog> {
 
 // Alert send confirmation dialog with 3-second timer
 class _AlertConfirmationDialog extends StatefulWidget {
+  final String targetAudience;
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
 
   const _AlertConfirmationDialog({
+    required this.targetAudience,
     required this.onConfirm,
     required this.onCancel,
   });
@@ -669,6 +675,28 @@ class _AlertConfirmationDialogState extends State<_AlertConfirmationDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // Format target audience for display
+    String audienceText;
+    switch (widget.targetAudience) {
+      case 'all':
+        audienceText = 'ALL users';
+        break;
+      case 'attendee':
+        audienceText = 'all ATTENDEES';
+        break;
+      case 'speaker':
+        audienceText = 'all SPEAKERS';
+        break;
+      case 'staff':
+        audienceText = 'all STAFF members';
+        break;
+      case 'admin':
+        audienceText = 'all ADMINS';
+        break;
+      default:
+        audienceText = 'selected users';
+    }
+    
     return AlertDialog(
       title: Row(
         children: [
@@ -697,7 +725,7 @@ class _AlertConfirmationDialogState extends State<_AlertConfirmationDialog> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'This will send a POPUP to ALL users\' screens!',
+                        'This will send a POPUP to $audienceText\' screens!',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           color: AppColors.errorRed,

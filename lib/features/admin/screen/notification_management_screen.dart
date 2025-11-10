@@ -383,9 +383,20 @@ class _NotificationManagementScreenState
         }
       } catch (e) {
         if (mounted) {
+          // Shorten error message for rate limit
+          String errorMessage = 'Failed to update notification';
+          if (e.toString().contains('resource-exhausted') || 
+              e.toString().contains('Rate limit')) {
+            errorMessage = 'Rate limit exceeded. Please wait a minute.';
+          } else if (e.toString().contains('permission-denied')) {
+            errorMessage = 'Permission denied';
+          } else if (e.toString().contains('not-found')) {
+            errorMessage = 'Notification not found';
+          }
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to update notification: $e'),
+              content: Text(errorMessage),
               backgroundColor: Colors.red,
             ),
           );
@@ -448,9 +459,20 @@ class _NotificationManagementScreenState
         }
       } catch (e) {
         if (mounted) {
+          // Shorten error message for rate limit
+          String errorMessage = 'Failed to delete notification';
+          if (e.toString().contains('resource-exhausted') || 
+              e.toString().contains('Rate limit')) {
+            errorMessage = 'Rate limit exceeded. Please wait a minute.';
+          } else if (e.toString().contains('permission-denied')) {
+            errorMessage = 'Permission denied';
+          } else if (e.toString().contains('not-found')) {
+            errorMessage = 'Notification not found';
+          }
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to delete notification: $e'),
+              content: Text(errorMessage),
               backgroundColor: Colors.red,
             ),
           );

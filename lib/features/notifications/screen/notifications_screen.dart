@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/widgets/notification_list_tile.dart';
@@ -55,103 +57,189 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }).toList();
   }
 
+  /// Mark all unread notifications as read
+  Future<void> _markAllAsRead(List<AppNotification> unreadNotifications) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mark All as Read'),
+        content: Text(
+          'Are you sure you want to mark all ${unreadNotifications.length} '
+          'notification${unreadNotifications.length != 1 ? 's' : ''} as read?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.namaNavyBlue,
+            ),
+            child: const Text('Mark All as Read'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) return;
+
+      // Batch update all unread notifications
+      final batch = FirebaseFirestore.instance.batch();
+      
+      for (final notification in unreadNotifications) {
+        final docRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('notifications')
+            .doc(notification.id);
+        batch.update(docRef, {'isRead': true});
+      }
+
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Marked ${unreadNotifications.length} notification${unreadNotifications.length != 1 ? 's' : ''} as read',
+            ),
+            backgroundColor: AppColors.successGreen,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to mark notifications as read: $e'),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final notificationsAsync = ref.watch(notificationsStreamProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Notifications'),
-        actions: [
-          // Clear filters button
-          if (_selectedPriority != null || _selectedType != null || _selectedDate != null)
-            IconButton(
-              icon: const Icon(Icons.filter_alt_off),
-              onPressed: () {
-                setState(() {
-                  _selectedPriority = null;
-                  _selectedType = null;
-                  _selectedDate = null;
-                });
-              },
-              tooltip: 'Clear Filters',
-            ),
-        ],
-      ),
-      body: notificationsAsync.when(
-        data: (notifications) {
-          if (notifications.isEmpty) {
-            return const Center(child: Text('You have no notifications.'));
-          }
+    
+    return notificationsAsync.when(
+      data: (notifications) {
+        // Calculate unread count for AppBar
+        final filteredNotifications = _applyFilters(notifications);
+        final unreadNotifications = filteredNotifications.where((n) => !n.isRead).toList();
+        final hasUnread = unreadNotifications.isNotEmpty;
 
-          // Apply filters
-          final filteredNotifications = _applyFilters(notifications);
-
-          if (filteredNotifications.isEmpty) {
-            return Column(
-              children: [
-                _buildFilterChips(),
-                const Expanded(
-                  child: Center(child: Text('No notifications match the selected filters.')),
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Notifications'),
+            actions: [
+              // Mark all as read button (only show when there are unread notifications)
+              if (hasUnread)
+                IconButton(
+                  icon: const Icon(Icons.done_all),
+                  onPressed: () => _markAllAsRead(unreadNotifications),
+                  tooltip: 'Mark All as Read',
                 ),
-              ],
-            );
-          }
-
-          // Separate into unread and read
-          final unreadNotifications = filteredNotifications.where((n) => !n.isRead).toList();
-          final readNotifications = filteredNotifications.where((n) => n.isRead).toList();
-
-          // Sort each group by priority then timestamp
-          unreadNotifications.sort((a, b) {
-            final aPriority = _getNotificationPriority(a.type);
-            final bPriority = _getNotificationPriority(b.type);
-            if (aPriority != bPriority) {
-              return aPriority.compareTo(bPriority);
-            }
-            return b.timestamp.compareTo(a.timestamp);
-          });
-
-          readNotifications.sort((a, b) {
-            final aPriority = _getNotificationPriority(a.type);
-            final bPriority = _getNotificationPriority(b.type);
-            if (aPriority != bPriority) {
-              return aPriority.compareTo(bPriority);
-            }
-            return b.timestamp.compareTo(a.timestamp);
-          });
-
-          return Column(
-            children: [
-              _buildFilterChips(),
-              Expanded(
-                child: ListView(
-                  children: [
-                    // UNREAD section
-                    if (unreadNotifications.isNotEmpty) ...[
-                      _buildSectionHeader('UNREAD NOTIFICATIONS', unreadNotifications.length),
-                      ...unreadNotifications.map((n) => NotificationListTile(
-                        notification: n,
-                        key: ValueKey(n.id),
-                      )),
-                      const SizedBox(height: 16),
-                    ],
-                    // READ section
-                    if (readNotifications.isNotEmpty) ...[
-                      _buildSectionHeader('READ NOTIFICATIONS', readNotifications.length),
-                      ...readNotifications.map((n) => NotificationListTile(
-                        notification: n,
-                        key: ValueKey(n.id),
-                      )),
-                    ],
-                  ],
+              // Clear filters button
+              if (_selectedPriority != null || _selectedType != null || _selectedDate != null)
+                IconButton(
+                  icon: const Icon(Icons.filter_alt_off),
+                  onPressed: () {
+                    setState(() {
+                      _selectedPriority = null;
+                      _selectedType = null;
+                      _selectedDate = null;
+                    });
+                  },
+                  tooltip: 'Clear Filters',
                 ),
-              ),
             ],
-          );
-        },
-        loading: () => const LoadingIndicator(),
-        error: (err, stack) => Center(child: Text('Error: $err')),
-      ),
+          ),
+          body: _buildBody(notifications),
+        );
+      },
+      loading: () => const LoadingIndicator(),
+      error: (err, stack) => Center(child: Text('Error: $err')),
+    );
+  }
+
+  Widget _buildBody(List<AppNotification> notifications) {
+    if (notifications.isEmpty) {
+      return const Center(child: Text('You have no notifications.'));
+    }
+
+    // Apply filters
+    final filteredNotifications = _applyFilters(notifications);
+
+    if (filteredNotifications.isEmpty) {
+      return Column(
+        children: [
+          _buildFilterChips(),
+          const Expanded(
+            child: Center(child: Text('No notifications match the selected filters.')),
+          ),
+        ],
+      );
+    }
+
+    // Separate into unread and read
+    final unreadNotifications = filteredNotifications.where((n) => !n.isRead).toList();
+    final readNotifications = filteredNotifications.where((n) => n.isRead).toList();
+
+    // Sort each group by priority then timestamp
+    unreadNotifications.sort((a, b) {
+      final aPriority = _getNotificationPriority(a.type);
+      final bPriority = _getNotificationPriority(b.type);
+      if (aPriority != bPriority) {
+        return aPriority.compareTo(bPriority);
+      }
+      return b.timestamp.compareTo(a.timestamp);
+    });
+
+    readNotifications.sort((a, b) {
+      final aPriority = _getNotificationPriority(a.type);
+      final bPriority = _getNotificationPriority(b.type);
+      if (aPriority != bPriority) {
+        return aPriority.compareTo(bPriority);
+      }
+      return b.timestamp.compareTo(a.timestamp);
+    });
+
+    return Column(
+      children: [
+        _buildFilterChips(),
+        Expanded(
+          child: ListView(
+            children: [
+              // UNREAD section
+              if (unreadNotifications.isNotEmpty) ...[
+                _buildSectionHeader('UNREAD NOTIFICATIONS', unreadNotifications.length),
+                ...unreadNotifications.map((n) => NotificationListTile(
+                  notification: n,
+                  key: ValueKey(n.id),
+                )),
+                const SizedBox(height: 16),
+              ],
+              // READ section
+              if (readNotifications.isNotEmpty) ...[
+                _buildSectionHeader('READ NOTIFICATIONS', readNotifications.length),
+                ...readNotifications.map((n) => NotificationListTile(
+                  notification: n,
+                  key: ValueKey(n.id),
+                )),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 
