@@ -73,15 +73,19 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Center(
-          child: Image.asset(
-            AppConstants.logoEmblemPath, // Just the emblem
-            height: 30,
-            errorBuilder: (context, error, stackTrace) => Text(
-              AppConstants.appName,
-              style: Theme.of(context).appBarTheme.titleTextStyle,
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset(
+              AppConstants.logoEmblemPath,
+              height: 30,
+              errorBuilder: (context, error, stackTrace) => Text(
+                AppConstants.appName,
+                style: Theme.of(context).appBarTheme.titleTextStyle,
+              ),
             ),
-          ),
+          ],
         ),
         centerTitle: true,
         leading: Builder(

@@ -38,7 +38,8 @@ class _ManageUserProfileScreenState extends ConsumerState<ManageUserProfileScree
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manage User Profile'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: AppColors.namaNavyBlue,
+        foregroundColor: AppColors.namaWhite,
       ),
       body: Column(
         children: [

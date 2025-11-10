@@ -57,7 +57,36 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
       // Create notification for each user
       final batch = FirebaseFirestore.instance.batch();
       final timestamp = Timestamp.now();
+      // Generate a single shared notification ID for all users
+      final sharedNotificationId = FirebaseFirestore.instance.collection('temp').doc().id;
 
+      // First, save to central adminNotifications collection
+      final adminNotificationData = {
+        'title': _titleController.text.trim(),
+        'body': _bodyController.text.trim(),
+        'timestamp': timestamp,
+        'type': _selectedType.toString().split('.').last,
+        'targetRole': _selectedAudience,
+      };
+
+      // Add optional fields
+      if (_subtitleController.text.trim().isNotEmpty) {
+        adminNotificationData['subtitle'] = _subtitleController.text.trim();
+      }
+      if (_hasTimeRange && _timeFrom != null) {
+        adminNotificationData['timeFrom'] = Timestamp.fromDate(_timeFrom!);
+      }
+      if (_hasTimeRange && _timeTo != null) {
+        adminNotificationData['timeTo'] = Timestamp.fromDate(_timeTo!);
+      }
+
+      final adminNotifRef = FirebaseFirestore.instance
+          .collection('adminNotifications')
+          .doc(sharedNotificationId);
+      
+      batch.set(adminNotifRef, adminNotificationData);
+
+      // Then distribute to all users
       for (final userDoc in usersSnapshot.docs) {
         final notificationRef = FirebaseFirestore.instance
             .collection('users')
@@ -73,7 +102,7 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
           'type': _selectedType.toString().split('.').last,
           'targetRole': _selectedAudience,
           'data': {
-            'notificationId': notificationRef.id, // Include notification ID for deep linking
+            'notificationId': sharedNotificationId, // Shared ID for all users - enables edit/delete
             'type': 'admin_notification',
           },
         };

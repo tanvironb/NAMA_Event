@@ -17,6 +17,14 @@ class UserManagementScreen extends ConsumerStatefulWidget {
 class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
   String _selectedRoleFilter = 'All';
   String _selectedStatusFilter = 'All';
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,7 +33,8 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manage Users'),
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: AppColors.namaNavyBlue,
+        foregroundColor: AppColors.namaWhite,
       ),
       body: allUsersAsync.when(
         data: (users) {
@@ -43,6 +52,38 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
             children: [
               // Filter Section
               _buildFilterSection(uniqueStatuses),
+              
+              // Search Bar
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search by name or email...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: () {
+                              setState(() {
+                                _searchController.clear();
+                                _searchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                ),
+              ),
               
               // User Count
               Padding(
@@ -178,7 +219,12 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
       final matchesStatus = _selectedStatusFilter == 'All' ||
           user.status.toLowerCase() == _selectedStatusFilter.toLowerCase();
 
-      return matchesRole && matchesStatus;
+      // Search filter
+      final matchesSearch = _searchQuery.isEmpty ||
+          user.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+          user.email.toLowerCase().contains(_searchQuery.toLowerCase());
+
+      return matchesRole && matchesStatus && matchesSearch;
     }).toList();
   }
 }

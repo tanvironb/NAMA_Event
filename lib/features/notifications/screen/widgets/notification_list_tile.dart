@@ -1,4 +1,3 @@
-// lib/features/notifications/screen/widgets/notification_list_tile.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -218,17 +217,9 @@ class NotificationListTile extends ConsumerWidget {
       case AppNotificationType.announcement:
       case AppNotificationType.information:
       case AppNotificationType.maintenance:
-        // Admin-sent notifications - show detail view
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => NotificationDetailView(notification: notification),
-          ),
-        );
-        break;
-      
       case AppNotificationType.generic:
       default:
-        // Generic or unknown types - show detail view
+        // All users see the same beautiful detail view
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => NotificationDetailView(notification: notification),

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/features/admin/screen/user_management_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/send_notification_screen.dart';
+import 'package:events_app_trueattempt/features/admin/screen/notification_management_screen.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -24,6 +25,17 @@ class AdminDashboardScreen extends ConsumerWidget {
             onTap: () {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (context) => const SendNotificationScreen(),
+              ));
+            },
+          ),
+          // Notification Management
+          _AdminActionCard(
+            icon: Icons.notifications_active,
+            title: 'Manage Notifications',
+            subtitle: 'View, edit, and delete sent notifications.',
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (context) => const NotificationManagementScreen(),
               ));
             },
           ),

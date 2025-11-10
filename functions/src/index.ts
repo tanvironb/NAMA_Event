@@ -955,3 +955,311 @@ export const onMeetingWrite = onDocumentWritten(
     }
   }
 );
+
+// ============================================================================
+// NOTIFICATION MANAGEMENT FUNCTIONS (Edit/Delete with Rate Limiting)
+// ============================================================================
+
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const MAX_EDIT_REQUESTS_PER_WINDOW = 10;
+const MAX_DELETE_REQUESTS_PER_WINDOW = 5;
+
+// In-memory rate limit tracking
+// Consider using Firebase Realtime Database for production
+const rateLimitMap = new Map<string, {
+  count: number;
+  resetTime: number;
+}>();
+
+/**
+ * Helper function to check rate limit
+ * @param {string} userId - The user ID to check rate limit for
+ * @param {"edit" | "delete"} action - The action type (edit or delete)
+ * @return {boolean} True if within rate limit, false if exceeded
+ */
+function checkRateLimit(
+  userId: string,
+  action: "edit" | "delete"
+): boolean {
+  const key = `${userId}_${action}`;
+  const now = Date.now();
+  const limit = action === "edit" ?
+    MAX_EDIT_REQUESTS_PER_WINDOW :
+    MAX_DELETE_REQUESTS_PER_WINDOW;
+
+  const entry = rateLimitMap.get(key);
+
+  if (!entry || now > entry.resetTime) {
+    // Reset or create new entry
+    rateLimitMap.set(key, {count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS});
+    return true;
+  }
+
+  if (entry.count >= limit) {
+    return false; // Rate limit exceeded
+  }
+
+  // Increment count
+  entry.count++;
+  return true;
+}
+
+/**
+ * Edit notification for all users
+ * Updates the central adminNotifications doc and all user copies
+ */
+export const editNotification = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    console.log("=== Start Edit Notification ===");
+
+    if (!request.auth || !request.auth.uid) {
+      throw new HttpsError("unauthenticated", "Authentication is required.");
+    }
+
+    const userId = request.auth.uid;
+
+    // Check if user is admin
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists || userDoc.data()?.role !== "admin") {
+      throw new HttpsError(
+        "permission-denied",
+        "Only admins can edit notifications."
+      );
+    }
+
+    // Rate limiting
+    if (!checkRateLimit(userId, "edit")) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Rate limit exceeded. " +
+        `Max ${MAX_EDIT_REQUESTS_PER_WINDOW} edits per minute.`
+      );
+    }
+
+    const {notificationId, title, subtitle, body} = request.data;
+
+    if (!notificationId || !title || !body) {
+      throw new HttpsError(
+        "invalid-argument",
+        "notificationId, title, and body are required."
+      );
+    }
+
+    console.log(`Admin ${userId} editing notification ${notificationId}`);
+
+    try {
+      // Get the admin notification
+      const adminNotifRef = db.collection("adminNotifications")
+        .doc(notificationId);
+      const adminNotifDoc = await adminNotifRef.get();
+
+      if (!adminNotifDoc.exists) {
+        throw new HttpsError("not-found", "Notification not found.");
+      }
+
+      const adminNotifData = adminNotifDoc.data();
+      if (!adminNotifData) {
+        throw new HttpsError("not-found", "Notification data not found.");
+      }
+      const targetRole = adminNotifData.targetRole as string;
+      const timestamp = admin.firestore.Timestamp.now();
+
+      // Update the admin notification
+      const updateData: {
+        [key: string]: string | admin.firestore.Timestamp |
+        admin.firestore.FieldValue;
+      } = {
+        title: title,
+        body: body,
+        editedAt: timestamp,
+      };
+
+      if (subtitle) {
+        updateData.subtitle = subtitle;
+      } else {
+        updateData.subtitle = admin.firestore.FieldValue.delete();
+      }
+
+      await adminNotifRef.update(updateData);
+
+      // Query users based on target role
+      const usersQuery = targetRole === "all" ?
+        db.collection("users").where("status", "==", "approved") :
+        db.collection("users")
+          .where("status", "==", "approved")
+          .where("role", "==", targetRole);
+
+      const usersSnapshot = await usersQuery.get();
+
+      // Update notifications for all users in batches
+      const batchSize = 500; // Firestore batch write limit
+      let updatedCount = 0;
+
+      for (let i = 0; i < usersSnapshot.docs.length; i += batchSize) {
+        const batch = db.batch();
+        const batchDocs = usersSnapshot.docs.slice(i, i + batchSize);
+
+        for (const userDoc of batchDocs) {
+          // Find the user's notification with matching notificationId
+          const userNotifSnapshot = await db
+            .collection("users")
+            .doc(userDoc.id)
+            .collection("notifications")
+            .where("data.notificationId", "==", notificationId)
+            .limit(1)
+            .get();
+
+          if (!userNotifSnapshot.empty) {
+            const userNotifRef = userNotifSnapshot.docs[0].ref;
+            const userUpdateData: {
+              [key: string]: string | boolean | admin.firestore.Timestamp |
+              admin.firestore.FieldValue;
+            } = {
+              "title": title,
+              "body": body,
+              "isRead": false, // Reset to unread when edited
+              "data.editedAt": timestamp,
+            };
+
+            if (subtitle) {
+              userUpdateData.subtitle = subtitle;
+            } else {
+              userUpdateData.subtitle = admin.firestore.FieldValue.delete();
+            }
+
+            batch.update(userNotifRef, userUpdateData);
+            updatedCount++;
+          }
+        }
+
+        await batch.commit();
+      }
+
+      console.log(`✓ Notification edited for ${updatedCount} user(s)`);
+      console.log("=== End Edit Notification ===\n");
+
+      return {
+        success: true,
+        updatedCount: updatedCount,
+      };
+    } catch (error) {
+      console.error("ERROR editing notification:", error);
+      throw error;
+    }
+  }
+);
+
+/**
+ * Delete notification for all users
+ * Removes from adminNotifications and all user copies
+ */
+export const deleteNotification = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    console.log("=== Start Delete Notification ===");
+
+    if (!request.auth || !request.auth.uid) {
+      throw new HttpsError("unauthenticated", "Authentication is required.");
+    }
+
+    const userId = request.auth.uid;
+
+    // Check if user is admin
+    const userDoc = await db.collection("users").doc(userId).get();
+    if (!userDoc.exists || userDoc.data()?.role !== "admin") {
+      throw new HttpsError(
+        "permission-denied",
+        "Only admins can delete notifications."
+      );
+    }
+
+    // Rate limiting
+    if (!checkRateLimit(userId, "delete")) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Rate limit exceeded. " +
+        `Max ${MAX_DELETE_REQUESTS_PER_WINDOW} deletions per minute.`
+      );
+    }
+
+    const {notificationId} = request.data;
+
+    if (!notificationId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "notificationId is required."
+      );
+    }
+
+    console.log(`Admin ${userId} deleting notification ${notificationId}`);
+
+    try {
+      // Get the admin notification
+      const adminNotifRef = db.collection("adminNotifications")
+        .doc(notificationId);
+      const adminNotifDoc = await adminNotifRef.get();
+
+      if (!adminNotifDoc.exists) {
+        throw new HttpsError("not-found", "Notification not found.");
+      }
+
+      const adminNotifData = adminNotifDoc.data();
+      if (!adminNotifData) {
+        throw new HttpsError("not-found", "Notification data not found.");
+      }
+      const targetRole = adminNotifData.targetRole as string;
+
+      // Query users based on target role
+      const usersQuery = targetRole === "all" ?
+        db.collection("users").where("status", "==", "approved") :
+        db.collection("users")
+          .where("status", "==", "approved")
+          .where("role", "==", targetRole);
+
+      const usersSnapshot = await usersQuery.get();
+
+      // Delete notifications for all users in batches
+      const batchSize = 500;
+      let deletedCount = 0;
+
+      for (let i = 0; i < usersSnapshot.docs.length; i += batchSize) {
+        const batch = db.batch();
+        const batchDocs = usersSnapshot.docs.slice(i, i + batchSize);
+
+        for (const userDoc of batchDocs) {
+          // Find the user's notification with matching notificationId
+          const userNotifSnapshot = await db
+            .collection("users")
+            .doc(userDoc.id)
+            .collection("notifications")
+            .where("data.notificationId", "==", notificationId)
+            .limit(1)
+            .get();
+
+          if (!userNotifSnapshot.empty) {
+            batch.delete(userNotifSnapshot.docs[0].ref);
+            deletedCount++;
+          }
+        }
+
+        await batch.commit();
+      }
+
+      // Delete the admin notification
+      await adminNotifRef.delete();
+
+      console.log(`✓ Notification deleted for ${deletedCount} user(s)`);
+      console.log("=== End Delete Notification ===\n");
+
+      return {
+        success: true,
+        deletedCount: deletedCount,
+      };
+    } catch (error) {
+      console.error("ERROR deleting notification:", error);
+      throw error;
+    }
+  }
+);

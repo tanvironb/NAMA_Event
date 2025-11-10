@@ -39,7 +39,8 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.user.name),
-        backgroundColor: Theme.of(context).colorScheme.surface,
+        backgroundColor: AppColors.namaNavyBlue,
+        foregroundColor: AppColors.namaWhite,
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
