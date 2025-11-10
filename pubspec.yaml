@@ -18,6 +18,7 @@ dependencies:
   firebase_core: ^3.1.1
   firebase_auth: ^5.1.1
   cloud_firestore: ^5.0.2
+  firebase_storage: ^12.3.6
 
   # State Management
   flutter_riverpod: ^2.5.1
@@ -67,6 +68,13 @@ dependencies:
 
   # For persistent storage
   shared_preferences: ^2.2.2
+
+  # For image selection and cropping
+  image_picker: ^1.1.2
+  image_cropper: ^8.0.2
+  
+  # For cached network images
+  cached_network_image: ^3.4.1
 
 dev_dependencies:
   flutter_test:

@@ -34,13 +34,34 @@ Client → users/{uid}/notifications/{id} → Cloud Function → FCM (role-filte
 
 ## 🔍 Search Implementation Pattern
 
-### Used in 4 screens:
-1. ConversationsScreen - search participant names
-2. AttendeeDirectoryScreen - search name, email, company, title
-3. SpeakerDirectoryScreen - search name, email, company, title
-4. NewConversationScreen - search name, email (empty until search starts)
+### Two Search Approaches:
 
-### Standard Pattern:
+#### 1. **Database Query Search** (FirestoreService)
+- **Used by:** `NewConversationScreen` only
+- **Why:** Needs to query database for ALL users (not in memory yet)
+- **Method:** `searchUsersByName(String query)` - searches name only
+- **Pattern:**
+```dart
+final searchResultsAsync = ref.watch(userSearchProvider(_searchQuery));
+// Provider calls FirestoreService.searchUsersByName()
+```
+
+#### 2. **Client-Side Filtering** (In-Memory)
+- **Used by:**
+  - `ConversationsScreen` - filters existing conversations by participant names
+  - `AttendeeDirectoryScreen` - filters attendees by name/email/company/title
+  - `SpeakerDirectoryScreen` - filters speakers by name/email/company/title
+- **Why:** Data already loaded, instant filtering
+- **Pattern:**
+```dart
+List<T> _applySearch(List<T> items) {
+  if (_searchQuery.isEmpty) return items;
+  final q = _searchQuery.toLowerCase();
+  return items.where((i) => /* contains check */).toList();
+}
+```
+
+### Standard UI Pattern:
 ```dart
 // 1. Convert to StatefulWidget
 class MyScreen extends ConsumerStatefulWidget
@@ -49,18 +70,12 @@ class MyScreen extends ConsumerStatefulWidget
 String _searchQuery = '';
 final TextEditingController _searchController = TextEditingController();
 
-// 3. Filter method
-List<T> _applySearch(List<T> items) {
-  if (_searchQuery.isEmpty) return items;
-  final q = _searchQuery.toLowerCase();
-  return items.where((i) => /* contains check */).toList();
-}
-
-// 4. UI
+// 3. UI
 TextField(
   controller: _searchController,
   onChanged: (v) => setState(() => _searchQuery = v),
   decoration: InputDecoration(
+    hintText: 'Search...',
     prefixIcon: Icon(Icons.search),
     suffixIcon: _searchQuery.isNotEmpty 
       ? IconButton(icon: Icon(Icons.clear), onPressed: ...) 
@@ -68,8 +83,10 @@ TextField(
   ),
 )
 
-// 5. Apply
-final filtered = _applySearch(original);
+// 4. Apply (choose appropriate method)
+final filtered = _applySearch(original); // Client-side
+// OR
+final results = ref.watch(userSearchProvider(_searchQuery)); // Database
 ```
 
 ---

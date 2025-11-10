@@ -1,12 +1,15 @@
 // lib/features/profile/data/profile_repository.dart
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
+import 'package:events_app_trueattempt/core/services/storage_service.dart';
 
 class UserProfileRepository {
   final FirestoreService _firestoreService;
+  final StorageService _storageService;
 
-  UserProfileRepository(this._firestoreService);
+  UserProfileRepository(this._firestoreService, this._storageService);
 
   // Gets a stream of user profile data for the given user ID
   Stream<AppUser?> getUserProfileStream(String uid) {
@@ -76,5 +79,38 @@ class UserProfileRepository {
     } catch (e) {
       return [];
     }
+  }
+
+  // Upload profile image and update user document
+  Future<String> uploadProfileImage(String userId, File imageFile) async {
+    try {
+      // Upload to Firebase Storage
+      final downloadUrl = await _storageService.uploadProfileImage(userId, imageFile);
+      
+      // Update Firestore with new URL
+      await updateUserProfile(userId, {'profileImageUrl': downloadUrl});
+      
+      return downloadUrl;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Remove profile image
+  Future<void> removeProfileImage(String userId) async {
+    try {
+      // Delete from Firebase Storage
+      await _storageService.deleteProfileImage(userId);
+      
+      // Update Firestore to remove URL
+      await updateUserProfile(userId, {'profileImageUrl': ''});
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Update only the profile image URL in Firestore
+  Future<void> updateProfileImageUrl(String userId, String imageUrl) async {
+    await updateUserProfile(userId, {'profileImageUrl': imageUrl});
   }
 }

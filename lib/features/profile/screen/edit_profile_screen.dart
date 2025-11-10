@@ -1,11 +1,14 @@
 // lib/features/profile/screen/edit_profile_screen.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/data_validator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/features/profile/screen/widgets/profile_image_picker.dart';
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   final AppUser user;
@@ -31,6 +34,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
+  bool _isUploadingImage = false;
+  File? _selectedImage;
+  bool _shouldRemoveImage = false;
 
   @override
   void initState() {
@@ -57,6 +63,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     setState(() => _isLoading = true);
     try {
       final repo = ref.read(userProfileRepositoryProvider);
+      
+      // Handle profile image upload/removal first
+      if (_shouldRemoveImage) {
+        await repo.removeProfileImage(widget.user.uid);
+      } else if (_selectedImage != null) {
+        await repo.uploadProfileImage(widget.user.uid, _selectedImage!);
+      }
+      
+      // Update other profile fields
       final updatedData = {
         'name': _nameController.text.trim(),
         'title': _titleController.text.trim(),
@@ -88,6 +103,41 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Future<void> _handleImageSelection() async {
+    final hasExistingImage = widget.user.profileImageUrl.isNotEmpty || _selectedImage != null;
+    
+    final result = await ProfileImagePicker.pickAndCropImage(
+      context,
+      hasExistingImage: hasExistingImage,
+    );
+    
+    // If result is null and user had an image, they want to remove it
+    if (result == null && hasExistingImage) {
+      setState(() {
+        _shouldRemoveImage = true;
+        _selectedImage = null;
+      });
+    } else if (result != null) {
+      setState(() {
+        _selectedImage = result;
+        _shouldRemoveImage = false;
+      });
+    }
+  }
+
+  ImageProvider? _getProfileImage() {
+    if (_shouldRemoveImage) {
+      return null;
+    }
+    if (_selectedImage != null) {
+      return FileImage(_selectedImage!);
+    }
+    if (widget.user.profileImageUrl.isNotEmpty) {
+      return CachedNetworkImageProvider(widget.user.profileImageUrl);
+    }
+    return null;
   }
 
   @override
@@ -122,6 +172,89 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Profile Image Section
+              Center(
+                child: Column(
+                  children: [
+                    Stack(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.namaGoldenYellow,
+                              width: 3,
+                            ),
+                          ),
+                          child: CircleAvatar(
+                            radius: 60,
+                            backgroundImage: _getProfileImage(),
+                            backgroundColor: AppColors.avatarPlaceholder,
+                            child: _getProfileImage() == null
+                                ? Icon(
+                                    Icons.person,
+                                    size: 60,
+                                    color: AppColors.avatarPlaceholderText,
+                                  )
+                                : null,
+                          ),
+                        ),
+                        if (_isUploadingImage)
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.black54,
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: AppColors.namaGoldenYellow,
+                                ),
+                              ),
+                            ),
+                          ),
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: AppColors.namaNavyBlue,
+                            child: IconButton(
+                              icon: const Icon(
+                                Icons.camera_alt,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                              onPressed: _isUploadingImage ? null : _handleImageSelection,
+                              padding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: _isUploadingImage ? null : _handleImageSelection,
+                      icon: const Icon(Icons.photo_camera),
+                      label: Text(
+                        _shouldRemoveImage 
+                            ? 'Photo will be removed'
+                            : (_selectedImage != null 
+                                ? 'Photo selected - tap to change' 
+                                : 'Change Profile Photo'),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: _shouldRemoveImage 
+                            ? AppColors.errorRed 
+                            : AppColors.namaNavyBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 32),
+              
               // Basic Information Section
               _buildSectionHeader('Basic Information'),
               const SizedBox(height: 16),

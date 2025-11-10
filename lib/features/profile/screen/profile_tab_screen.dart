@@ -1,6 +1,7 @@
 // lib/features/profile/screen/profile_tab_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -56,7 +57,7 @@ class ProfileTabScreen extends ConsumerWidget {
                         child: CircleAvatar(
                           radius: 60,
                           backgroundImage: appUser.profileImageUrl.isNotEmpty
-                              ? NetworkImage(appUser.profileImageUrl)
+                              ? CachedNetworkImageProvider(appUser.profileImageUrl)
                               : null,
                           backgroundColor: AppColors.avatarPlaceholder,
                           child: appUser.profileImageUrl.isEmpty

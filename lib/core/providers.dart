@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
+import 'package:events_app_trueattempt/core/services/storage_service.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/core/models/event_model.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
@@ -42,6 +43,10 @@ final authStateChangesProvider = StreamProvider<User?>(
 final firestoreServiceProvider = Provider<FirestoreService>(
     (ref) => FirestoreService(ref.watch(firestoreProvider)));
 
+// Provides an instance of our StorageService for interacting with Firebase Storage.
+final storageServiceProvider = Provider<StorageService>(
+    (ref) => StorageService());
+
 // --- App Initialization Provider ---
 // A provider that encapsulates all essential async initializations before the app starts
 final appInitializationProvider = FutureProvider<void>((ref) async {
@@ -56,7 +61,10 @@ final appInitializationProvider = FutureProvider<void>((ref) async {
 // These abstract direct FirestoreService calls and work with domain models.
 
 // User Repository Provider
-final userProfileRepositoryProvider = Provider((ref) => UserProfileRepository(ref.watch(firestoreServiceProvider)));
+final userProfileRepositoryProvider = Provider((ref) => UserProfileRepository(
+  ref.watch(firestoreServiceProvider),
+  ref.watch(storageServiceProvider),
+));
 
 // Event Repository Provider
 final eventRepositoryProvider = Provider((ref) => EventRepository(ref.watch(firestoreServiceProvider)));
