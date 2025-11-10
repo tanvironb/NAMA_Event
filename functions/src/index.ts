@@ -577,7 +577,7 @@ export const onNotificationCreate = onDocumentCreated(
     console.log("\n=== Admin Notification FCM Triggered ===");
     console.log(`User: ${userId}, Type: ${notificationType}`);
 
-    // Get user's FCM token
+    // Get user's FCM token and role
     const userDoc = await db.collection("users").doc(userId).get();
     if (!userDoc.exists) {
       console.log(`ERROR: User ${userId} does not exist.`);
@@ -586,11 +586,24 @@ export const onNotificationCreate = onDocumentCreated(
 
     const userData = userDoc.data();
     const fcmToken = userData?.fcmToken;
+    const userRole = userData?.role;
 
     if (!fcmToken) {
       console.log(`User ${userId} does not have an FCM token.`);
       return null;
     }
+
+    // Check if notification is targeted and user matches target audience
+    const targetRole = notificationData.targetRole || "all";
+    if (targetRole !== "all" && userRole !== targetRole) {
+      console.log(
+        `Skipping FCM: User role '${userRole}' does not match ` +
+        `target audience '${targetRole}'`
+      );
+      return null;
+    }
+
+    console.log(`✓ User role '${userRole}' matches target '${targetRole}'`);
 
     // Construct FCM message
     const message = {
@@ -877,7 +890,39 @@ export const onMeetingWrite = onDocumentWritten(
       return null;
     }
 
-    // Get recipient's FCM token
+    // Step 1: Create in-app notification in Firestore
+    // This ensures the notification appears in the user's notification list
+    try {
+      const notificationType = payload.data?.type === "meeting_request" ?
+        "meetingRequest" :
+        "meetingRequest"; // Both use meetingRequest type for in-app display
+
+      const inAppNotificationData = {
+        title: payload.notification?.title || "Meeting Notification",
+        subtitle: null,
+        body: payload.notification?.body || "",
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timeFrom: null,
+        timeTo: null,
+        isRead: false,
+        type: notificationType,
+        targetRole: "all",
+        data: payload.data || {},
+      };
+
+      await db
+        .collection("users")
+        .doc(recipientId)
+        .collection("notifications")
+        .add(inAppNotificationData);
+
+      console.log(`✓ In-app notification created for ${recipientId}`);
+    } catch (error) {
+      console.error("ERROR creating in-app notification:", error);
+      // Continue to FCM even if in-app notification fails
+    }
+
+    // Step 2: Get recipient's FCM token and send push notification
     const recipientDoc = await db.collection("users").doc(recipientId).get();
 
     if (!recipientDoc.exists) {
@@ -890,6 +935,7 @@ export const onMeetingWrite = onDocumentWritten(
 
     if (!recipientFcmToken) {
       console.log(`Recipient ${recipientId} does not have an FCM token.`);
+      console.log("In-app notification created, but skipping FCM.");
       return null;
     }
 
@@ -905,7 +951,7 @@ export const onMeetingWrite = onDocumentWritten(
       // If both users have the SAME FCM token, don't send
       if (senderFcmToken && recipientFcmToken === senderFcmToken) {
         console.log("WARNING: Sender and recipient have SAME FCM token!");
-        console.log("Testing with same device. SKIPPING notification.");
+        console.log("Testing with same device. SKIPPING FCM (in-app created).");
         return null;
       }
 
@@ -934,12 +980,12 @@ export const onMeetingWrite = onDocumentWritten(
 
     try {
       const response = await admin.messaging().send(message);
-      console.log(`✓ SUCCESS: Meeting notification sent to ${recipientId}`);
+      console.log(`✓ SUCCESS: Meeting FCM sent to ${recipientId}`);
       console.log(`Response: ${response}`);
       console.log("=== End Meeting Notification ===\n");
       return response;
     } catch (error) {
-      console.error("ERROR sending meeting notification:", error);
+      console.error("ERROR sending meeting FCM:", error);
 
       // If token is invalid, remove it from the user document
       if (error instanceof Error &&
@@ -951,7 +997,9 @@ export const onMeetingWrite = onDocumentWritten(
         });
       }
 
-      throw error;
+      // Don't throw - in-app notification was already created successfully
+      console.log("FCM failed but in-app notification exists.");
+      return null;
     }
   }
 );
