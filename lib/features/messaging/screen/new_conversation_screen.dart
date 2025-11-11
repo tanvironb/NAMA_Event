@@ -117,6 +117,9 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
                       return const SizedBox.shrink();
                     }
                     
+                    // Note: In conversations/messaging, we show ALL users when searching
+                    // This allows users to message anyone (privacy is respected in profile view)
+                    // The user's display name will be privacy-aware when shown in the UserListTile
                     return UserListTile(
                       user: user,
                       onTap: () => _startConversation(context, user),

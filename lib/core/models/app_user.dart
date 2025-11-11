@@ -160,11 +160,15 @@ class AppUser {
     return false;
   }
   
-  /// Check if viewer can see this user's full data (beyond name/email)
+  /// Check if viewer can see this user's full data (beyond name/email/company/role)
+  /// Returns true if:
+  /// - Viewer is admin
+  /// - This user has 'full' visibility
+  /// Note: Anonymous users only show Minimal data, even to connected users
   bool canViewFullDataBy(String viewerId, bool viewerIsAdmin) {
     if (viewerIsAdmin) return true;
     if (isFull) return true;
-    if (isAnonymous && scannedByUsers.contains(viewerId)) return true;
+    // Anonymous and Minimal users only show basic data
     return false;
   }
   

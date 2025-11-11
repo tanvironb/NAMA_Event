@@ -6,9 +6,19 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class UserListTile extends StatelessWidget {
   final AppUser user;
-  final VoidCallback? onTap; // NEW: Optional onTap callback
+  final VoidCallback? onTap;
+  final Widget? trailing;
+  final String? displayName; // NEW: Optional override for display name
+  final String? displaySubtitle; // NEW: Optional override for subtitle
 
-  const UserListTile({super.key, required this.user, this.onTap});
+  const UserListTile({
+    super.key, 
+    required this.user, 
+    this.onTap,
+    this.trailing,
+    this.displayName,
+    this.displaySubtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +30,7 @@ class UserListTile extends StatelessWidget {
           backgroundColor: AppColors.avatarPlaceholder,
           child: user.profileImageUrl.isEmpty 
             ? Text(
-                user.name[0].toUpperCase(),
+                (displayName ?? user.name)[0].toUpperCase(),
                 style: const TextStyle(
                   color: AppColors.avatarPlaceholderText,
                   fontWeight: FontWeight.bold,
@@ -28,10 +38,10 @@ class UserListTile extends StatelessWidget {
               )
             : null,
         ),
-        title: Text(user.name),
-        subtitle: Text(user.title),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap ?? () { // Use the provided onTap, or default to navigating to the profile
+        title: Text(displayName ?? user.name),
+        subtitle: Text(displaySubtitle ?? user.title),
+        trailing: trailing ?? const Icon(Icons.chevron_right),
+        onTap: onTap ?? () {
           Navigator.of(context).push(MaterialPageRoute(
             builder: (context) => UserDetailsScreen(userId: user.uid),
           ));
