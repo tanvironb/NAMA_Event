@@ -4,13 +4,17 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
 
 class DirectMessageComposer extends ConsumerStatefulWidget {
-  final String conversationId;
+  final String? conversationId; // Made optional
+  final String otherUserId; // Need this to create conversation
   final AppUser currentUser;
+  final Function(String)? onConversationCreated; // Callback when conversation is created
 
   const DirectMessageComposer({
     super.key,
-    required this.conversationId,
+    this.conversationId,
+    required this.otherUserId,
     required this.currentUser,
+    this.onConversationCreated,
   });
 
   @override
@@ -34,8 +38,19 @@ class _DirectMessageComposerState extends ConsumerState<DirectMessageComposer> {
 
     final messagingRepo = ref.read(messagingRepositoryProvider);
     try {
+      // Create conversation if it doesn't exist yet
+      String conversationId = widget.conversationId ?? '';
+      if (conversationId.isEmpty) {
+        conversationId = await messagingRepo.createOrGetConversation(
+          widget.currentUser.uid,
+          widget.otherUserId,
+        );
+        // Notify parent that conversation was created
+        widget.onConversationCreated?.call(conversationId);
+      }
+      
       await messagingRepo.sendDirectMessage(
-        conversationId: widget.conversationId,
+        conversationId: conversationId,
         text: _controller.text.trim(),
         senderId: widget.currentUser.uid,
         senderName: widget.currentUser.name,

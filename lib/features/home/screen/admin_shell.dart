@@ -14,6 +14,7 @@ import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.
 import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
+import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 
 class AdminShell extends ConsumerStatefulWidget {
   const AdminShell({super.key});
@@ -185,6 +186,16 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(content: Text('About Event details will be here!')),
                 );
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.handshake_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('Connections', style: Theme.of(context).textTheme.titleMedium),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const ConnectionsScreen(),
+                ));
               },
             ),
             ListTile(

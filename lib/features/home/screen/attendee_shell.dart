@@ -14,6 +14,7 @@ import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_scre
 import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
 import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
+import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 
 class AttendeeShell extends ConsumerStatefulWidget {
   const AttendeeShell({super.key});
@@ -169,6 +170,16 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
                 Navigator.pop(context);
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (context) => const MyMeetingsScreen(),
+                ));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.handshake_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('Connections', style: Theme.of(context).textTheme.titleMedium),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const ConnectionsScreen(),
                 ));
               },
             ),

@@ -159,46 +159,25 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
     if (currentUserId == null) return;
 
     try {
-      // Show loading
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: CircularProgressIndicator()),
-      );
-
-      // Create or get existing conversation
-      final messagingRepo = ref.read(messagingRepositoryProvider);
-      final conversationId = await messagingRepo.createOrGetConversation(
-        currentUserId,
-        otherUser.uid,
-      );
-
-      // Close loading dialog
-      if (context.mounted) Navigator.pop(context);
-
-      // Navigate to chat screen
-      if (context.mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => DirectMessageScreen(
-              conversationId: conversationId,
-              otherUserId: otherUser.uid,
-              otherUserName: otherUser.name,
-              otherUserProfileImage: otherUser.profileImageUrl,
-            ),
+      // Navigate directly to chat screen without creating conversation
+      // Conversation will be created when first message is sent
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => DirectMessageScreen(
+            conversationId: null, // Don't create conversation yet
+            otherUserId: otherUser.uid,
+            otherUserName: otherUser.name,
+            otherUserProfileImage: otherUser.profileImageUrl,
           ),
-        );
-      }
+        ),
+      );
     } catch (e) {
-      // Close loading dialog
-      if (context.mounted) Navigator.pop(context);
-      
       // Show error
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to start conversation: $e'),
+            content: Text('Failed to open conversation: $e'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );

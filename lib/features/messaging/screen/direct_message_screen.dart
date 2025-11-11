@@ -11,14 +11,14 @@ import 'package:events_app_trueattempt/utils/date_time_utils.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class DirectMessageScreen extends ConsumerStatefulWidget {
-  final String conversationId;
+  final String? conversationId; // Made optional
   final String otherUserId;
   final String otherUserName;
   final String otherUserProfileImage;
 
   const DirectMessageScreen({
     super.key,
-    required this.conversationId,
+    this.conversationId, // Optional now
     required this.otherUserId,
     required this.otherUserName,
     this.otherUserProfileImage = '',
@@ -38,14 +38,20 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
   
   // Track the last time we marked messages as read
   DateTime? _lastMarkAsReadTime;
+  
+  // Track conversation ID (will be created when first message is sent)
+  String? _conversationId;
 
   @override
   void initState() {
     super.initState();
-    // Schedule initial mark as read
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scheduleInitialMarkAsRead();
-    });
+    _conversationId = widget.conversationId;
+    // Schedule initial mark as read only if conversation exists
+    if (_conversationId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scheduleInitialMarkAsRead();
+      });
+    }
   }
 
   @override
@@ -132,13 +138,13 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
   }
 
   Future<void> _markMessagesAsRead() async {
-    if (!mounted) return;
+    if (!mounted || _conversationId == null) return;
     final currentUser = ref.read(firebaseAuthProvider).currentUser;
     if (currentUser == null) return;
 
     try {
       await ref.read(messagingRepositoryProvider).markMessagesAsRead(
-        conversationId: widget.conversationId,
+        conversationId: _conversationId!,
         userId: currentUser.uid,
       );
     } catch (e) {
@@ -317,7 +323,10 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final messagesAsync = ref.watch(directMessagesStreamProvider(widget.conversationId));
+    // Only watch messages if conversation exists
+    final messagesAsync = _conversationId != null 
+        ? ref.watch(directMessagesStreamProvider(_conversationId!))
+        : null;
     final currentUserAsync = ref.watch(userAppProfileStreamProvider);
 
     return Scaffold(
@@ -370,44 +379,60 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
           return Column(
             children: [
               Expanded(
-                child: messagesAsync.when(
-                  data: (messages) {
-                    // Check for unread messages on first build
-                    _checkUnreadMessages(messages, currentUser.uid);
-                    
-                    if (messages.isEmpty) {
-                      return Center(
+                child: messagesAsync == null
+                    ? Center(
                         child: Text(
-                          'Say hello!',
+                          'Say hello to start the conversation!',
                           style: TextStyle(
                             fontSize: 16,
                             color: Colors.grey[600],
                           ),
                         ),
-                      );
-                    }
-                    
-                    final groupedWidgets = _buildGroupedMessages(messages, currentUser.uid);
-                    
-                    return ListView.builder(
-                      reverse: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                      itemCount: groupedWidgets.length,
-                      itemBuilder: (context, index) => groupedWidgets[index],
-                    );
-                  },
-                  loading: () => const LoadingIndicator(),
-                  error: (err, stack) => Center(
-                    child: Text(
-                      'Error: $err',
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ),
-                ),
+                      )
+                    : messagesAsync.when(
+                        data: (messages) {
+                          // Check for unread messages on first build
+                          _checkUnreadMessages(messages, currentUser.uid);
+                          
+                          if (messages.isEmpty) {
+                            return Center(
+                              child: Text(
+                                'Say hello!',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            );
+                          }
+                          
+                          final groupedWidgets = _buildGroupedMessages(messages, currentUser.uid);
+                          
+                          return ListView.builder(
+                            reverse: true,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                            itemCount: groupedWidgets.length,
+                            itemBuilder: (context, index) => groupedWidgets[index],
+                          );
+                        },
+                        loading: () => const LoadingIndicator(),
+                        error: (err, stack) => Center(
+                          child: Text(
+                            'Error: $err',
+                            style: const TextStyle(color: Colors.red),
+                          ),
+                        ),
+                      ),
               ),
               DirectMessageComposer(
-                conversationId: widget.conversationId,
+                conversationId: _conversationId,
+                otherUserId: widget.otherUserId,
                 currentUser: currentUser,
+                onConversationCreated: (String newConversationId) {
+                  setState(() {
+                    _conversationId = newConversationId;
+                  });
+                },
               ),
             ],
           );

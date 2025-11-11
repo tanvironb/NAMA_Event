@@ -623,31 +623,17 @@ class UserDetailsScreen extends ConsumerWidget {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: () async {
-                    try {
-                      final repo = ref.read(messagingRepositoryProvider);
-                      final conversationId = await repo.createOrGetConversation(currentUserId, appUser.uid);
-                      
-                      if (context.mounted) {
-                        Navigator.of(context).push(MaterialPageRoute(
-                          builder: (context) => DirectMessageScreen(
-                            conversationId: conversationId,
-                            otherUserId: appUser.uid,
-                            otherUserName: appUser.name,
-                            otherUserProfileImage: appUser.profileImageUrl,
-                          ),
-                        ));
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Failed to start conversation: $e'),
-                            backgroundColor: AppColors.errorRed,
-                          ),
-                        );
-                      }
-                    }
+                  onPressed: () {
+                    // Navigate directly to chat without creating conversation
+                    // Conversation will be created when first message is sent
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (context) => DirectMessageScreen(
+                        conversationId: null, // Don't create conversation yet
+                        otherUserId: appUser.uid,
+                        otherUserName: appUser.name,
+                        otherUserProfileImage: appUser.profileImageUrl,
+                      ),
+                    ));
                   },
                   icon: const Icon(Icons.chat_bubble_outline),
                   label: const Text(

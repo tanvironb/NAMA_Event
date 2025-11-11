@@ -21,52 +21,34 @@ class ConversationListTile extends ConsumerWidget {
     
     if (otherUserId.isEmpty || currentUserId == null) return const SizedBox.shrink();
 
+    // Get cached data immediately to prevent flashing
+    final cachedName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
+    final cachedImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
+
     return currentUserAsync.when(
       data: (currentUser) {
-        // Fetch the other user's profile to get privacy-aware display name
+        final viewerIsAdmin = currentUser?.role == 'admin';
+        
+        // Fetch the other user's profile to determine privacy-aware display name
         final otherUserAsync = ref.watch(userProfileByIdProvider(otherUserId));
         
         return otherUserAsync.when(
           data: (otherUser) {
             if (otherUser == null) {
-              // Fallback to cached memberInfo if user not found
-              final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
-              final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
-              return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
+              return _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage);
             }
             
             // Use privacy-aware display name
-            final viewerIsAdmin = currentUser?.role == 'admin';
             final displayName = otherUser.getDisplayNameFor(currentUserId, viewerIsAdmin);
             
             return _buildTile(context, currentUserId, otherUserId, displayName, otherUser.profileImageUrl);
           },
-          loading: () {
-            // Show cached data while loading
-            final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
-            final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
-            return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
-          },
-          error: (_, __) {
-            // Fallback to cached memberInfo on error
-            final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
-            final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
-            return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
-          },
+          loading: () => _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage),
+          error: (_, __) => _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage),
         );
       },
-      loading: () {
-        // Show cached data while loading current user
-        final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
-        final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
-        return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
-      },
-      error: (_, __) {
-        // Fallback to cached memberInfo
-        final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
-        final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
-        return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
-      },
+      loading: () => _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage),
+      error: (_, __) => _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage),
     );
   }
 

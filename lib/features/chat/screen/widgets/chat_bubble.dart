@@ -134,7 +134,6 @@ class ChatBubble extends ConsumerWidget {
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: _getRoleColor(message.senderRole),
-                                    decoration: TextDecoration.underline,
                                   ),
                             ),
                             // Show muted indicator to moderators

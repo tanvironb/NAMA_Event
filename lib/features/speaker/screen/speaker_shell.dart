@@ -14,6 +14,7 @@ import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.da
 import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
+import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 
 class SpeakerShell extends ConsumerStatefulWidget {
   const SpeakerShell({super.key});
@@ -153,6 +154,16 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
                 Navigator.pop(context);
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (context) => const MyMeetingsScreen(),
+                ));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.handshake_outlined, color: Theme.of(context).colorScheme.onSurface),
+              title: Text('Connections', style: Theme.of(context).textTheme.titleMedium),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const ConnectionsScreen(),
                 ));
               },
             ),
