@@ -1311,3 +1311,134 @@ export const deleteNotification = onCall(
     }
   }
 );
+
+/**
+ * Add a scanned connection between two users
+ * Called when a user scans another user's QR code
+ * Creates a unidirectional connection-
+ * (scanner can see scanned user's full profile)
+ */
+export const addScannedConnection = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    console.log("=== Start Add Scanned Connection ===");
+
+    // Authentication check
+    if (!request.auth || !request.auth.uid) {
+      throw new HttpsError("unauthenticated", "Not authenticated");
+    }
+
+    const scannerUserId = request.auth.uid;
+    const scannedUserId = request.data.scannedUserId;
+
+    console.log(`Scanner: ${scannerUserId}, Scanned: ${scannedUserId}`);
+
+    // Validation
+    if (!scannedUserId || typeof scannedUserId !== "string") {
+      throw new HttpsError(
+        "invalid-argument",
+        "scannedUserId is required and must be a string"
+      );
+    }
+
+    // Prevent self-scanning
+    if (scannerUserId === scannedUserId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "You cannot scan your own QR code"
+      );
+    }
+
+    try {
+      // Fetch both users in parallel
+      const [scannerDoc, scannedDoc] = await Promise.all([
+        db.collection("users").doc(scannerUserId).get(),
+        db.collection("users").doc(scannedUserId).get(),
+      ]);
+
+      // Validate both users exist
+      if (!scannerDoc.exists) {
+        throw new HttpsError("not-found", "Scanner user not found");
+      }
+      if (!scannedDoc.exists) {
+        throw new HttpsError("not-found", "Scanned user not found");
+      }
+
+      const scannerData = scannerDoc.data();
+      const scannedData = scannedDoc.data();
+
+      // Validate both users are approved
+      if (scannerData?.status !== "approved") {
+        throw new HttpsError(
+          "permission-denied",
+          "Your account is not approved"
+        );
+      }
+      if (scannedData?.status !== "approved") {
+        throw new HttpsError(
+          "permission-denied",
+          "The scanned user is not approved"
+        );
+      }
+
+      // Check for duplicate scan (idempotent)
+      const usersIScanned = scannerData?.usersIScanned || [];
+      const alreadyScanned = usersIScanned.includes(scannedUserId);
+
+      if (alreadyScanned) {
+        console.log("Connection already exists");
+        return {
+          success: false,
+          message: "User already connected",
+          user: {
+            uid: scannedData?.uid || scannedUserId,
+            name: scannedData?.name || "Unknown",
+            email: scannedData?.email || "",
+            profileImageUrl: scannedData?.profileImageUrl || "",
+            company: scannedData?.company || "",
+            title: scannedData?.title || "",
+            role: scannedData?.role || "attendee",
+            profileVisibility: scannedData?.profileVisibility || "minimal",
+          },
+        };
+      }
+
+      // Add connection using atomic updates
+      // (optimized for 100 concurrent scans)
+      await Promise.all([
+        db.collection("users").doc(scannerUserId).update({
+          usersIScanned: admin.firestore.FieldValue.arrayUnion(scannedUserId),
+        }),
+        db.collection("users").doc(scannedUserId).update({
+          scannedByUsers: admin.firestore.FieldValue.arrayUnion(scannerUserId),
+        }),
+      ]);
+
+      console.log("✓ Connection established successfully");
+      console.log("=== End Add Scanned Connection ===\n");
+
+      return {
+        success: true,
+        message: "Connection established",
+        user: {
+          uid: scannedData?.uid || scannedUserId,
+          name: scannedData?.name || "Unknown",
+          email: scannedData?.email || "",
+          profileImageUrl: scannedData?.profileImageUrl || "",
+          company: scannedData?.company || "",
+          title: scannedData?.title || "",
+          role: scannedData?.role || "attendee",
+          profileVisibility: scannedData?.profileVisibility || "minimal",
+          bio: scannedData?.bio || "",
+          phone: scannedData?.phone || "",
+          linkedin: scannedData?.linkedin || "",
+          twitter: scannedData?.twitter || "",
+          website: scannedData?.website || "",
+        },
+      };
+    } catch (error) {
+      console.error("ERROR adding scanned connection:", error);
+      throw error;
+    }
+  }
+);

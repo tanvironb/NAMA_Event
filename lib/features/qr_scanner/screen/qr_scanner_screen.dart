@@ -130,6 +130,52 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       if (scannerProfile.role == 'admin' || scannerProfile.role == 'staff') {
         _showAdminStaffPopup(scannedUserData);
       } else { // Attendee is scanning
+        // Call cloud function to establish connection
+        try {
+          final functions = ref.read(firebaseFunctionsProvider);
+          final callable = functions.httpsCallable('addScannedConnection');
+          final result = await callable.call<Map<String, dynamic>>({
+            'scannedUserId': scannedUserData['uid'],
+          });
+          
+          debugPrint('Connection result: ${result.data}');
+          
+          // Show appropriate message
+          if (result.data['message'] == 'User already connected') {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Already connected with this user'),
+                  backgroundColor: AppColors.namaNavyBlue,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Connection established! ✓'),
+                  backgroundColor: AppColors.successGreen,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+          }
+        } catch (connectionError) {
+          debugPrint('Connection error: $connectionError');
+          // Continue to profile even if connection fails
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Could not establish connection: ${connectionError.toString()}'),
+                backgroundColor: AppColors.errorRed,
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+        
         // Small delay to ensure state is stable before navigation
         await Future.delayed(const Duration(milliseconds: 100));
         

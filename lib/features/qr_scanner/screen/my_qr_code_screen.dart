@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/core/enums/profile_visibility.dart';
 
 class MyQRCodeScreen extends ConsumerWidget {
   const MyQRCodeScreen({super.key});
@@ -38,6 +39,18 @@ class MyQRCodeScreen extends ConsumerWidget {
       case 'attendee':
       default:
         return 'Attendee';
+    }
+  }
+
+  /// Get privacy-aware warning text based on user's privacy level
+  String _getPrivacyAwareWarning(ProfileVisibility privacyLevel) {
+    switch (privacyLevel) {
+      case ProfileVisibility.anonymous:
+        return 'Sharing this QR initiates a connection. They can view your Minimal profile and later your Full profile if you change your privacy settings.';
+      case ProfileVisibility.minimal:
+        return 'Sharing this QR initiates a connection. They can view your Minimal profile (name, company, role). They can view your Full profile if you later change to Full privacy.';
+      case ProfileVisibility.full:
+        return 'Sharing this QR initiates a connection. They can view your Full profile (all information). If you later change to Anonymous, they will still be able to view your Minimal profile.';
     }
   }
 
@@ -84,6 +97,7 @@ class MyQRCodeScreen extends ConsumerWidget {
 
             final backgroundColor = _getQRBackgroundColor(user.role);
             final roleDisplayName = _getRoleDisplayName(user.role);
+            final privacyLevel = ProfileVisibility.fromString(user.profileVisibility);
 
             return Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -101,6 +115,50 @@ class MyQRCodeScreen extends ConsumerWidget {
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     color: Theme.of(context).colorScheme.primary,
                     fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                
+                // Privacy Level Indicator
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: privacyLevel == ProfileVisibility.anonymous
+                        ? AppColors.namaNavyBlue.withOpacity(0.1)
+                        : privacyLevel == ProfileVisibility.minimal
+                            ? AppColors.namaGoldenYellow.withOpacity(0.1)
+                            : Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: privacyLevel == ProfileVisibility.anonymous
+                          ? AppColors.namaNavyBlue
+                          : privacyLevel == ProfileVisibility.minimal
+                              ? AppColors.namaGoldenYellow
+                              : Colors.green,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        privacyLevel.icon,
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Your privacy: ${privacyLevel.displayName}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: privacyLevel == ProfileVisibility.anonymous
+                              ? AppColors.namaNavyBlue
+                              : privacyLevel == ProfileVisibility.minimal
+                                  ? AppColors.namaGoldenYellow
+                                  : Colors.green,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 32),
@@ -222,7 +280,7 @@ class MyQRCodeScreen extends ConsumerWidget {
 
                 const SizedBox(height: 24),
 
-                // Information Text
+                // Privacy-aware warning message
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -244,7 +302,7 @@ class MyQRCodeScreen extends ConsumerWidget {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Sharing this QR allows any user to view your full profile despite your anonymous status',
+                          _getPrivacyAwareWarning(privacyLevel),
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
                             height: 1.4,
