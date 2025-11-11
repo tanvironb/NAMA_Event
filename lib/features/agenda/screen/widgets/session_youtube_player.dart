@@ -14,12 +14,9 @@ class SessionYoutubePlayer extends StatefulWidget {
   State<SessionYoutubePlayer> createState() => _SessionYoutubePlayerState();
 }
 
-class _SessionYoutubePlayerState extends State<SessionYoutubePlayer> with AutomaticKeepAliveClientMixin {
+class _SessionYoutubePlayerState extends State<SessionYoutubePlayer> {
   YoutubePlayerController? _controller;
   bool _isPlayerReady = false;
-
-  @override
-  bool get wantKeepAlive => true; // Keep state alive to prevent rebuilds
 
   @override
   void initState() {
@@ -29,6 +26,7 @@ class _SessionYoutubePlayerState extends State<SessionYoutubePlayer> with Automa
 
   @override
   void dispose() {
+    _controller?.pause(); // Stop playback before disposing
     _controller?.dispose();
     super.dispose();
   }
@@ -78,8 +76,6 @@ class _SessionYoutubePlayerState extends State<SessionYoutubePlayer> with Automa
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
-    
     // Don't show anything if conditions aren't met
     if (!_shouldShowPlayer()) {
       return const SizedBox.shrink();

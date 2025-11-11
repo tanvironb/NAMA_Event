@@ -14,7 +14,6 @@ class YoutubeLivePlayer extends ConsumerStatefulWidget {
 class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   YoutubePlayerController? _controller;
-  bool _isPlayerReady = false;
   bool _isMinimized = false;
   bool _isClosed = false; // Track if player was closed
   late AnimationController _animationController;
@@ -41,6 +40,7 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
 
   @override
   void dispose() {
+    _controller?.pause(); // Pause before disposing
     _controller?.dispose();
     _animationController.dispose();
     super.dispose();
@@ -64,10 +64,6 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
       ),
     );
 
-    setState(() {
-      _isPlayerReady = true;
-    });
-
     _animationController.forward();
   }
 
@@ -87,9 +83,9 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
           print('❌ YoutubeLivePlayer: No active session or empty URL, hiding player');
           // No active live session with stream URL, hide the player
           if (_controller != null && (session == null || session.liveStreamUrl.isEmpty)) {
+            _controller!.pause(); // Pause before disposing
             _controller!.dispose();
             _controller = null;
-            _isPlayerReady = false;
             _isClosed = false; // Reset closed state when session ends
             _animationController.reset();
           }

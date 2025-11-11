@@ -4,8 +4,6 @@ import 'package:intl/intl.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/speaker_carousel.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/partner_carousel.dart';
-import 'package:events_app_trueattempt/features/home/screen/widgets/quick_action_grid.dart';
-import 'package:events_app_trueattempt/features/home/screen/widgets/live_stream_card.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/venue_maps_carousel.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
@@ -142,9 +140,6 @@ class HomeDashboardScreen extends ConsumerWidget {
             ),
           ),
           
-          // Live Stream Card - Auto-detects and shows active live sessions
-          const LiveStreamCard(),
-          
           const SizedBox(height: 24),
 
           // Featured Speakers Carousel (Phase 2)
@@ -172,15 +167,6 @@ class HomeDashboardScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           const PartnerCarousel(), // Custom widget for partners
-          const SizedBox(height: 24),
-
-          // Quick Action Buttons (Phase 2)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Text('Quick Actions', style: Theme.of(context).textTheme.headlineSmall),
-          ),
-          const SizedBox(height: 12),
-          const QuickActionGrid(), // Custom widget for action buttons
           const SizedBox(height: 24),
 
           // Announcement / Highlight Card (Phase 2)

@@ -7,6 +7,7 @@ import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/core/models/event_model.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/core/models/sponsor_model.dart';
+import 'package:events_app_trueattempt/core/models/venue_map_model.dart';
 import 'package:events_app_trueattempt/features/profile/data/profile_repository.dart';
 import 'package:events_app_trueattempt/features/explore/data/explore_repository.dart';
 import 'package:events_app_trueattempt/features/agenda/data/agenda_repository.dart';
@@ -145,6 +146,25 @@ final sponsorsStreamProvider = StreamProvider.autoDispose<List<Sponsor>>((ref) {
   final eventId = eventAsync.asData?.value.id;
   if (eventId != null) {
     return repo.getSponsorsStream(eventId);
+  }
+  return Stream.value([]); // Return empty list if no active event is found
+});
+
+// Provides a stream of venue maps for the active event (ordered by 'order' field)
+final venueMapsStreamProvider = StreamProvider.autoDispose<List<VenueMap>>((ref) {
+  final eventAsync = ref.watch(activeEventFutureProvider);
+  final eventId = eventAsync.asData?.value.id;
+  
+  if (eventId != null) {
+    return FirebaseFirestore.instance
+        .collection('events')
+        .doc(eventId)
+        .collection('venueMaps')
+        .orderBy('order')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+            .map((doc) => VenueMap.fromFirestore(doc))
+            .toList());
   }
   return Stream.value([]); // Return empty list if no active event is found
 });

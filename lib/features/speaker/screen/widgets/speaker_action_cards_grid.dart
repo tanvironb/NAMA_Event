@@ -131,7 +131,7 @@ class SpeakerActionCardsGrid extends ConsumerWidget {
             title: 'Go Live',
             subtitle: 'Start broadcast',
             color: Colors.red,
-            isEnabled: isChatEnabled,
+            isEnabled: false, // Disabled - not implemented yet
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Live streaming coming soon!')),

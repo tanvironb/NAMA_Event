@@ -105,29 +105,36 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.how_to_reg_outlined,
-                              size: 32,
+                              size: 28,
                               color: AppColors.namaNavyBlue,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               '$uniqueAttendees',
-                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.namaNavyBlue,
+                                fontSize: 26,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
+                            const SizedBox(height: 2),
                             Text(
                               'Unique Attendees',
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppColors.namaDarkGray,
+                                fontSize: 11,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -140,29 +147,36 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.qr_code_scanner_outlined,
-                              size: 32,
+                              size: 28,
                               color: AppColors.namaRichGold,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               '$totalCheckedIn',
-                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.namaRichGold,
+                                fontSize: 26,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
+                            const SizedBox(height: 2),
                             Text(
                               'Total Check-ins',
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppColors.namaDarkGray,
+                                fontSize: 11,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -175,29 +189,36 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.chat_bubble_outline,
-                              size: 32,
+                              size: 28,
                               color: AppColors.infoBlue,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               '$totalParticipants',
-                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.infoBlue,
+                                fontSize: 26,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
+                            const SizedBox(height: 2),
                             Text(
                               'Chat Participants',
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppColors.namaDarkGray,
+                                fontSize: 11,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -210,31 +231,38 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.all(16.0),
+                        padding: const EdgeInsets.all(12.0),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
                               Icons.percent_outlined,
-                              size: 32,
+                              size: 28,
                               color: AppColors.successGreen,
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               uniqueAttendees > 0
                                 ? '${((totalParticipants / uniqueAttendees) * 100).toStringAsFixed(0)}%'
                                 : '0%',
-                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.successGreen,
+                                fontSize: 26,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
+                            const SizedBox(height: 2),
                             Text(
                               'Engagement Rate',
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: AppColors.namaDarkGray,
+                                fontSize: 11,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -276,6 +304,8 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                               fontWeight: FontWeight.bold,
                               color: AppColors.namaNavyBlue,
                             ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 12),
                           
@@ -302,10 +332,13 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                                           ),
                                         ),
                                         const SizedBox(width: 4),
-                                        Text(
-                                          'attendees',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: AppColors.namaMediumGray,
+                                        Flexible(
+                                          child: Text(
+                                            'attendees',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: AppColors.namaMediumGray,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                       ],
@@ -327,10 +360,13 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                                           ),
                                         ),
                                         const SizedBox(width: 4),
-                                        Text(
-                                          'chat participants',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: AppColors.namaMediumGray,
+                                        Flexible(
+                                          child: Text(
+                                            'chat participants',
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: AppColors.namaMediumGray,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
                                           ),
                                         ),
                                       ],
@@ -338,9 +374,10 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                                   ],
                                 ),
                               ),
+                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
+                                  horizontal: 10,
                                   vertical: 6,
                                 ),
                                 decoration: BoxDecoration(
@@ -366,6 +403,7 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                                         color: engagementRate >= 50
                                           ? AppColors.successGreen
                                           : AppColors.warningAmber,
+                                        fontSize: 10,
                                       ),
                                     ),
                                   ],
