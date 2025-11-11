@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/home/screen/attendee_shell.dart';
+import 'package:events_app_trueattempt/features/home/screen/staff_shell.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_shell.dart';
 import 'package:events_app_trueattempt/features/home/screen/admin_shell.dart';
 import 'package:events_app_trueattempt/common_widgets/in_app_notification_handler.dart';
@@ -107,8 +108,8 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen> {
             shell = const SpeakerShell();
             break;
           case 'staff':
-            // Staff users get the same interface as users but with QR scanning privileges
-            shell = const AttendeeShell();
+            // Staff users get separate UI identical to attendees but with QR check-in privileges
+            shell = const StaffShell();
             break;
           case 'attendee':
           default:
