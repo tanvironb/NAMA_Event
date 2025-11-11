@@ -24,6 +24,7 @@ class UserDetailsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userProfileAsync = ref.watch(userProfileByIdProvider(userId));
+    final currentUserAsync = ref.watch(userAppProfileStreamProvider);
     final currentUserId = ref.watch(firebaseAuthProvider).currentUser?.uid;
 
     return userProfileAsync.when(
@@ -46,59 +47,92 @@ class UserDetailsScreen extends ConsumerWidget {
           );
         }
 
-        return Scaffold(
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          appBar: AppBar(
-            title: const Text('Profile'),
-            backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-            foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
-            elevation: 0,
-            actions: [
-              if (currentUserId == userId)
-                TweenAnimationBuilder<double>(
-                  duration: const Duration(milliseconds: 500),
-                  tween: Tween(begin: 0.0, end: 1.0),
-                  builder: (context, value, child) {
-                    return Transform.scale(
-                      scale: value,
-                      child: IconButton(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            PageRouteBuilder(
-                              pageBuilder: (context, animation, secondaryAnimation) =>
-                                  EditProfileScreen(user: appUser),
-                              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                                return SlideTransition(
-                                  position: animation.drive(
-                                    Tween(begin: const Offset(1.0, 0.0), end: Offset.zero)
-                                        .chain(CurveTween(curve: Curves.easeInOut)),
-                                  ),
-                                  child: child,
-                                );
-                              },
-                            ),
-                          );
-                        },
-                        icon: const Icon(Icons.edit_outlined),
-                        color: AppColors.namaWhite,
-                        iconSize: 24,
-                        tooltip: 'Edit Profile',
-                      ),
-                    );
-                  },
-                ),
-            ],
-          ),
-          body: AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            child: SingleChildScrollView(
-              physics: const BouncingScrollPhysics(),
-              child: Column(
-                children: [
-                  _buildProfileHeader(context, appUser, currentUserId, ref),
-                  _buildProfileContent(context, appUser),
+        // Get current user to check admin status and determine privacy permissions
+        return currentUserAsync.when(
+          data: (currentUser) {
+            final viewerIsAdmin = currentUser?.role == 'admin';
+            final canViewFullData = appUser.canViewFullDataBy(currentUserId ?? '', viewerIsAdmin);
+            
+            return Scaffold(
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              appBar: AppBar(
+                title: const Text('Profile'),
+                backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+                foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
+                elevation: 0,
+                actions: [
+                  if (currentUserId == userId)
+                    TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 500),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.scale(
+                          scale: value,
+                          child: IconButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                PageRouteBuilder(
+                                  pageBuilder: (context, animation, secondaryAnimation) =>
+                                      EditProfileScreen(user: appUser),
+                                  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                    return SlideTransition(
+                                      position: animation.drive(
+                                        Tween(begin: const Offset(1.0, 0.0), end: Offset.zero)
+                                            .chain(CurveTween(curve: Curves.easeInOut)),
+                                      ),
+                                      child: child,
+                                    );
+                                  },
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.edit_outlined),
+                            color: AppColors.namaWhite,
+                            iconSize: 24,
+                            tooltip: 'Edit Profile',
+                          ),
+                        );
+                      },
+                    ),
                 ],
+              ),
+              body: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Column(
+                    children: [
+                      _buildProfileHeader(context, appUser, currentUserId, ref, viewerIsAdmin, canViewFullData),
+                      _buildProfileContent(context, appUser, canViewFullData),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+          loading: () => Scaffold(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            appBar: AppBar(
+              title: const Text('Profile'),
+              backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+              foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
+              elevation: 0,
+            ),
+            body: const Center(child: LoadingIndicator()),
+          ),
+          error: (error, stack) => Scaffold(
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+            appBar: AppBar(
+              title: const Text('Profile'),
+              backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+              foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
+              elevation: 0,
+            ),
+            body: const Center(
+              child: Text(
+                'Error loading viewer info',
+                style: TextStyle(fontSize: 16, color: AppColors.namaMediumGray),
               ),
             ),
           ),
@@ -145,7 +179,9 @@ class UserDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileHeader(BuildContext context, AppUser appUser, String? currentUserId, WidgetRef ref) {
+  Widget _buildProfileHeader(BuildContext context, AppUser appUser, String? currentUserId, WidgetRef ref, bool viewerIsAdmin, bool canViewFullData) {
+    final isConnected = appUser.isConnectedWith(currentUserId ?? '');
+    
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 800),
       tween: Tween(begin: 0.0, end: 1.0),
@@ -319,8 +355,121 @@ class UserDetailsScreen extends ConsumerWidget {
                     ),
                   ],
                   
-                  // Social Icons Row
-                  if (appUser.linkedin.isNotEmpty || appUser.twitter.isNotEmpty || appUser.website.isNotEmpty) ...[
+                  // Privacy & Connection Indicators
+                  if (currentUserId != userId && (viewerIsAdmin || appUser.isAnonymous || isConnected)) ...[
+                    const SizedBox(height: 12),
+                    TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 850),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, 10 * (1 - value)),
+                          child: Opacity(
+                            opacity: value,
+                            child: Wrap(
+                              alignment: WrapAlignment.center,
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                // Connected Badge
+                                if (isConnected)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: Colors.green.shade200,
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.qr_code_scanner, size: 14, color: Colors.green.shade700),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Connected via QR',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.green.shade700,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                
+                                // Privacy Level Indicator (Admin or Anonymous users)
+                                if (viewerIsAdmin && appUser.isAnonymous)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.namaMediumGray.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: AppColors.namaMediumGray.withOpacity(0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          '🕵️',
+                                          style: const TextStyle(fontSize: 11),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Anonymous Mode',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.namaMediumGray,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                
+                                // Limited Profile Badge (when not connected to anonymous user)
+                                if (appUser.isAnonymous && !isConnected && !viewerIsAdmin)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.namaMediumGray.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: AppColors.namaMediumGray.withOpacity(0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.lock_outline, size: 12, color: AppColors.namaMediumGray),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Limited Profile',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppColors.namaMediumGray,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                  
+                  // Social Icons Row (only show for Full privacy or Admin)
+                  if (canViewFullData && (appUser.linkedin.isNotEmpty || appUser.twitter.isNotEmpty || appUser.website.isNotEmpty)) ...[
                     const SizedBox(height: 16),
                     TweenAnimationBuilder<double>(
                       duration: const Duration(milliseconds: 900),
@@ -502,16 +651,18 @@ class UserDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildProfileContent(BuildContext context, AppUser appUser) {
+  Widget _buildProfileContent(BuildContext context, AppUser appUser, bool canViewFullData) {
     return Container(
       color: AppColors.namaVeryLightGray,
       child: Column(
         children: [
-          if (appUser.bio.isNotEmpty) 
+          // Bio section (only show for Full privacy or Admin)
+          if (canViewFullData && appUser.bio.isNotEmpty) 
             _buildAnimatedSection('About', appUser.bio, Icons.info_outline, 0),
           
-          if (appUser.email.isNotEmpty || appUser.phone.isNotEmpty)
-            _buildContactSection(context, appUser),
+          // Contact section (email always visible, phone only for Full privacy or Admin)
+          if (appUser.email.isNotEmpty || (canViewFullData && appUser.phone.isNotEmpty))
+            _buildContactSection(context, appUser, canViewFullData),
           
           const SizedBox(height: 40),
         ],
@@ -590,7 +741,7 @@ class UserDetailsScreen extends ConsumerWidget {
 
 
 
-  Widget _buildContactSection(BuildContext context, AppUser appUser) {
+  Widget _buildContactSection(BuildContext context, AppUser appUser, bool canViewFullData) {
     return TweenAnimationBuilder<double>(
       duration: const Duration(milliseconds: 1000),
       tween: Tween(begin: 0.0, end: 1.0),
@@ -643,7 +794,8 @@ class UserDetailsScreen extends ConsumerWidget {
                   const SizedBox(height: 20),
                   if (appUser.email.isNotEmpty)
                     _buildEmailTile(context, appUser.email, 0),
-                  if (appUser.phone.isNotEmpty)
+                  // Phone is only visible for Full privacy or Admin
+                  if (canViewFullData && appUser.phone.isNotEmpty)
                     _buildContactTile(context, Icons.phone_outlined, 'Phone', appUser.phone, 'tel:${appUser.phone}', 1),
                 ],
               ),
