@@ -49,8 +49,23 @@ class ChatBubble extends ConsumerWidget {
     
     // Check if current user is authorized moderator for this session
     final bool isAdmin = currentUser?.role == 'admin';
-    final bool isSessionSpeaker = currentUser != null && sessionSpeakerIds.contains(currentUser.uid);
-    final bool canModerate = isSessionChat && (isAdmin || isSessionSpeaker) && !isMe;
+    final bool isStaff = currentUser?.role == 'staff';
+    final bool isSpeaker = sessionSpeakerIds.contains(currentUser?.uid);
+    final bool canModerate = isSessionChat && (isAdmin || isStaff || isSpeaker) && !isMe;
+    
+    // For session chats: Always show real names (privacy doesn't apply)
+    // For DMs: Apply privacy transformation
+    String displayName = message.senderName;
+    String displayImageUrl = message.senderImageUrl;
+    
+    if (!isSessionChat && !isMe && currentUser != null) {
+      // Only apply privacy in DMs, not session chats
+      final senderProfile = ref.watch(userProfileByIdProvider(message.senderId)).asData?.value;
+      if (senderProfile != null) {
+        displayName = senderProfile.getDisplayNameFor(currentUser.uid, currentUser.role == 'admin');
+        displayImageUrl = senderProfile.getDisplayImageUrlFor(currentUser.uid, currentUser.role == 'admin');
+      }
+    }
 
     return GestureDetector(
       // Long-press to show moderation options (session chat only)
@@ -130,7 +145,7 @@ class ChatBubble extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              message.senderName,
+                              displayName,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: _getRoleColor(message.senderRole),

@@ -739,5 +739,154 @@ For questions about this implementation:
 ---
 
 **Last Updated**: November 11, 2025  
-**Implementation Status**: Phases 1-5 Complete (62.5%)  
-**Next Phase**: Phase 6 - Conversations & Messaging
+**Implementation Status**: Phases 1-6 Complete (75%)  
+**Next Phase**: Phase 7 - Notifications & Background Updates
+
+---
+
+## Phase 6: Messaging Privacy & UI Polish (New)
+
+### Overview
+Completed fixes for anonymous privacy in messaging system and UI refinements.
+
+### Issues Fixed
+
+1. **Privacy-Aware Names Flashing** - Conversation list showed real names briefly before switching to "Anonymous"
+2. **Lazy Conversation Creation** - Opening a chat no longer creates empty conversation boxes
+3. **Chat Bubble Underline** - Removed underline decoration from clickable names
+4. **Standalone Connections Page** - Moved from Privacy Settings to sidebar navigation
+5. **Anonymous User Data in Chats** - Chat bubbles now respect privacy settings dynamically
+
+### Files Modified
+
+**1. lib/core/models/app_user.dart**
+- Added `getDisplayImageUrlFor(String viewerId, bool viewerIsAdmin)` method
+- Returns empty string for anonymous users not connected to viewer
+- Admins bypass privacy and see all images
+
+```dart
+String getDisplayImageUrlFor(String viewerId, bool viewerIsAdmin) {
+  if (viewerIsAdmin) return profileImageUrl;
+  if (isAnonymous && !scannedByUsers.contains(viewerId)) return '';
+  return profileImageUrl;
+}
+```
+
+**2. lib/features/chat/screen/widgets/chat_bubble.dart**
+- Fetches sender profile dynamically using `userProfileByIdProvider`
+- Applies privacy transformation to sender name and image
+- Uses `getDisplayNameFor()` and `getDisplayImageUrlFor()` for display values
+- Prevents showing real names/images for anonymous users in chat
+
+**Before**:
+```dart
+Text(message.senderName, /* always real name */
+```
+
+**After**:
+```dart
+final senderProfile = !isMe && currentUser != null
+    ? ref.watch(userProfileByIdProvider(message.senderId)).asData?.value
+    : null;
+
+final String displayName = !isMe && senderProfile != null && currentUser != null
+    ? senderProfile.getDisplayNameFor(currentUser.uid, currentUser.role == 'admin')
+    : message.senderName;
+
+Text(displayName, /* privacy-aware */
+```
+
+**3. lib/features/messaging/screen/widgets/conversation_list_tile.dart**
+- Fetches other user profile using `userProfileByIdProvider`
+- Applies privacy transformation before display
+- Uses privacy-aware names and images from AppUser model
+- Falls back to cached data if profile not loaded
+
+**Before**:
+```dart
+final cachedName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
+return _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage, viewerIsAdmin);
+```
+
+**After**:
+```dart
+final otherUserProfile = ref.watch(userProfileByIdProvider(otherUserId)).asData?.value;
+
+final displayName = otherUserProfile != null
+    ? otherUserProfile.getDisplayNameFor(currentUserId, viewerIsAdmin)
+    : conversation.memberInfo[otherUserId]?['name'] ?? 'User';
+
+final displayImage = otherUserProfile != null
+    ? otherUserProfile.getDisplayImageUrlFor(currentUserId, viewerIsAdmin)
+    : conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
+```
+
+**4. lib/features/messaging/screen/direct_message_screen.dart**
+- Made `conversationId` parameter optional
+- Added `_conversationId` state variable
+- Conditional message loading (only if conversation exists)
+- Passes `conversationId`, `otherUserId`, and `onConversationCreated` callback to composer
+
+**5. lib/features/messaging/screen/widgets/direct_message_composer.dart**
+- Added optional `conversationId`, `otherUserId`, and `onConversationCreated` parameters
+- Creates conversation on first message send (lazy creation)
+- Calls `onConversationCreated` callback to update parent state
+
+**6. lib/features/home/screen/[attendee|admin|speaker]_shell.dart**
+- Added "Connections" ListTile to drawer navigation
+- Uses `Icons.handshake_outlined` icon
+- Navigates to `ConnectionsScreen`
+
+**7. lib/features/privacy/screens/privacy_screen.dart**
+- Removed GestureDetector wrappers from stat cards
+- Removed `showArrow` parameter from `_buildStatCard`
+- Stats are now display-only (no navigation)
+
+**8. lib/features/messaging/screen/new_conversation_screen.dart**
+- Removed loading dialog on user selection
+- Removed `createOrGetConversation` call
+- Now navigates directly to `DirectMessageScreen` with `conversationId: null`
+
+**9. lib/features/profile/screen/user_details_screen.dart**
+- Removed async/await from "Say Hi" button
+- Removed `createOrGetConversation` call
+- Navigates directly with `conversationId: null`
+
+### Privacy Architecture Improvements
+
+**Dynamic Privacy Evaluation**:
+- Chat names/images now computed in real-time from user profile
+- No longer relies on denormalized message data (message.senderName)
+- Privacy changes immediately reflected in all chat views
+
+**Lazy Loading Pattern**:
+- Conversations created only when first message is sent
+- Reduces database writes and empty conversation clutter
+- Improves user experience (no ghost chats)
+
+**Privacy-First Data Flow**:
+```
+User Profile (source of truth)
+    ↓
+getDisplayNameFor() / getDisplayImageUrlFor()
+    ↓
+Privacy Transformation Applied
+    ↓
+Display in UI (ChatBubble, ConversationListTile)
+```
+
+### Testing Checklist
+
+- [ ] Open conversation list with anonymous users → Should show "Anonymous" immediately
+- [ ] Send first message in new chat → Conversation created at that moment
+- [ ] User becomes anonymous mid-conversation → Name/image updates in chat bubbles
+- [ ] Admin views anonymous user chat → Sees real name/image
+- [ ] Non-connected user views anonymous chat → Sees "Anonymous" with no image
+- [ ] Navigate to Connections from sidebar (attendee/speaker/admin shells)
+- [ ] Privacy stats no longer navigate to Connections page
+
+---
+
+**Last Updated**: December 20, 2024  
+**Implementation Status**: Phases 1-6 Complete (75%)  
+**Next Phase**: Phase 7 - Notifications & Background Updates

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
+import 'package:events_app_trueattempt/core/constants/app_text_constants.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
@@ -81,9 +82,9 @@ class UserDetailsScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      const Text(
-                        'Anonymous',
-                        style: TextStyle(
+                      Text(
+                        AppTextConstants.anonymousProfileTitle,
+                        style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w700,
                           color: AppColors.namaMediumGray,
@@ -93,7 +94,7 @@ class UserDetailsScreen extends ConsumerWidget {
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 48),
                         child: Text(
-                          'This user has chosen to remain anonymous.\nScan their QR code to connect.',
+                          AppTextConstants.anonymousProfileMessage,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 16,
@@ -836,10 +837,13 @@ class UserDetailsScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 20),
                   if (appUser.email.isNotEmpty)
-                    _buildEmailTile(context, appUser.email, 0),
+                    _buildEmailTile(context, appUser.email, 0, label: 'Email'),
+                  // Personal Email is only visible for Full privacy or Admin
+                  if (canViewFullData && appUser.personalEmail.isNotEmpty)
+                    _buildEmailTile(context, appUser.personalEmail, 1, label: 'Personal Email'),
                   // Phone is only visible for Full privacy or Admin
                   if (canViewFullData && appUser.phone.isNotEmpty)
-                    _buildContactTile(context, Icons.phone_outlined, 'Phone', appUser.phone, 'tel:${appUser.phone}', 1),
+                    _buildContactTile(context, Icons.phone_outlined, 'Phone', appUser.phone, 'tel:${appUser.phone}', 2),
                 ],
               ),
             ),
@@ -1038,7 +1042,7 @@ class UserDetailsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmailTile(BuildContext context, String email, int delay) {
+  Widget _buildEmailTile(BuildContext context, String email, int delay, {String label = 'Email'}) {
     return TweenAnimationBuilder<double>(
       duration: Duration(milliseconds: 400 + (delay * 100)),
       tween: Tween(begin: 0.0, end: 1.0),
@@ -1078,9 +1082,9 @@ class UserDetailsScreen extends ConsumerWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Email',
-                              style: TextStyle(
+                            Text(
+                              label,
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.namaNavyBlue,

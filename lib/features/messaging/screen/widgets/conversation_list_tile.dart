@@ -14,41 +14,30 @@ class ConversationListTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUserId = ref.watch(firebaseAuthProvider).currentUser?.uid;
-    final currentUserAsync = ref.watch(userAppProfileStreamProvider);
     
     // Find the other user's ID
     final otherUserId = conversation.members.firstWhere((id) => id != currentUserId, orElse: () => '');
     
     if (otherUserId.isEmpty || currentUserId == null) return const SizedBox.shrink();
 
-    // Get cached data immediately to prevent flashing
-    final cachedName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
-    final cachedImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
-
-    return currentUserAsync.when(
-      data: (currentUser) {
-        final viewerIsAdmin = currentUser?.role == 'admin';
-        
-        // Fetch the other user's profile to determine privacy-aware display name
-        final otherUserAsync = ref.watch(userProfileByIdProvider(otherUserId));
-        
-        return otherUserAsync.when(
-          data: (otherUser) {
-            if (otherUser == null) {
-              return _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage);
-            }
-            
-            // Use privacy-aware display name
-            final displayName = otherUser.getDisplayNameFor(currentUserId, viewerIsAdmin);
-            
-            return _buildTile(context, currentUserId, otherUserId, displayName, otherUser.profileImageUrl);
-          },
-          loading: () => _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage),
-          error: (_, __) => _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage),
-        );
-      },
-      loading: () => _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage),
-      error: (_, __) => _buildTile(context, currentUserId, otherUserId, cachedName, cachedImage),
+    // Get cached name and image from conversation memberInfo
+    // Show real names in conversations - privacy only applies to profiles
+    final cachedUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
+    final cachedUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
+    
+    // Fetch user profile to get latest data (in case cached data is missing/stale)
+    final otherUserProfile = ref.watch(userProfileByIdProvider(otherUserId)).asData?.value;
+    
+    // Use fresh data if available, otherwise use cached data
+    final otherUserName = otherUserProfile?.name ?? cachedUserName;
+    final otherUserImage = otherUserProfile?.profileImageUrl ?? cachedUserImage;
+    
+    return _buildTile(
+      context, 
+      currentUserId, 
+      otherUserId, 
+      otherUserName, 
+      otherUserImage,
     );
   }
 
@@ -58,7 +47,8 @@ class ConversationListTile extends ConsumerWidget {
     String otherUserId,
     String otherUserName,
     String otherUserImage,
-  ) {    // Get unread count for current user
+  ) {    
+    // Get unread count for current user
     final unreadCount = conversation.getUnreadCountForUser(currentUserId);
     final hasUnread = unreadCount > 0;
     

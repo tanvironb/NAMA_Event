@@ -273,6 +273,202 @@ A privacy system allowing attendees to control profile visibility with three lev
 ---
 
 **Testing Duration**: 1-2 hours for complete coverage  
+**Last Updated**: December 20, 2024  
+**Implementation Status**: Phases 1-6 Complete (75%)
+
+---
+
+## Phase 6: Messaging Privacy & UI Polish - Testing Scenarios
+
+### New Features to Test
+
+#### 1. Privacy-Aware Conversation List Names
+
+**Setup**: User A is anonymous, User B has connected with A, User C has not
+
+**Test**: View conversation list
+- User B should see "Real Name" with profile image
+- User C should see "Anonymous" with no profile image
+- Admin should see "Real Name" with profile image
+- Name should display correctly **immediately** (no flash of real name)
+
+**Expected Behavior**:
+```
+✅ NO flashing of real name before switching to "Anonymous"
+✅ Display uses getDisplayNameFor() dynamically
+✅ Images respect getDisplayImageUrlFor()
+✅ Changes when user toggles privacy instantly reflected
+```
+
+#### 2. Privacy-Aware Chat Bubble Names
+
+**Setup**: User A sends message, then changes privacy from Full → Anonymous
+
+**Test**: Open conversation with User A
+- Before privacy change: Should show real name in chat bubble
+- After privacy change: Should show "Anonymous" (if viewer not connected)
+- Connected viewer: Always sees real name
+- Admin: Always sees real name
+
+**Expected Behavior**:
+```
+✅ Chat bubble uses getDisplayNameFor() for sender name
+✅ Sender image respects getDisplayImageUrlFor()
+✅ Privacy changes update chat names dynamically
+✅ Clicking name navigates to profile (privacy-aware)
+```
+
+#### 3. Lazy Conversation Creation
+
+**Setup**: Fresh users with no existing conversations
+
+**Test**: Navigate to "Say Hi" or select user from new conversation screen
+- Should open chat interface
+- Should show empty message area
+- Should NOT create conversation in database yet
+- Type and send first message
+- Now conversation should be created in database
+- Both users should see the conversation in their lists
+
+**Expected Behavior**:
+```
+✅ Opening chat does NOT create conversation
+✅ Sending first message creates conversation
+✅ No empty conversation boxes
+✅ ConversationId updates after first send
+```
+
+**Verification**:
+```dart
+// Before first message
+DirectMessageScreen(conversationId: null) // No database conversation
+
+// After first message send
+DirectMessageComposer creates conversation
+Calls onConversationCreated callback
+DirectMessageScreen updates _conversationId state
+```
+
+#### 4. Standalone Connections Page
+
+**Test**: Navigate from sidebar in all user roles
+- Attendee shell: Sidebar → Connections
+- Speaker shell: Sidebar → Connections  
+- Admin shell: Sidebar → Connections
+- Should show handshake icon
+- Should navigate to ConnectionsScreen
+
+**Test**: Privacy Settings page
+- Stat cards should be display-only
+- No navigation when tapping stats
+- No arrow icons on stat cards
+
+**Expected Behavior**:
+```
+✅ Connections accessible from all shells
+✅ Uses Icons.handshake_outlined
+✅ Privacy stats are non-clickable
+✅ No arrows on stat cards
+```
+
+#### 5. Chat Bubble Underline Removal
+
+**Test**: View any chat (session or DM)
+- Tap sender name in chat bubble
+- Should navigate to profile
+- Name should have NO underline decoration
+- Name should still be visually identifiable as clickable (color coding by role)
+
+**Expected Behavior**:
+```
+✅ No TextDecoration.underline on sender names
+✅ Names still clickable via GestureDetector
+✅ Clean, minimal design
+✅ Role color coding maintained
+```
+
+### Regression Testing
+
+#### Existing Features to Re-verify
+
+1. **Directory Filtering** - Anonymous users still hidden unless connected
+2. **QR Connection System** - Still creates bidirectional connections
+3. **Privacy Level Selection** - Changes still persist correctly
+4. **Admin Override** - Admins still see all users
+5. **Session Chat** - Privacy-aware names in group chat
+6. **Profile Navigation** - Tapping names opens privacy-aware profiles
+
+### Edge Cases to Test
+
+#### Anonymous User Mid-Conversation
+
+**Scenario**: Active conversation, user switches to anonymous
+1. User A (Full) chats with User B (Full)
+2. Multiple messages exchanged
+3. User A changes privacy to Anonymous
+4. User B (not connected) views conversation
+
+**Expected**:
+- Conversation still appears in list
+- User A shows as "Anonymous" in conversation list
+- User A's messages show "Anonymous" in chat bubbles
+- User A's profile image is hidden
+- User B can still send messages (messaging is open)
+
+#### Connected User Sees Anonymous
+
+**Scenario**: Users connected via QR, one becomes anonymous
+1. User A scans User B (connection created)
+2. User B changes privacy to Anonymous
+3. User A views conversation
+
+**Expected**:
+- Conversation list shows User B's real name (connected)
+- Chat bubbles show User B's real name
+- User B's profile image visible
+- Can navigate to User B's profile (minimal data shown)
+
+#### Admin Views Anonymous Conversation
+
+**Scenario**: Admin views conversation with anonymous user
+1. User A is Anonymous
+2. Admin opens conversation with User A
+3. Admin views chat
+
+**Expected**:
+- Conversation list shows User A's real name
+- Chat bubbles show User A's real name
+- User A's full profile image visible
+- Admin can see all profile data
+
+### Performance Testing
+
+#### Conversation List Load (80+ Conversations)
+
+**Test**: Load conversation list with many users
+- Some anonymous, some connected, some not
+- Each conversation fetches user profile
+- Should load without excessive lag
+
+**Target Performance**:
+```
+✅ Initial render: < 1s
+✅ Profile data loads in background
+✅ No UI flashing during load
+✅ Smooth scrolling maintained
+```
+
+**Note**: If performance issues occur with 80+ conversations, consider:
+- Pagination (load 20 at a time)
+- Profile thumbnail caching
+- Limiting cached image size
+- Virtual scrolling
+
+---
+
+**Testing Duration**: 1-2 hours for complete coverage  
+**Last Updated**: December 20, 2024  
+**Implementation Status**: Phases 1-6 Complete (75%)
 **Priority Areas**: QR scanning, directory filtering, profile field visibility  
 **Next Phases**: Phase 8 (Optimization & Polish - optional)
 

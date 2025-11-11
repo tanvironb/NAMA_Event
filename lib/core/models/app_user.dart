@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/core/constants/app_text_constants.dart';
 
 class AppUser {
   final String uid;
@@ -75,6 +76,7 @@ class AppUser {
     return AppUser(
       uid: doc.id,
       email: data['email'] as String,
+      personalEmail: data['personalEmail'] as String? ?? '',
       name: data['name'] as String? ?? 'User',
       role: data['role'] as String? ?? 'attendee',
       status: data['status'] as String? ?? 'pending',
@@ -108,6 +110,7 @@ class AppUser {
   Map<String, dynamic> toFirestore() {
     return {
       'email': email,
+      'personalEmail': personalEmail,
       'name': name,
       'role': role,
       'status': status,
@@ -150,10 +153,12 @@ class AppUser {
   
   /// Check if the current user (viewerId) can see this user's full profile
   /// Returns true if:
+  /// - Viewer is viewing their own profile
   /// - Viewer is admin
   /// - This user has 'full' or 'minimal' visibility
   /// - Viewer has scanned this user's QR
   bool canBeViewedBy(String viewerId, bool viewerIsAdmin) {
+    if (viewerId == uid) return true; // Users can always view their own profile
     if (viewerIsAdmin) return true;
     if (isFull || isMinimal) return true;
     if (isAnonymous && scannedByUsers.contains(viewerId)) return true;
@@ -162,10 +167,12 @@ class AppUser {
   
   /// Check if viewer can see this user's full data (beyond name/email/company/role)
   /// Returns true if:
+  /// - Viewer is viewing their own profile
   /// - Viewer is admin
   /// - This user has 'full' visibility
   /// Note: Anonymous users only show Minimal data, even to connected users
   bool canViewFullDataBy(String viewerId, bool viewerIsAdmin) {
+    if (viewerId == uid) return true; // Users can always view their own full data
     if (viewerIsAdmin) return true;
     if (isFull) return true;
     // Anonymous and Minimal users only show basic data
@@ -177,16 +184,26 @@ class AppUser {
   
   /// Get display name based on viewer permissions
   String getDisplayNameFor(String viewerId, bool viewerIsAdmin) {
+    if (viewerId == uid) return name; // Users always see their own real name
     if (viewerIsAdmin) return name;
-    if (isAnonymous && !scannedByUsers.contains(viewerId)) return 'Anonymous';
+    if (isAnonymous && !scannedByUsers.contains(viewerId)) return AppTextConstants.anonymousDisplayName;
     return name;
   }
   
   /// Get display email based on viewer permissions
   String getDisplayEmailFor(String viewerId, bool viewerIsAdmin) {
+    if (viewerId == uid) return email; // Users always see their own email
     if (viewerIsAdmin) return email;
     if (isAnonymous && !scannedByUsers.contains(viewerId)) return '';
     return email;
+  }
+  
+  /// Get display profile image based on viewer permissions
+  String getDisplayImageUrlFor(String viewerId, bool viewerIsAdmin) {
+    if (viewerId == uid) return profileImageUrl; // Users always see their own image
+    if (viewerIsAdmin) return profileImageUrl;
+    if (isAnonymous && !scannedByUsers.contains(viewerId)) return '';
+    return profileImageUrl;
   }
   
   /// Check if viewer is connected to this user via QR scan
