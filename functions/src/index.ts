@@ -1444,57 +1444,32 @@ export const addScannedConnection = onCall(
 );
 
 /**
- * ADMIN ONLY: Manually verify user emails for testing purposes
- * Allows admins to mark user emails as verified in Firebase Auth
- *
- * SPECIAL MODE: If called without authentication, uses hardcoded emails
- * This allows running directly from Google Cloud Console
+ * TESTING ONLY: Manually verify user emails
+ * 
+ * HOW TO USE:
+ * 1. Update the hardcoded emails array below (lines 20-25)
+ * 2. Deploy: firebase deploy --only functions:manuallyVerifyEmails
+ * 3. Run in Google Cloud Shell:
+ *    gcloud functions call manuallyVerifyEmails --region=asia-southeast1 --data='{}'
+ * 4. After testing, comment out this function and redeploy to remove it
+ * 
+ * UNCOMMENT BELOW TO USE:
  */
+/*
 export const manuallyVerifyEmails = onCall(
   {region: FUNCTION_REGION},
   async (request) => {
     console.log("=== Start Manual Email Verification ===");
 
-    // SPECIAL MODE: Allow running without auth with hardcoded emails
-    let emails: string[];
+    // HARDCODED EMAILS - Update these before deploying
+    const emails = [
+      "adminuser@gmail.com",
+      "testuser1@gmail.com",
+      "speaker1@gmail.com",
+      "testuser3@gmail.com",
+    ];
 
-    if (!request.auth || !request.auth.uid) {
-      // Running from Google Cloud Console - use hardcoded emails
-      console.log("Running in HARDCODED mode (no authentication)");
-
-      emails = [
-        "adminuser@gmail.com",
-        "testuser1@gmail.com",
-        "speaker1@gmail.com",
-        "testuser3@gmail.com",
-      ];
-
-      console.log(`Using hardcoded emails: ${emails.join(", ")}`);
-    } else {
-      // Normal mode with authentication
-      const adminUid = request.auth.uid;
-
-      // Check if user is admin
-      const adminDoc = await db.collection("users").doc(adminUid).get();
-      if (!adminDoc.exists || adminDoc.data()?.role !== "admin") {
-        throw new HttpsError(
-          "permission-denied",
-          "Only admins can manually verify emails."
-        );
-      }
-
-      emails = request.data.emails;
-
-      // Validation
-      if (!emails || !Array.isArray(emails) || emails.length === 0) {
-        throw new HttpsError(
-          "invalid-argument",
-          "An array of email addresses is required."
-        );
-      }
-
-      console.log(`Admin ${adminUid} verifying ${emails.length} emails`);
-    }
+    console.log(`Verifying ${emails.length} emails: ${emails.join(", ")}`);
 
     const results: Array<{email: string; success: boolean; error?: string}> =
       [];
@@ -1556,3 +1531,4 @@ export const manuallyVerifyEmails = onCall(
     };
   }
 );
+*/

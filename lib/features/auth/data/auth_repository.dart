@@ -68,6 +68,8 @@ class AuthRepository {
         'name': name ?? email.split('@')[0],
         'role': 'attendee',
         'status': 'approved',
+        'profileVisibility': 'minimal', // Default privacy level (user will be forced to confirm/change on first login)
+        // privacySelectedAt is intentionally null - user must make explicit choice on first login
         'qrCodePayload': '',
         'profileImageUrl': '',
         'title': '',
