@@ -46,6 +46,12 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
     final time = await showTimePicker(
       context: context,
       initialTime: _selectedTime,
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+          child: child!,
+        );
+      },
     );
     if (time != null) {
       setState(() {

@@ -102,4 +102,5 @@ flutter:
   # Assets configuration
   assets:
     - assets/images/
+    - assets/images/tmp/
     - assets/icons/

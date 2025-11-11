@@ -40,28 +40,6 @@ class LiveStreamCard extends ConsumerWidget {
                 children: [
                   Row(
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(Icons.circle, color: Colors.white, size: 8),
-                            SizedBox(width: 4),
-                            Text(
-                              'LIVE',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                       const Spacer(),
                       Text(
                         DateFormat('h:mm a').format(activeSession.startTime),
