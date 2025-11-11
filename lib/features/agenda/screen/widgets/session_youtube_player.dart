@@ -14,9 +14,12 @@ class SessionYoutubePlayer extends StatefulWidget {
   State<SessionYoutubePlayer> createState() => _SessionYoutubePlayerState();
 }
 
-class _SessionYoutubePlayerState extends State<SessionYoutubePlayer> {
+class _SessionYoutubePlayerState extends State<SessionYoutubePlayer> with AutomaticKeepAliveClientMixin {
   YoutubePlayerController? _controller;
   bool _isPlayerReady = false;
+
+  @override
+  bool get wantKeepAlive => true; // Keep state alive to prevent rebuilds
 
   @override
   void initState() {
@@ -75,6 +78,8 @@ class _SessionYoutubePlayerState extends State<SessionYoutubePlayer> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
     // Don't show anything if conditions aren't met
     if (!_shouldShowPlayer()) {
       return const SizedBox.shrink();
@@ -91,49 +96,47 @@ class _SessionYoutubePlayerState extends State<SessionYoutubePlayer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.circle, color: Colors.white, size: 8),
-                      SizedBox(width: 4),
-                      Text(
-                        'LIVE',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Live Stream',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // LIVE badge - commented out for potential future use
+          // Padding(
+          //   padding: const EdgeInsets.all(16),
+          //   child: Row(
+          //     children: [
+          //       Container(
+          //         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          //         decoration: BoxDecoration(
+          //           color: Colors.red,
+          //           borderRadius: BorderRadius.circular(4),
+          //         ),
+          //         child: const Row(
+          //           mainAxisSize: MainAxisSize.min,
+          //           children: [
+          //             Icon(Icons.circle, color: Colors.white, size: 8),
+          //             SizedBox(width: 4),
+          //             Text(
+          //               'LIVE',
+          //               style: TextStyle(
+          //                 color: Colors.white,
+          //                 fontSize: 12,
+          //                 fontWeight: FontWeight.bold,
+          //               ),
+          //             ),
+          //           ],
+          //         ),
+          //       ),
+          //       const SizedBox(width: 12),
+          //       Expanded(
+          //         child: Text(
+          //           'Live Stream',
+          //           style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          //             fontWeight: FontWeight.bold,
+          //           ),
+          //         ),
+          //       ),
+          //     ],
+          //   ),
+          // ),
           ClipRRect(
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(12),
-              bottomRight: Radius.circular(12),
-            ),
+            borderRadius: BorderRadius.circular(12),
             child: AspectRatio(
               aspectRatio: 16 / 9,
               child: YoutubePlayer(

@@ -52,6 +52,16 @@
 - Field 1: `status` (Ascending)
 - Field 2: `role` (Ascending)
 
+### 6. Admin Notifications Collection
+**Query**: Get admin notifications filtered by target role, ordered by time
+```dart
+.where('targetRole', isEqualTo: role)
+.orderBy('timestamp', descending: true)
+```
+**Index Required**:
+- Field 1: `targetRole` (Ascending)
+- Field 2: `timestamp` (Descending)
+
 ## **SINGLE FIELD INDEXES** 
 *(Automatically created by Firebase)*
 

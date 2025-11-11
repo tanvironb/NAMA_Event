@@ -12,12 +12,16 @@ class YoutubeLivePlayer extends ConsumerStatefulWidget {
 }
 
 class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   YoutubePlayerController? _controller;
   bool _isPlayerReady = false;
   bool _isMinimized = false;
+  bool _isClosed = false; // Track if player was closed
   late AnimationController _animationController;
   late Animation<double> _slideAnimation;
+
+  @override
+  bool get wantKeepAlive => true; // Keep state alive
 
   @override
   void initState() {
@@ -48,34 +52,29 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
   }
 
   void _initializePlayer(String videoId) {
-    if (_controller != null) {
-      _controller!.dispose();
-    }
-
+    _controller?.dispose();
     _controller = YoutubePlayerController(
       initialVideoId: videoId,
       flags: const YoutubePlayerFlags(
-        autoPlay: true,
+        autoPlay: true, // Auto-play when video appears
         mute: false,
         enableCaption: true,
         loop: false,
-        forceHD: false,
-        startAt: 0,
+        forceHD: false, // Allow quality selection
       ),
     );
 
-    _controller!.addListener(() {
-      if (_controller!.value.isReady && !_isPlayerReady) {
-        setState(() {
-          _isPlayerReady = true;
-        });
-        _animationController.forward();
-      }
+    setState(() {
+      _isPlayerReady = true;
     });
+
+    _animationController.forward();
   }
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    
     final activeLiveSession = ref.watch(activeLiveSessionProvider);
 
     return activeLiveSession.when(
@@ -84,13 +83,14 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
         print('🔗 YoutubeLivePlayer: Live stream URL = ${session?.liveStreamUrl ?? 'null'}');
         print('🔥 YoutubeLivePlayer: Priority = ${session?.priority ?? 'null'} (1=Low, 5=Max Urgent)');
         
-        if (session == null || session.liveStreamUrl.isEmpty) {
+        if (session == null || session.liveStreamUrl.isEmpty || _isClosed) {
           print('❌ YoutubeLivePlayer: No active session or empty URL, hiding player');
           // No active live session with stream URL, hide the player
-          if (_controller != null) {
+          if (_controller != null && (session == null || session.liveStreamUrl.isEmpty)) {
             _controller!.dispose();
             _controller = null;
             _isPlayerReady = false;
+            _isClosed = false; // Reset closed state when session ends
             _animationController.reset();
           }
           return const SizedBox.shrink();
@@ -145,42 +145,15 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
   Widget _buildFullPlayer(String sessionTitle) {
     return Container(
       height: 250,
-      decoration: const BoxDecoration(
-        color: Colors.black,
-      ),
+      color: Colors.black,
       child: Column(
         children: [
-          // Player header
+          // Header with session title and controls
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.goldenYellow.withOpacity(0.9),
-                  AppColors.goldenYellow.withOpacity(0.7),
-                ],
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-              ),
-            ),
+            color: AppColors.namaNavyBlue.withOpacity(0.95),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'LIVE',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     sessionTitle,
@@ -189,11 +162,12 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.minimize, color: Colors.white, size: 20),
+                  icon: const Icon(Icons.close_fullscreen, color: Colors.white, size: 20),
                   onPressed: () {
                     setState(() {
                       _isMinimized = true;
@@ -203,20 +177,21 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white, size: 20),
                   onPressed: () {
-                    _controller?.pause();
                     setState(() {
-                      _isPlayerReady = false;
+                      _isClosed = true;
                     });
+                    _controller?.pause();
                     _animationController.reverse();
                   },
                 ),
               ],
             ),
           ),
-          // YouTube Player
+          // YouTube Player - single instance
           Expanded(
             child: _controller != null
                 ? YoutubePlayer(
+                    key: ValueKey(_controller!.initialVideoId),
                     controller: _controller!,
                     showVideoProgressIndicator: true,
                     progressIndicatorColor: AppColors.goldenYellow,
@@ -224,12 +199,9 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
                       _controller!.addListener(() {});
                     },
                   )
-                : Container(
-                    color: Colors.black,
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.goldenYellow),
-                      ),
+                : const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.goldenYellow,
                     ),
                   ),
           ),
@@ -241,112 +213,86 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
   Widget _buildMinimizedPlayer(String sessionTitle) {
     return Container(
       height: 80,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.goldenYellow.withOpacity(0.9),
-            AppColors.goldenYellow.withOpacity(0.7),
-          ],
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(
-          children: [
-            // Mini video thumbnail/placeholder
-            Container(
-              width: 60,
-              height: 45,
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: _controller != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: AspectRatio(
-                        aspectRatio: 16 / 9,
-                        child: YoutubePlayer(
-                          controller: _controller!,
-                          showVideoProgressIndicator: false,
-                        ),
-                      ),
-                    )
-                  : const Icon(
-                      Icons.play_circle_fill,
-                      color: Colors.white,
-                      size: 30,
-                    ),
-            ),
-            const SizedBox(width: 12),
-            // Session info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
+      color: AppColors.namaDeepNavy,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            setState(() {
+              _isMinimized = false;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(
+              children: [
+                // Play icon indicator
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: AppColors.namaNavyBlue,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow_rounded,
+                    color: AppColors.goldenYellow,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Session title
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(3),
-                        ),
-                        child: const Text(
-                          'LIVE',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
+                      const Text(
+                        'LIVE NOW',
+                        style: TextStyle(
+                          color: AppColors.goldenYellow,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      const Icon(
-                        Icons.circle,
-                        color: Colors.red,
-                        size: 8,
+                      const SizedBox(height: 2),
+                      Text(
+                        sessionTitle,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    sessionTitle,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-                  ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                // Expand button
+                IconButton(
+                  icon: const Icon(Icons.open_in_full, color: Colors.white70, size: 20),
+                  onPressed: () {
+                    setState(() {
+                      _isMinimized = false;
+                    });
+                  },
+                ),
+                // Close button
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+                  onPressed: () {
+                    setState(() {
+                      _isClosed = true;
+                    });
+                    _controller?.pause();
+                    _animationController.reverse();
+                  },
+                ),
+              ],
             ),
-            // Expand button
-            IconButton(
-              icon: const Icon(Icons.expand_less, color: Colors.white, size: 24),
-              onPressed: () {
-                setState(() {
-                  _isMinimized = false;
-                });
-              },
-            ),
-            // Close button
-            IconButton(
-              icon: const Icon(Icons.close, color: Colors.white, size: 20),
-              onPressed: () {
-                _controller?.pause();
-                setState(() {
-                  _isPlayerReady = false;
-                });
-                _animationController.reverse();
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
