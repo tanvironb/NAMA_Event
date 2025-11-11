@@ -32,6 +32,16 @@
 - Field 1: `memberIds` (Array Contains)
 - Field 2: `createdAt` (Descending)
 
+### 4. Help Tickets Collection
+**Query**: Check if user submitted a ticket recently (rate limiting)
+```dart
+.where('userId', isEqualTo: userId)
+.where('createdAt', isGreaterThan: tenMinutesAgo)
+```
+**Index Required**:
+- Field 1: `userId` (Ascending)
+- Field 2: `createdAt` (Ascending)
+
 ## **SINGLE FIELD INDEXES** 
 *(Automatically created by Firebase)*
 
@@ -119,4 +129,4 @@ Review and update this document when:
 - Query patterns change
 - Performance issues are identified
 
-Last Updated: October 3, 2025
+Last Updated: November 11, 2025

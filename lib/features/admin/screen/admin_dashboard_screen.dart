@@ -5,6 +5,8 @@ import 'package:events_app_trueattempt/features/admin/screen/user_management_scr
 import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/send_notification_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/notification_management_screen.dart';
+import 'package:events_app_trueattempt/features/help/screen/admin_help_tickets_screen.dart';
+import 'package:events_app_trueattempt/features/help/data/help_repository.dart';
 
 class AdminDashboardScreen extends ConsumerWidget {
   const AdminDashboardScreen({super.key});
@@ -50,6 +52,24 @@ class AdminDashboardScreen extends ConsumerWidget {
               ));
             },
           ),
+          // Help Tickets Management
+          StreamBuilder<int>(
+            stream: ref.watch(helpRepositoryProvider).getPendingTicketsCountStream(),
+            builder: (context, snapshot) {
+              final pendingCount = snapshot.data ?? 0;
+              return _AdminActionCardWithBadge(
+                icon: Icons.help_outline,
+                title: 'Help Tickets',
+                subtitle: 'Manage user support requests.',
+                badgeCount: pendingCount,
+                onTap: () {
+                  Navigator.of(context).push(MaterialPageRoute(
+                    builder: (context) => const AdminHelpTicketsScreen(),
+                  ));
+                },
+              );
+            },
+          ),
           // Example Admin Action: Manage Sessions
           _AdminActionCard(
             icon: Icons.event_note,
@@ -89,6 +109,66 @@ class _AdminActionCard extends StatelessWidget {
     return Card(
       child: ListTile(
         leading: Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
+        title: Text(title, style: Theme.of(context).textTheme.titleMedium),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _AdminActionCardWithBadge extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final int badgeCount;
+  final VoidCallback onTap;
+
+  const _AdminActionCardWithBadge({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.badgeCount,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Icon(icon, size: 40, color: Theme.of(context).colorScheme.primary),
+            if (badgeCount > 0)
+              Positioned(
+                right: -4,
+                top: -4,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 20,
+                    minHeight: 20,
+                  ),
+                  child: Center(
+                    child: Text(
+                      badgeCount > 99 ? '99+' : badgeCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
         title: Text(title, style: Theme.of(context).textTheme.titleMedium),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right),

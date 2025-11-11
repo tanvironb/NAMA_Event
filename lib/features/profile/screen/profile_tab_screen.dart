@@ -9,6 +9,7 @@ import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart
 import 'package:events_app_trueattempt/features/agenda/screen/my_bookmarks_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
+import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
 
 class ProfileTabScreen extends ConsumerWidget {
   const ProfileTabScreen({super.key});
@@ -145,9 +146,11 @@ class ProfileTabScreen extends ConsumerWidget {
                     title: 'Help Center',
                     subtitle: 'Get help and support',
                     onTap: () {
-                      // TODO: Navigate to help center
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Help Center coming soon!')),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const HelpCenterScreen(),
+                        ),
                       );
                     },
                   ),
