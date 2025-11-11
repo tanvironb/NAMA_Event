@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/widgets/session_youtube_player.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/widgets/session_bookmark_button.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 
 // SessionDetailScreen displays the detailed information for a selected session.
 class SessionDetailScreen extends ConsumerWidget {
@@ -91,11 +92,14 @@ class SessionDetailScreen extends ConsumerWidget {
                         ),
                         title: Text(speaker.name, style: Theme.of(context).textTheme.titleMedium),
                         subtitle: Text(speaker.title, style: Theme.of(context).textTheme.bodySmall),
+                        trailing: const Icon(Icons.chevron_right, color: AppColors.namaMediumGray),
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Speaker profile for ${speaker.name} coming soon!')),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => UserDetailsScreen(userId: speaker.uid),
+                            ),
                           );
-                          // TODO: Navigate to Speaker Profile in Phase 2/3
                         },
                       ),
                     );
@@ -148,6 +152,8 @@ class SessionDetailScreen extends ConsumerWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
+            // Bottom padding for devices with navigation buttons
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
           ],
         ),
       ),

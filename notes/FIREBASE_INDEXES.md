@@ -42,6 +42,16 @@
 - Field 1: `userId` (Ascending)
 - Field 2: `createdAt` (Ascending)
 
+### 5. Users Collection
+**Query**: Get users by status and role (notification targeting)
+```dart
+.where('status', isEqualTo: 'approved')
+.where('role', isEqualTo: role)
+```
+**Index Required**:
+- Field 1: `status` (Ascending)
+- Field 2: `role` (Ascending)
+
 ## **SINGLE FIELD INDEXES** 
 *(Automatically created by Firebase)*
 

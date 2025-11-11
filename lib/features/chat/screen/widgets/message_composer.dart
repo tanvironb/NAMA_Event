@@ -299,31 +299,33 @@ class _MessageComposerState extends ConsumerState<MessageComposer> {
             color: AppColors.surface,
             border: Border(top: BorderSide(color: AppColors.lightGray)),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _controller,
-                  decoration: const InputDecoration(
-                    hintText: 'Type a message...',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16),
+          child: SafeArea(
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      hintText: 'Type a message...',
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                    textCapitalization: TextCapitalization.sentences,
+                    onSubmitted: (_) => _sendMessage(),
                   ),
-                  textCapitalization: TextCapitalization.sentences,
-                  onSubmitted: (_) => _sendMessage(),
                 ),
-              ),
-              IconButton(
-                icon: _isSending
-                    ? const SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send, color: AppColors.navyBlue),
-                onPressed: _isSending ? null : _sendMessage,
-              ),
-            ],
+                IconButton(
+                  icon: _isSending
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send, color: AppColors.navyBlue),
+                  onPressed: _isSending ? null : _sendMessage,
+                ),
+              ],
+            ),
           ),
         ),
       ],

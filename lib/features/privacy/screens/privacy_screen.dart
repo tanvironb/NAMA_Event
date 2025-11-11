@@ -276,6 +276,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                     ),
                   ),
                 ),
+                // Bottom padding for devices with navigation buttons
+                SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
               ],
             ),
           );
