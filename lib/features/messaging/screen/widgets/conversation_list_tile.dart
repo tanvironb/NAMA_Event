@@ -14,15 +14,69 @@ class ConversationListTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUserId = ref.watch(firebaseAuthProvider).currentUser?.uid;
+    final currentUserAsync = ref.watch(userAppProfileStreamProvider);
+    
     // Find the other user's ID
     final otherUserId = conversation.members.firstWhere((id) => id != currentUserId, orElse: () => '');
     
     if (otherUserId.isEmpty || currentUserId == null) return const SizedBox.shrink();
 
-    final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
-    final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
-    
-    // Get unread count for current user
+    return currentUserAsync.when(
+      data: (currentUser) {
+        // Fetch the other user's profile to get privacy-aware display name
+        final otherUserAsync = ref.watch(userProfileByIdProvider(otherUserId));
+        
+        return otherUserAsync.when(
+          data: (otherUser) {
+            if (otherUser == null) {
+              // Fallback to cached memberInfo if user not found
+              final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
+              final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
+              return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
+            }
+            
+            // Use privacy-aware display name
+            final viewerIsAdmin = currentUser?.role == 'admin';
+            final displayName = otherUser.getDisplayNameFor(currentUserId, viewerIsAdmin);
+            
+            return _buildTile(context, currentUserId, otherUserId, displayName, otherUser.profileImageUrl);
+          },
+          loading: () {
+            // Show cached data while loading
+            final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
+            final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
+            return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
+          },
+          error: (_, __) {
+            // Fallback to cached memberInfo on error
+            final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
+            final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
+            return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
+          },
+        );
+      },
+      loading: () {
+        // Show cached data while loading current user
+        final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
+        final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
+        return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
+      },
+      error: (_, __) {
+        // Fallback to cached memberInfo
+        final otherUserName = conversation.memberInfo[otherUserId]?['name'] ?? 'User';
+        final otherUserImage = conversation.memberInfo[otherUserId]?['profileImageUrl'] ?? '';
+        return _buildTile(context, currentUserId, otherUserId, otherUserName, otherUserImage);
+      },
+    );
+  }
+
+  Widget _buildTile(
+    BuildContext context,
+    String currentUserId,
+    String otherUserId,
+    String otherUserName,
+    String otherUserImage,
+  ) {    // Get unread count for current user
     final unreadCount = conversation.getUnreadCountForUser(currentUserId);
     final hasUnread = unreadCount > 0;
     

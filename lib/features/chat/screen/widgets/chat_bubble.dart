@@ -4,6 +4,7 @@ import 'package:events_app_trueattempt/core/models/message_model.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/chat/screen/widgets/message_moderation_dialog.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 
 class ChatBubble extends ConsumerWidget {
   final Message message;
@@ -116,26 +117,37 @@ class ChatBubble extends ConsumerWidget {
                   children: [
                     // Show sender name and role for others' messages (WhatsApp style)
                     if (!isMe)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            message.senderName,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: _getRoleColor(message.senderRole),
-                                ),
-                          ),
-                          // Show muted indicator to moderators
-                          if (canModerate && isUserMuted) ...[
-                            const SizedBox(width: 4),
-                            const Icon(
-                              Icons.volume_off,
-                              size: 12,
-                              color: AppColors.warningAmber,
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => UserDetailsScreen(userId: message.senderId),
                             ),
+                          );
+                        },
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              message.senderName,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: _getRoleColor(message.senderRole),
+                                    decoration: TextDecoration.underline,
+                                  ),
+                            ),
+                            // Show muted indicator to moderators
+                            if (canModerate && isUserMuted) ...[
+                              const SizedBox(width: 4),
+                              const Icon(
+                                Icons.volume_off,
+                                size: 12,
+                                color: AppColors.warningAmber,
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     if (!isMe) const SizedBox(height: 4),
                     Text(

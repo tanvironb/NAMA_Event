@@ -51,6 +51,63 @@ class UserDetailsScreen extends ConsumerWidget {
         return currentUserAsync.when(
           data: (currentUser) {
             final viewerIsAdmin = currentUser?.role == 'admin';
+            final canViewProfile = appUser.canBeViewedBy(currentUserId ?? '', viewerIsAdmin);
+            
+            // If viewer cannot access this profile, show "ANONYMOUS" screen
+            if (!canViewProfile) {
+              return Scaffold(
+                backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                appBar: AppBar(
+                  title: const Text('Profile'),
+                  backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+                  foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
+                  elevation: 0,
+                ),
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.namaMediumGray.withOpacity(0.1),
+                        ),
+                        child: const Icon(
+                          Icons.person_off_outlined,
+                          size: 60,
+                          color: AppColors.namaMediumGray,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Anonymous',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.namaMediumGray,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 48),
+                        child: Text(
+                          'This user has chosen to remain anonymous.\nScan their QR code to connect.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: AppColors.namaMediumGray.withOpacity(0.8),
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            
             final canViewFullData = appUser.canViewFullDataBy(currentUserId ?? '', viewerIsAdmin);
             
             return Scaffold(
@@ -562,7 +619,7 @@ class UserDetailsScreen extends ConsumerWidget {
           scale: value,
           child: Column(
             children: [
-              // Say Hi button
+              // Say Hi button (always available - messaging is open to all)
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -612,7 +669,7 @@ class UserDetailsScreen extends ConsumerWidget {
               
               const SizedBox(height: 12),
               
-              // Request Meeting button
+              // Request Meeting button (always available)
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(

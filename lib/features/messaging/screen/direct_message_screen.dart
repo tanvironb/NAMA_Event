@@ -5,6 +5,7 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/chat/screen/widgets/chat_bubble.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/widgets/direct_message_composer.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/core/models/message_model.dart';
 import 'package:events_app_trueattempt/utils/date_time_utils.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -321,33 +322,43 @@ class _DirectMessageScreenState extends ConsumerState<DirectMessageScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            CircleAvatar(
-              radius: 16,
-              backgroundImage: widget.otherUserProfileImage.isNotEmpty
-                  ? NetworkImage(widget.otherUserProfileImage)
-                  : null,
-              backgroundColor: AppColors.avatarPlaceholder,
-              child: widget.otherUserProfileImage.isEmpty
-                  ? Text(
-                      widget.otherUserName.isNotEmpty ? widget.otherUserName[0].toUpperCase() : 'U',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.avatarPlaceholderText,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                widget.otherUserName,
-                overflow: TextOverflow.ellipsis,
+        title: GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => UserDetailsScreen(userId: widget.otherUserId),
               ),
-            ),
-          ],
+            );
+          },
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 16,
+                backgroundImage: widget.otherUserProfileImage.isNotEmpty
+                    ? NetworkImage(widget.otherUserProfileImage)
+                    : null,
+                backgroundColor: AppColors.avatarPlaceholder,
+                child: widget.otherUserProfileImage.isEmpty
+                    ? Text(
+                        widget.otherUserName.isNotEmpty ? widget.otherUserName[0].toUpperCase() : 'U',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.avatarPlaceholderText,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  widget.otherUserName,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       body: currentUserAsync.when(

@@ -6,6 +6,7 @@ import 'package:events_app_trueattempt/config/app_icons.dart';
 import 'package:events_app_trueattempt/core/enums/profile_visibility.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/privacy/widgets/privacy_selection_dialog.dart';
+import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 class PrivacyScreen extends ConsumerStatefulWidget {
@@ -210,18 +211,40 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                 // Connection Stats
                 _buildSectionHeader('Connection Statistics'),
                 const SizedBox(height: 8),
-                _buildStatCard(
-                  icon: AppIcons.people,
-                  title: 'Users who scanned you',
-                  value: scannedByCount.toString(),
-                  color: AppColors.namaGoldenYellow,
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ConnectionsScreen(),
+                      ),
+                    );
+                  },
+                  child: _buildStatCard(
+                    icon: AppIcons.people,
+                    title: 'Users who scanned you',
+                    value: scannedByCount.toString(),
+                    color: AppColors.namaGoldenYellow,
+                    showArrow: true,
+                  ),
                 ),
                 const SizedBox(height: 8),
-                _buildStatCard(
-                  icon: AppIcons.qrCodeScanner,
-                  title: 'Users you scanned',
-                  value: usersIScannedCount.toString(),
-                  color: AppColors.namaNavyBlue,
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ConnectionsScreen(),
+                      ),
+                    );
+                  },
+                  child: _buildStatCard(
+                    icon: AppIcons.qrCodeScanner,
+                    title: 'Users you scanned',
+                    value: usersIScannedCount.toString(),
+                    color: AppColors.namaNavyBlue,
+                    showArrow: true,
+                  ),
                 ),
                 const SizedBox(height: 24),
                 
@@ -325,6 +348,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     required String title,
     required String value,
     required Color color,
+    bool showArrow = false,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -360,6 +384,13 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                   fontWeight: FontWeight.bold,
                 ),
           ),
+          if (showArrow) ...[
+            const SizedBox(width: 8),
+            Icon(
+              Icons.chevron_right,
+              color: color,
+            ),
+          ],
         ],
       ),
     );
