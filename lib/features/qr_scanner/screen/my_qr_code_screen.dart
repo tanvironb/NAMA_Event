@@ -5,6 +5,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/config/app_icons.dart';
 import 'package:events_app_trueattempt/core/enums/profile_visibility.dart';
 
 class MyQRCodeScreen extends ConsumerWidget {
@@ -73,7 +74,7 @@ class MyQRCodeScreen extends ConsumerWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.qr_code,
+                        AppIcons.qrCode,
                         size: 64,
                         color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
                       ),
@@ -295,7 +296,7 @@ class MyQRCodeScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
-                        Icons.info_outline,
+                        AppIcons.info,
                         size: 20,
                         color: Theme.of(context).colorScheme.primary,
                       ),
@@ -325,7 +326,7 @@ class MyQRCodeScreen extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.error_outline,
+                    AppIcons.error,
                     size: 64,
                     color: Theme.of(context).colorScheme.error,
                   ),

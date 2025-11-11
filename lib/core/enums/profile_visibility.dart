@@ -1,3 +1,5 @@
+import 'package:events_app_trueattempt/config/app_icons.dart';
+
 /// Enum representing the three levels of profile visibility
 enum ProfileVisibility {
   /// User appears as "Anonymous" with detective icon
@@ -57,11 +59,11 @@ enum ProfileVisibility {
   String get icon {
     switch (this) {
       case ProfileVisibility.anonymous:
-        return '🕵️';
+        return AppIcons.privacyAnonymous;
       case ProfileVisibility.minimal:
-        return '👤';
+        return AppIcons.privacyMinimal;
       case ProfileVisibility.full:
-        return '🌐';
+        return AppIcons.privacyFull;
     }
   }
 }

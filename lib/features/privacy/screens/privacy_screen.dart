@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/config/app_icons.dart';
 import 'package:events_app_trueattempt/core/enums/profile_visibility.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/privacy/widgets/privacy_selection_dialog.dart';
@@ -193,7 +194,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                 
                 ElevatedButton.icon(
                   onPressed: _isLoading ? null : _changePrivacyLevel,
-                  icon: const Icon(Icons.edit),
+                  icon: const Icon(AppIcons.edit),
                   label: const Text('Change Privacy Level'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.namaNavyBlue,
@@ -210,14 +211,14 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                 _buildSectionHeader('Connection Statistics'),
                 const SizedBox(height: 8),
                 _buildStatCard(
-                  icon: Icons.people_outline,
+                  icon: AppIcons.people,
                   title: 'Users who scanned you',
                   value: scannedByCount.toString(),
                   color: AppColors.namaGoldenYellow,
                 ),
                 const SizedBox(height: 8),
                 _buildStatCard(
-                  icon: Icons.qr_code_scanner,
+                  icon: AppIcons.qrCodeScanner,
                   title: 'Users you scanned',
                   value: usersIScannedCount.toString(),
                   color: AppColors.namaNavyBlue,
@@ -228,7 +229,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                 _buildSectionHeader('Application'),
                 const SizedBox(height: 8),
                 _buildInfoCard(
-                  icon: Icons.info_outline,
+                  icon: AppIcons.info,
                   title: 'App Version',
                   value: _appVersion,
                 ),
@@ -237,7 +238,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                 // Logout Button
                 ElevatedButton.icon(
                   onPressed: _logout,
-                  icon: const Icon(Icons.logout),
+                  icon: const Icon(AppIcons.logout),
                   label: const Text('Logout'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
