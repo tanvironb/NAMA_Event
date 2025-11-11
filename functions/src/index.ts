@@ -1442,3 +1442,117 @@ export const addScannedConnection = onCall(
     }
   }
 );
+
+/**
+ * ADMIN ONLY: Manually verify user emails for testing purposes
+ * Allows admins to mark user emails as verified in Firebase Auth
+ *
+ * SPECIAL MODE: If called without authentication, uses hardcoded emails
+ * This allows running directly from Google Cloud Console
+ */
+export const manuallyVerifyEmails = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    console.log("=== Start Manual Email Verification ===");
+
+    // SPECIAL MODE: Allow running without auth with hardcoded emails
+    let emails: string[];
+
+    if (!request.auth || !request.auth.uid) {
+      // Running from Google Cloud Console - use hardcoded emails
+      console.log("Running in HARDCODED mode (no authentication)");
+
+      emails = [
+        "adminuser@gmail.com",
+        "testuser1@gmail.com",
+        "speaker1@gmail.com",
+        "testuser3@gmail.com",
+      ];
+
+      console.log(`Using hardcoded emails: ${emails.join(", ")}`);
+    } else {
+      // Normal mode with authentication
+      const adminUid = request.auth.uid;
+
+      // Check if user is admin
+      const adminDoc = await db.collection("users").doc(adminUid).get();
+      if (!adminDoc.exists || adminDoc.data()?.role !== "admin") {
+        throw new HttpsError(
+          "permission-denied",
+          "Only admins can manually verify emails."
+        );
+      }
+
+      emails = request.data.emails;
+
+      // Validation
+      if (!emails || !Array.isArray(emails) || emails.length === 0) {
+        throw new HttpsError(
+          "invalid-argument",
+          "An array of email addresses is required."
+        );
+      }
+
+      console.log(`Admin ${adminUid} verifying ${emails.length} emails`);
+    }
+
+    const results: Array<{email: string; success: boolean; error?: string}> =
+      [];
+
+    for (const email of emails) {
+      try {
+        // Get user by email
+        const userRecord = await admin.auth().getUserByEmail(email);
+
+        // Check if already verified
+        if (userRecord.emailVerified) {
+          results.push({
+            email,
+            success: true,
+            error: "Already verified",
+          });
+          console.log(`✓ ${email} - Already verified`);
+          continue;
+        }
+
+        // Update user to mark email as verified
+        await admin.auth().updateUser(userRecord.uid, {
+          emailVerified: true,
+        });
+
+        results.push({
+          email,
+          success: true,
+        });
+
+        console.log(`✓ ${email} - Successfully verified`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ?
+          error.message :
+          "Unknown error";
+        results.push({
+          email,
+          success: false,
+          error: errorMessage,
+        });
+
+        console.error(`✗ ${email} - Error: ${errorMessage}`);
+      }
+    }
+
+    const successCount = results.filter((r) => r.success).length;
+    const failureCount = results.length - successCount;
+
+    console.log(`✓ Verified ${successCount} emails`);
+    console.log(`✗ Failed ${failureCount} emails`);
+    console.log("=== End Manual Email Verification ===\n");
+
+    return {
+      success: true,
+      total: emails.length,
+      verified: successCount,
+      failed: failureCount,
+      results: results,
+    };
+  }
+);

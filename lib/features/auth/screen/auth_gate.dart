@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
+import 'package:events_app_trueattempt/features/auth/screen/email_verification_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/main_hub/screen/main_hub_screen.dart';
 import 'package:events_app_trueattempt/features/auth/screen/pending_approval_screen.dart';
@@ -19,7 +20,12 @@ class AuthGate extends ConsumerWidget {
     return authState.when(
       data: (user) {
         if (user != null && user.email != null) {
-          // User is authenticated - check their profile and status
+          // Check if email is verified first
+          if (!user.emailVerified) {
+            return const EmailVerificationScreen();
+          }
+          
+          // User is authenticated and verified - check their profile and status
           final userProfileAsync = ref.watch(userAppProfileStreamProvider);
           return userProfileAsync.when(
             data: (appUser) {

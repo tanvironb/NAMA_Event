@@ -40,6 +40,10 @@ class FirestoreService {
   Future<void> updateUserDocument(String uid, Map<String, dynamic> data) async {
     await _db.collection('users').doc(uid).update(data);
   }
+
+  Future<void> deleteUserDocument(String uid) async {
+    await _db.collection('users').doc(uid).delete();
+  }
   
   Future<List<DocumentSnapshot>> getUserDocumentsByIds(List<String> uids) async {
     if (uids.isEmpty) return [];

@@ -23,18 +23,20 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
       }
     } on FirebaseAuthException catch (e, stack) {
       if (mounted) {
-        state = AsyncValue.error(e.message ?? 'Authentication failed.', stack);
+        // Pass full exception so we can check error code
+        state = AsyncValue.error(e, stack);
       }
     }
   }
 
   // Handles user sign-up.
-  Future<void> signUp(String email, String password) async {
+  Future<void> signUp(String email, String password, {String? name}) async {
     if (!mounted) return;
     
     state = const AsyncValue.loading();
     try {
-      await _authRepository.createUserWithEmailAndPassword(email, password);
+      await _authRepository.createUserWithEmailAndPassword(email, password, name: name);
+      // DON'T send verification email automatically - user will do it manually
       if (mounted) {
         state = const AsyncValue.data(null);
       }

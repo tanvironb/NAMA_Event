@@ -20,60 +20,98 @@ class AuthRepository {
   /// This prevents unauthorized access to the application
 
   Future<UserCredential> signInWithEmailAndPassword(String email, String password) async {
-    final userCredential = await _firebaseAuth.signInWithEmailAndPassword(email: email, password: password);
+    // First try to sign in - this validates BOTH email AND password
+    final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
+      email: email, 
+      password: password
+    );
     
-    // SECURITY: Only allow sign-in if user already has a valid profile
-    // This prevents unauthorized users from gaining access
-    final userId = userCredential.user!.uid;
-    final userDoc = await _firestoreService.getUserDocument(userId);
+    final user = userCredential.user;
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No user found.',
+      );
+    }
+    
+    // Check if email is verified
+    if (!user.emailVerified) {
+      // Keep user signed in for verification dialog flow
+      throw FirebaseAuthException(
+        code: 'email-not-verified',
+        message: 'Your email is pending verification.',
+      );
+    }
+    
+    // Check if user document exists in Firestore
+    final userDoc = await _firestoreService.getUserDocument(user.uid);
     
     if (!userDoc.exists) {
-      // User exists in Firebase Auth but NOT authorized for this app
-      // Sign them out immediately and throw error
       await _firebaseAuth.signOut();
       throw FirebaseAuthException(
         code: 'user-not-authorized',
-        message: 'This account is not authorized to access this application. Please contact an administrator.',
+        message: 'Account not found. Please register.',
       );
     }
     
     return userCredential;
   }
 
-  Future<UserCredential> createUserWithEmailAndPassword(String email, String password) async {
-    // First, create the user in Firebase Auth
-    final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(email: email, password: password);
-    
-    // Then, create their 'pending' profile document in Firestore
-    final userData = {
-      'email': email,
-      'name': email.split('@')[0],
-      'role': 'attendee',
-      'status': 'pending', // CRITICAL: Set status to pending
-      'qrCodePayload': '',
-      'profileImageUrl': '',
-      'title': '',
-      'company': '',
-      'bio': '',
-      'phone': '',
-      'linkedin': '',
-      'twitter': '',
-      'website': '',
-      'isOnline': false,
-      'lastSeen': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    await _firestoreService.createUserDocument(
-      uid: userCredential.user!.uid, 
-      userData: userData,
-    );
-    return userCredential;
+  Future<UserCredential> createUserWithEmailAndPassword(String email, String password, {String? name}) async {
+    try {
+      // Try to create the user
+      final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(email: email, password: password);
+      
+      // Create Firestore profile
+      final userData = {
+        'email': email,
+        'name': name ?? email.split('@')[0],
+        'role': 'attendee',
+        'status': 'approved',
+        'qrCodePayload': '',
+        'profileImageUrl': '',
+        'title': '',
+        'company': '',
+        'bio': '',
+        'phone': '',
+        'linkedin': '',
+        'twitter': '',
+        'website': '',
+        'isOnline': false,
+        'lastSeen': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      await _firestoreService.createUserDocument(
+        uid: userCredential.user!.uid, 
+        userData: userData,
+      );
+      
+      return userCredential;
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        throw FirebaseAuthException(
+          code: 'email-already-in-use',
+          message: 'This email is already registered. Please sign in or use password reset if you forgot your password.',
+        );
+      }
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {
     await _firebaseAuth.signOut();
   }
+
+  Future<void> sendEmailVerification() async {
+    final user = _firebaseAuth.currentUser;
+    if (user != null && !user.emailVerified) {
+      await user.sendEmailVerification();
+    }
+  }
+
+  User? get currentUser => _firebaseAuth.currentUser;
 }
 
 // Riverpod provider for AuthRepository
