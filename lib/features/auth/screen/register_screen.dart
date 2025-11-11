@@ -5,6 +5,7 @@ import 'package:events_app_trueattempt/features/auth/screen/email_verification_s
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/config/app_icons.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -19,6 +20,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
 
   @override
   void dispose() {
@@ -213,12 +217,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 TextFormField(
                   controller: _passwordController,
                   validator: _validatePassword,
-                  obscureText: true,
+                  obscureText: _obscurePassword,
                   textInputAction: TextInputAction.next,
                   decoration: InputDecoration(
                     labelText: 'Password',
                     hintText: 'At least 6 characters',
-                    prefixIcon: Icon(Icons.lock_outline, color: AppColors.namaMediumGray),
+                    prefixIcon: Icon(AppIcons.lock, color: AppColors.namaMediumGray),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword ? AppIcons.visibilityOff : AppIcons.visibilityOn,
+                        color: AppColors.namaMediumGray,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscurePassword = !_obscurePassword);
+                      },
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -231,13 +244,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 TextFormField(
                   controller: _confirmPasswordController,
                   validator: _validateConfirmPassword,
-                  obscureText: true,
+                  obscureText: _obscureConfirmPassword,
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => _handleRegister(),
                   decoration: InputDecoration(
                     labelText: 'Confirm Password',
                     hintText: 'Re-enter your password',
-                    prefixIcon: Icon(Icons.lock_outline, color: AppColors.namaMediumGray),
+                    prefixIcon: Icon(AppIcons.lock, color: AppColors.namaMediumGray),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscureConfirmPassword ? AppIcons.visibilityOff : AppIcons.visibilityOn,
+                        color: AppColors.namaMediumGray,
+                      ),
+                      onPressed: () {
+                        setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                      },
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),

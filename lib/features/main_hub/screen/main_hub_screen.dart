@@ -48,7 +48,7 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen> {
         canDismiss: false, // Cannot skip first-time selection
         onConfirm: (selectedLevel) async {
           // Update user's privacy level in Firestore
-          final currentUser = ref.read(currentUserProvider);
+          final currentUser = ref.read(firebaseAuthProvider).currentUser;
           if (currentUser != null) {
             await FirebaseFirestore.instance
                 .collection('users')

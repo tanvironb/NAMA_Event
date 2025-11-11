@@ -57,6 +57,15 @@ class AppIcons {
   
   /// People icon (outline style)
   static const IconData people = Icons.people_outline;
+  
+  /// Visibility on icon (show password)
+  static const IconData visibilityOn = Icons.visibility;
+  
+  /// Visibility off icon (hide password)
+  static const IconData visibilityOff = Icons.visibility_off;
+  
+  /// Lock icon (password)
+  static const IconData lock = Icons.lock_outline;
 
   // ============================================================================
   // Helper Methods

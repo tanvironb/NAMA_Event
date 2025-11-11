@@ -6,6 +6,7 @@ import 'package:events_app_trueattempt/config/app_icons.dart';
 import 'package:events_app_trueattempt/core/enums/profile_visibility.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/privacy/widgets/privacy_selection_dialog.dart';
+import 'package:events_app_trueattempt/features/privacy/screens/change_password_screen.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 class PrivacyScreen extends ConsumerStatefulWidget {
@@ -222,6 +223,32 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                   title: 'Users you scanned',
                   value: usersIScannedCount.toString(),
                   color: AppColors.namaNavyBlue,
+                ),
+                const SizedBox(height: 24),
+                
+                // Account Section
+                _buildSectionHeader('Account'),
+                const SizedBox(height: 8),
+                
+                // Change Password Button
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ChangePasswordScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(AppIcons.lock),
+                  label: const Text('Change Password'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.namaNavyBlue,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
                 
