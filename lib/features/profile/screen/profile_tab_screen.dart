@@ -7,6 +7,7 @@ import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/my_bookmarks_screen.dart';
+import 'package:events_app_trueattempt/features/calendar/screens/my_calendar_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
@@ -127,12 +128,12 @@ class ProfileTabScreen extends ConsumerWidget {
                     context,
                     icon: Icons.calendar_month_outlined,
                     title: 'My Calendar',
-                    subtitle: 'View your bookmarked sessions',
+                    subtitle: 'View your schedule',
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => const MyBookmarksScreen(),
+                          builder: (context) => const MyCalendarScreen(),
                         ),
                       );
                     },
