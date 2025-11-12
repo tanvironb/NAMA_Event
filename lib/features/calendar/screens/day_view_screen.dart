@@ -6,6 +6,7 @@ import 'package:events_app_trueattempt/features/calendar/providers/calendar_prov
 import 'package:events_app_trueattempt/features/calendar/models/calendar_entry.dart';
 import 'package:events_app_trueattempt/features/calendar/models/calendar_entry_type.dart';
 import 'package:events_app_trueattempt/features/calendar/widgets/entry_details_sheet.dart';
+import 'package:events_app_trueattempt/features/calendar/widgets/overlap_handler.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:intl/intl.dart';
 
@@ -55,7 +56,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final entries = ref.watch(entriesForDateProvider(widget.selectedDate));
+    final entriesAsync = ref.watch(entriesForDateProvider(widget.selectedDate));
     final dateFormat = DateFormat('EEEE, MMMM d');
 
     return Scaffold(
@@ -65,24 +66,65 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
         backgroundColor: AppColors.namaNavyBlue,
         foregroundColor: Colors.white,
       ),
-      body: entries.isEmpty
-          ? _buildEmptyState()
-          : Stack(
-              children: [
-                // Hour rows and entries
-                ListView.builder(
-                  controller: _scrollController,
-                  itemCount: 24, // 24 hours
-                  itemBuilder: (context, hour) {
-                    return _buildHourRow(hour, entries);
-                  },
-                ),
+      body: entriesAsync.when(
+        data: (entries) => entries.isEmpty
+            ? _buildEmptyState()
+            : _buildDayTimeline(entries),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => Center(
+          child: Text('Error loading calendar: $error'),
+        ),
+      ),
+    );
+  }
 
-                // Current time indicator (if today)
-                if (_isToday(widget.selectedDate))
-                  _buildCurrentTimeIndicator(),
-              ],
-            ),
+  Widget _buildDayTimeline(List<CalendarEntry> entries) {
+    // Group overlapping entries
+    final groups = OverlapHandler.groupOverlappingEntries(entries);
+    
+    // Calculate overflow box info for each hour
+    final Map<int, double> hourPadding = {};
+    
+    for (final group in groups) {
+      if (group.hasOverflow) {
+        // Find which hour the overflow box will be in
+        final latestEndTime = group.visibleEntries
+            .map((e) => e.endTime)
+            .reduce((a, b) => a.isAfter(b) ? a : b);
+        
+        final overflowHour = latestEndTime.hour;
+        final overflowBoxHeight = (group.overflowCount * 24.0) + 16.0; // Height needed
+        
+        // Add padding to this hour and potentially next hours
+        final currentPadding = hourPadding[overflowHour] ?? 0.0;
+        hourPadding[overflowHour] = currentPadding + overflowBoxHeight;
+      }
+    }
+
+    return SingleChildScrollView(
+      controller: _scrollController,
+      child: Column(
+        children: [
+          Stack(
+            children: [
+              // Hour rows with dynamic padding
+              Column(
+                children: List.generate(24, (hour) {
+                  final extraPadding = hourPadding[hour] ?? 0.0;
+                  return _buildHourRow(hour, extraPadding);
+                }),
+              ),
+              
+              // All entries and overflow boxes positioned absolutely
+              ..._buildAllEntries(groups, hourPadding),
+              
+              // Current time indicator (if today)
+              if (_isToday(widget.selectedDate))
+                _buildCurrentTimeIndicator(hourPadding),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -110,29 +152,31 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     );
   }
 
-  Widget _buildHourRow(int hour, List<CalendarEntry> allEntries) {
-    final hourStart = DateTime(
-      widget.selectedDate.year,
-      widget.selectedDate.month,
-      widget.selectedDate.day,
-      hour,
-    );
-    final hourEnd = hourStart.add(const Duration(hours: 1));
+  Widget _buildHourRow(int hour, double extraPadding) {
+    final format = DateFormat('h a');
+    final time = DateTime(2000, 1, 1, hour);
 
-    // Find entries that overlap with this hour
-    final entriesInHour = allEntries.where((entry) {
-      return entry.startTime.isBefore(hourEnd) && entry.endTime.isAfter(hourStart);
-    }).toList();
-
-    return SizedBox(
-      height: _hourHeight,
+    return Container(
+      height: _hourHeight + extraPadding,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Hour label
-          _buildHourLabel(hour),
+          Container(
+            width: 60,
+            padding: const EdgeInsets.only(right: 8, top: 4),
+            child: Text(
+              format.format(time),
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppColors.namaMediumGray,
+              ),
+            ),
+          ),
 
-          // Entries area
+          // Hour line
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -143,9 +187,6 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                   ),
                 ),
               ),
-              child: entriesInHour.isEmpty
-                  ? const SizedBox()
-                  : _buildEntriesForHour(hourStart, hourEnd, entriesInHour),
             ),
           ),
         ],
@@ -153,112 +194,51 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     );
   }
 
-  Widget _buildHourLabel(int hour) {
-    final format = DateFormat('h a');
-    final time = DateTime(2000, 1, 1, hour);
-
-    return Container(
-      width: 60,
-      padding: const EdgeInsets.only(right: 8, top: 4),
-      child: Text(
-        format.format(time),
-        textAlign: TextAlign.right,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: AppColors.namaMediumGray,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEntriesForHour(
-    DateTime hourStart,
-    DateTime hourEnd,
-    List<CalendarEntry> entries,
-  ) {
-    // Group overlapping entries
-    final groups = _groupOverlappingEntries(entries);
-
-    return Stack(
-      children: groups.map((group) {
-        return _buildEntryGroup(group, hourStart);
-      }).toList(),
-    );
-  }
-
-  List<_EntryGroup> _groupOverlappingEntries(List<CalendarEntry> entries) {
-    final List<_EntryGroup> groups = [];
-    final Set<String> processed = {};
-
-    for (final entry in entries) {
-      if (processed.contains(entry.id)) continue;
-
-      // Find overlapping entries
-      final overlapping = entries.where((other) {
-        return !processed.contains(other.id) && entry.overlapsWith(other);
-      }).toList();
-
-      if (overlapping.isEmpty) {
-        groups.add(_EntryGroup(entries: [entry]));
-        processed.add(entry.id);
+  List<Widget> _buildAllEntries(List<OverlapGroup> groups, Map<int, double> hourPadding) {
+    final List<Widget> widgets = [];
+    
+    for (final group in groups) {
+      if (group.entries.length == 1) {
+        // Single entry - full width
+        widgets.add(_buildPositionedEntry(group.entries[0], 0.0, 1.0, hourPadding));
+      } else if (group.entries.length == 2) {
+        // Two entries - side by side
+        widgets.add(_buildPositionedEntry(group.entries[0], 0.0, 0.5, hourPadding));
+        widgets.add(_buildPositionedEntry(group.entries[1], 0.5, 0.5, hourPadding));
       } else {
-        // Sort: earlier first, then sessions before meetings
-        overlapping.sort((a, b) {
-          final timeCompare = a.startTime.compareTo(b.startTime);
-          if (timeCompare != 0) return timeCompare;
-          return a.type == CalendarEntryType.session ? -1 : 1;
-        });
-
-        groups.add(_EntryGroup(entries: overlapping));
-        processed.addAll(overlapping.map((e) => e.id));
+        // 3+ overlapping entries
+        // Show first 2 entries (sessions/longest duration based on priority)
+        final firstTwo = [group.entries[0], group.entries[1]];
+        widgets.add(_buildPositionedEntry(firstTwo[0], 0.0, 0.5, hourPadding));
+        widgets.add(_buildPositionedEntry(firstTwo[1], 0.5, 0.5, hourPadding));
+        
+        // Add overflow box for remaining entries
+        final overflowEntries = group.entries.sublist(2);
+        widgets.add(_buildOverflowBox(overflowEntries, firstTwo, hourPadding));
       }
     }
-
-    return groups;
+    
+    return widgets;
   }
 
-  Widget _buildEntryGroup(_EntryGroup group, DateTime hourStart) {
-    if (group.entries.length == 1) {
-      return _buildSingleEntry(group.entries.first, hourStart, 1.0);
-    } else if (group.entries.length == 2) {
-      return Row(
-        children: [
-          Expanded(child: _buildSingleEntry(group.entries[0], hourStart, 0.5)),
-          Expanded(child: _buildSingleEntry(group.entries[1], hourStart, 0.5)),
-        ],
-      );
-    } else {
-      // 3+ entries: Show first 2, then "+N more" box
-      return _buildOverflowGroup(group, hourStart);
-    }
-  }
-
-  Widget _buildOverflowGroup(_EntryGroup group, DateTime hourStart) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: _buildSingleEntry(group.entries[0], hourStart, 0.5)),
-            Expanded(child: _buildSingleEntry(group.entries[1], hourStart, 0.5)),
-          ],
-        ),
-        _buildMoreEntriesBox(group.overflowEntries),
-      ],
-    );
-  }
-
-  Widget _buildSingleEntry(
+  Widget _buildPositionedEntry(
     CalendarEntry entry,
-    DateTime hourStart,
+    double leftFactor,
     double widthFactor,
+    Map<int, double> hourPadding,
   ) {
-    final minutesSinceHourStart = entry.startTime.isAfter(hourStart)
-        ? entry.startTime.difference(hourStart).inMinutes
-        : 0;
-
-    final topOffset = (minutesSinceHourStart / 60.0) * _hourHeight;
-
+    // Calculate cumulative padding up to this entry's start time
+    double cumulativePadding = 0.0;
+    for (int h = 0; h < entry.startTime.hour; h++) {
+      cumulativePadding += hourPadding[h] ?? 0.0;
+    }
+    
+    // Calculate position based on start time
+    final hour = entry.startTime.hour;
+    final minute = entry.startTime.minute;
+    final topOffset = (hour * _hourHeight) + ((minute / 60.0) * _hourHeight) + cumulativePadding;
+    
+    // Calculate height based on duration
     final durationMinutes = entry.durationMinutes;
     final height = (durationMinutes / 60.0) * _hourHeight;
 
@@ -267,9 +247,9 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
 
     return Positioned(
       top: topOffset,
-      left: 0,
-      right: 0,
-      height: height.clamp(30, double.infinity), // Minimum height
+      left: 60 + (leftFactor * (MediaQuery.of(context).size.width - 60)),
+      width: widthFactor * (MediaQuery.of(context).size.width - 60),
+      height: height.clamp(30, double.infinity),
       child: GestureDetector(
         onTap: () => _showEntryDetails(entry),
         child: Container(
@@ -331,77 +311,116 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     );
   }
 
-  Widget _buildMoreEntriesBox(List<CalendarEntry> overflowEntries) {
-    if (overflowEntries.isEmpty) return const SizedBox();
+  Widget _buildOverflowBox(
+    List<CalendarEntry> overflowEntries,
+    List<CalendarEntry> displayedEntries,
+    Map<int, double> hourPadding,
+  ) {
+    // Find the latest end time among the displayed entries
+    DateTime latestEndTime = displayedEntries[0].endTime;
+    for (final entry in displayedEntries) {
+      if (entry.endTime.isAfter(latestEndTime)) {
+        latestEndTime = entry.endTime;
+      }
+    }
+    
+    // Calculate cumulative padding up to overflow box position
+    double cumulativePadding = 0.0;
+    for (int h = 0; h < latestEndTime.hour; h++) {
+      cumulativePadding += hourPadding[h] ?? 0.0;
+    }
+    
+    // Position the overflow box right after the latest end time
+    final hour = latestEndTime.hour;
+    final minute = latestEndTime.minute;
+    final topOffset = (hour * _hourHeight) + ((minute / 60.0) * _hourHeight) + cumulativePadding + 4; // Small gap
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.namaMediumGray.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: overflowEntries.map((entry) {
-          return _buildOverflowEntryItem(entry);
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildOverflowEntryItem(CalendarEntry entry) {
-    final isSession = entry.type == CalendarEntryType.session;
-    final color = isSession ? AppColors.namaNavyBlue : AppColors.namaGoldenYellow;
-
-    return GestureDetector(
-      onTap: () => _showEntryDetails(entry),
+    return Positioned(
+      top: topOffset,
+      left: 60,
+      right: 0,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.all(8),
+        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(6),
+          color: AppColors.namaMediumGray.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: AppColors.namaMediumGray.withOpacity(0.3),
+            width: 1,
+          ),
         ),
-        child: Row(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: color,
-              ),
+            Row(
+              children: [
+                Icon(
+                  Icons.more_horiz,
+                  size: 16,
+                  color: AppColors.namaDarkGray,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '+${overflowEntries.length} more overlapping',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.namaDarkGray,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                entry.title,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: color,
+            const SizedBox(height: 8),
+            ...overflowEntries.map((entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: GestureDetector(
+                onTap: () => _showEntryDetails(entry),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 4,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: entry.type == CalendarEntryType.session
+                            ? AppColors.namaNavyBlue
+                            : AppColors.namaGoldenYellow,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${DateFormat('h:mm a').format(entry.startTime)} - ${entry.title}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.namaDarkGray,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+            )),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCurrentTimeIndicator() {
+  Widget _buildCurrentTimeIndicator(Map<int, double> hourPadding) {
     final now = DateTime.now();
+    
+    // Calculate cumulative padding up to current hour
+    double cumulativePadding = 0.0;
+    for (int h = 0; h < now.hour; h++) {
+      cumulativePadding += hourPadding[h] ?? 0.0;
+    }
+    
     final minutesSinceMidnight = now.hour * 60 + now.minute;
-    final topOffset = (minutesSinceMidnight / 60.0) * _hourHeight;
+    final topOffset = (minutesSinceMidnight / 60.0) * _hourHeight + cumulativePadding;
 
     return Positioned(
       top: topOffset,
@@ -450,13 +469,4 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
         date.month == now.month &&
         date.day == now.day;
   }
-}
-
-/// Helper class to group overlapping entries
-class _EntryGroup {
-  final List<CalendarEntry> entries;
-
-  _EntryGroup({required this.entries});
-
-  List<CalendarEntry> get overflowEntries => entries.skip(2).toList();
 }

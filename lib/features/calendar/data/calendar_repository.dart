@@ -1,5 +1,7 @@
 // lib/features/calendar/data/calendar_repository.dart
 
+import 'dart:async';
+import 'package:async/async.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/core/models/meeting_model.dart';
@@ -12,53 +14,78 @@ class CalendarRepository {
 
   CalendarRepository(this._firestore);
 
-  /// Get all calendar entries for a user (bookmarked sessions + approved meetings)
-  Stream<List<CalendarEntry>> getCalendarEntries({
+  /// Get real-time stream of calendar entries for a user (bookmarked sessions + approved meetings)
+  Stream<List<CalendarEntry>> getCalendarEntriesStream({
     required String userId,
     required String eventId,
     required List<String> bookmarkedSessionIds,
   }) {
-    // Combine streams of sessions and meetings
-    return _combineStreams(
-      userId: userId,
-      eventId: eventId,
-      bookmarkedSessionIds: bookmarkedSessionIds,
-    );
-  }
-
-  /// Combine sessions and meetings into a single stream of calendar entries
-  Stream<List<CalendarEntry>> _combineStreams({
-    required String userId,
-    required String eventId,
-    required List<String> bookmarkedSessionIds,
-  }) async* {
-    // Stream bookmarked sessions
-    final sessionsStream = _getBookmarkedSessions(eventId, bookmarkedSessionIds);
+    // Combine both streams (sessions and meetings) and merge them
+    final sessionsStream = _getBookmarkedSessionsStream(eventId, bookmarkedSessionIds);
+    final meetingsStream = _getApprovedMeetingsStream(userId);
     
-    // Stream approved meetings
-    final meetingsStream = _getApprovedMeetings(userId);
-
-    // Combine both streams
-    await for (final sessions in sessionsStream) {
-      final meetings = await meetingsStream.first;
+    return StreamZip([sessionsStream, meetingsStream]).map((results) {
+      final sessions = results[0] as List<Session>;
+      final meetings = results[1] as List<Meeting>;
       
       final List<CalendarEntry> entries = [];
       
-      // Add sessions
-      entries.addAll(sessions.map((session) => CalendarEntry.fromSession(session)));
+      // Convert sessions to calendar entries
+      for (final session in sessions) {
+        entries.add(CalendarEntry.fromSession(session));
+      }
       
-      // Add meetings
-      entries.addAll(meetings.map((meeting) => CalendarEntry.fromMeeting(meeting)));
+      // Convert meetings to calendar entries
+      for (final meeting in meetings) {
+        entries.add(CalendarEntry.fromMeeting(meeting));
+      }
       
       // Sort by start time
       entries.sort((a, b) => a.startTime.compareTo(b.startTime));
       
-      yield entries;
-    }
+      return entries;
+    });
   }
 
-  /// Get bookmarked sessions for the current event
-  Stream<List<Session>> _getBookmarkedSessions(String eventId, List<String> sessionIds) {
+  /// Get all calendar entries for a user (bookmarked sessions + approved meetings)
+  Future<List<CalendarEntry>> getCalendarEntries({
+    required String userId,
+    required String eventId,
+    required List<String> bookmarkedSessionIds,
+  }) async {
+    print('📅 CALENDAR: Fetching entries for user: $userId, event: $eventId');
+    print('📅 CALENDAR: Bookmarked sessions: ${bookmarkedSessionIds.length} IDs');
+    
+    final List<CalendarEntry> entries = [];
+    
+    // Fetch bookmarked sessions
+    final sessions = await _getBookmarkedSessions(eventId, bookmarkedSessionIds);
+    print('📅 CALENDAR: Fetched ${sessions.length} sessions from DB');
+    
+    for (final session in sessions) {
+      print('  📌 Session: ${session.id} - ${session.title}');
+      entries.add(CalendarEntry.fromSession(session));
+    }
+    
+    // Fetch approved meetings
+    final meetings = await _getApprovedMeetings(userId);
+    print('📅 CALENDAR: Fetched ${meetings.length} meetings from DB');
+    
+    for (final meeting in meetings) {
+      print('  🤝 Meeting: ${meeting.id}');
+      entries.add(CalendarEntry.fromMeeting(meeting));
+    }
+    
+    print('📅 CALENDAR: Total entries created: ${entries.length}');
+    
+    // Sort by start time
+    entries.sort((a, b) => a.startTime.compareTo(b.startTime));
+    
+    return entries;
+  }
+
+  /// Get stream of bookmarked sessions for the current event
+  Stream<List<Session>> _getBookmarkedSessionsStream(String eventId, List<String> sessionIds) {
     if (sessionIds.isEmpty) {
       return Stream.value([]);
     }
@@ -68,21 +95,43 @@ class CalendarRepository {
         .where('eventId', isEqualTo: eventId)
         .where(FieldPath.documentId, whereIn: sessionIds)
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Session.fromFirestore(doc))
-            .toList());
+        .map((snapshot) => snapshot.docs.map((doc) => Session.fromFirestore(doc)).toList());
   }
 
-  /// Get approved meetings for the user
-  Stream<List<Meeting>> _getApprovedMeetings(String userId) {
+  /// Get stream of approved meetings for the user
+  Stream<List<Meeting>> _getApprovedMeetingsStream(String userId) {
     return _firestore
         .collection('meetings')
         .where('memberIds', arrayContains: userId)
         .where('status', isEqualTo: 'accepted')
         .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Meeting.fromFirestore(doc))
-            .toList());
+        .map((snapshot) => snapshot.docs.map((doc) => Meeting.fromFirestore(doc)).toList());
+  }
+
+  /// Get bookmarked sessions for the current event
+  Future<List<Session>> _getBookmarkedSessions(String eventId, List<String> sessionIds) async {
+    if (sessionIds.isEmpty) {
+      return [];
+    }
+
+    final snapshot = await _firestore
+        .collection('sessions')
+        .where('eventId', isEqualTo: eventId)
+        .where(FieldPath.documentId, whereIn: sessionIds)
+        .get();
+    
+    return snapshot.docs.map((doc) => Session.fromFirestore(doc)).toList();
+  }
+
+  /// Get approved meetings for the user
+  Future<List<Meeting>> _getApprovedMeetings(String userId) async {
+    final snapshot = await _firestore
+        .collection('meetings')
+        .where('memberIds', arrayContains: userId)
+        .where('status', isEqualTo: 'accepted')
+        .get();
+    
+    return snapshot.docs.map((doc) => Meeting.fromFirestore(doc)).toList();
   }
 
   /// Save custom notes for a calendar entry

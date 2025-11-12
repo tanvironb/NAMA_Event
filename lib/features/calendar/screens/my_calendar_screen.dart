@@ -189,23 +189,12 @@ class MyCalendarScreen extends ConsumerWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ...entries.take(3).map((entry) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: _buildEntryChip(entry),
-          );
-        }),
-        if (entries.length > 3)
-          Text(
-            '+${entries.length - 3} more',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.namaMediumGray,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-      ],
+      children: entries.map((entry) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _buildEntryChip(entry),
+        );
+      }).toList(),
     );
   }
 

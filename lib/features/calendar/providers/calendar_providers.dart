@@ -7,35 +7,31 @@ import 'package:events_app_trueattempt/features/calendar/models/calendar_entry.d
 
 /// Provider for CalendarRepository
 final calendarRepositoryProvider = Provider<CalendarRepository>((ref) {
-  final firestore = ref.watch(firestoreProvider);
-  return CalendarRepository(firestore);
+  return CalendarRepository(ref.watch(firestoreProvider));
 });
 
-/// Provider for calendar entries stream
-final calendarEntriesProvider = StreamProvider<List<CalendarEntry>>((ref) {
+/// Stream provider for calendar entries (bookmarked sessions + approved meetings)
+/// Watches for real-time updates to sessions and meetings
+final calendarEntriesProvider = StreamProvider.autoDispose<List<CalendarEntry>>((ref) {
   final repository = ref.watch(calendarRepositoryProvider);
   final userAsync = ref.watch(userAppProfileStreamProvider);
   final activeEventAsync = ref.watch(activeEventFutureProvider);
 
-  return userAsync.when(
-    data: (user) {
-      if (user == null) {
-        return Stream.value([]);
-      }
+  // Extract user and event from AsyncValue using .asData?.value pattern (existing system pattern)
+  final user = userAsync.asData?.value;
+  if (user == null) {
+    return Stream.value([]);
+  }
 
-      final eventId = activeEventAsync.asData?.value.id;
-      if (eventId == null) {
-        return Stream.value([]);
-      }
-
-      return repository.getCalendarEntries(
-        userId: user.uid,
-        eventId: eventId,
-        bookmarkedSessionIds: user.bookmarkedSessions,
-      );
-    },
-    loading: () => Stream.value([]),
-    error: (_, __) => Stream.value([]),
+  final event = activeEventAsync.asData?.value;
+  if (event == null) {
+    return Stream.value([]);
+  }
+  
+  return repository.getCalendarEntriesStream(
+    userId: user.uid,
+    eventId: event.id,
+    bookmarkedSessionIds: user.bookmarkedSessions,
   );
 });
 
@@ -68,9 +64,24 @@ final calendarEntriesByDateProvider = Provider<Map<DateTime, List<CalendarEntry>
 });
 
 /// Provider for entries on a specific date
-final entriesForDateProvider = Provider.family<List<CalendarEntry>, DateTime>((ref, date) {
-  final groupedEntries = ref.watch(calendarEntriesByDateProvider);
+final entriesForDateProvider = Provider.autoDispose.family<AsyncValue<List<CalendarEntry>>, DateTime>((ref, date) {
+  final entriesAsync = ref.watch(calendarEntriesProvider);
   
-  final normalizedDate = DateTime(date.year, date.month, date.day);
-  return groupedEntries[normalizedDate] ?? [];
+  return entriesAsync.when(
+    data: (entries) {
+      final normalizedDate = DateTime(date.year, date.month, date.day);
+      final filtered = entries.where((entry) {
+        final entryDate = DateTime(
+          entry.startTime.year,
+          entry.startTime.month,
+          entry.startTime.day,
+        );
+        return entryDate == normalizedDate;
+      }).toList();
+      
+      return AsyncValue.data(filtered);
+    },
+    loading: () => const AsyncValue.loading(),
+    error: (error, stack) => AsyncValue.error(error, stack),
+  );
 });
