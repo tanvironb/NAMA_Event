@@ -36,12 +36,13 @@ class _EntryDetailsSheetState extends ConsumerState<EntryDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      child: Column(
+    return SafeArea(
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Handle bar
@@ -113,6 +114,7 @@ class _EntryDetailsSheetState extends ConsumerState<EntryDetailsSheet> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

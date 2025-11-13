@@ -37,16 +37,17 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
         backgroundColor: AppColors.namaNavyBlue,
         foregroundColor: Colors.white,
       ),
-      body: entriesAsync.when(
-        data: (entries) {
-          if (entries.isEmpty) {
-            return _buildEmptyState();
-          }
+      body: SafeArea(
+        child: entriesAsync.when(
+          data: (entries) {
+            if (entries.isEmpty) {
+              return _buildEmptyState();
+            }
 
-          // Get sorted list of dates
-          final dates = groupedEntries.keys.toList()..sort();
+            // Get sorted list of dates
+            final dates = groupedEntries.keys.toList()..sort();
 
-          return ListView.builder(
+            return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: dates.length,
             itemBuilder: (context, index) {
@@ -61,9 +62,10 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
             },
           );
         },
-        loading: () => const Center(child: LoadingIndicator()),
-        error: (error, stack) => Center(
-          child: Text('Error loading calendar: $error'),
+          loading: () => const Center(child: LoadingIndicator()),
+          error: (error, stack) => Center(
+            child: Text('Error loading calendar: $error'),
+          ),
         ),
       ),
     );

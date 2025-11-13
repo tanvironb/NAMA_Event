@@ -66,13 +66,15 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
         backgroundColor: AppColors.namaNavyBlue,
         foregroundColor: Colors.white,
       ),
-      body: entriesAsync.when(
-        data: (entries) => entries.isEmpty
-            ? _buildEmptyState()
-            : _buildDayTimeline(entries),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text('Error loading calendar: $error'),
+      body: SafeArea(
+        child: entriesAsync.when(
+          data: (entries) => entries.isEmpty
+              ? _buildEmptyState()
+              : _buildDayTimeline(entries),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stack) => Center(
+            child: Text('Error loading calendar: $error'),
+          ),
         ),
       ),
     );
