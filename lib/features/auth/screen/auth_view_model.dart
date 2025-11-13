@@ -56,6 +56,8 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
       await _authRepository.signOut();
       if (mounted) {
         state = const AsyncValue.data(null);
+        // Note: All .autoDispose providers will automatically clean up when
+        // authStateChangesProvider fires due to Firebase Auth sign-out
       }
     } on Exception catch (e, stack) {
       if (mounted) {

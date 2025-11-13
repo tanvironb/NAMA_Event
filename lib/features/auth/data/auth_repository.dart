@@ -54,6 +54,20 @@ class AuthRepository {
       );
     }
     
+    // Update lastSeen timestamp and set user online
+    try {
+      await _firestoreService.updateUserDocument(
+        user.uid,
+        {
+          'lastSeen': FieldValue.serverTimestamp(),
+          'isOnline': true,
+        },
+      );
+    } catch (e) {
+      // Don't fail login if timestamp update fails
+      print('Warning: Failed to update lastSeen on login: $e');
+    }
+    
     return userCredential;
   }
 
@@ -103,6 +117,33 @@ class AuthRepository {
   }
 
   Future<void> signOut() async {
+    final user = _firebaseAuth.currentUser;
+    
+    if (user != null) {
+      try {
+        // Clean up user session data before signing out
+        // Use timeout to prevent hanging on poor network
+        await _firestoreService.updateUserDocument(
+          user.uid,
+          {
+            'fcmToken': FieldValue.delete(), // Remove FCM token to stop notifications
+            'isOnline': false, // Set user offline
+            'lastSeen': FieldValue.serverTimestamp(), // Record sign-out time
+          },
+        ).timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            print('Warning: Firestore update timed out during sign-out');
+          },
+        );
+      } catch (e) {
+        // If Firestore update fails (e.g., no network), continue with sign-out
+        // This ensures user can still sign out locally
+        print('Warning: Failed to update user session data on sign-out: $e');
+      }
+    }
+    
+    // Always sign out from Firebase Auth, even if Firestore update failed
     await _firebaseAuth.signOut();
   }
 

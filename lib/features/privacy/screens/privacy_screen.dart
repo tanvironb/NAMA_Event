@@ -8,6 +8,7 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/privacy/widgets/privacy_selection_dialog.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/change_password_screen.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 
 class PrivacyScreen extends ConsumerStatefulWidget {
   const PrivacyScreen({super.key});
@@ -150,10 +151,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     );
 
     if (shouldLogout == true) {
-      await ref.read(firebaseAuthProvider).signOut();
-      if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-      }
+      await ref.read(authViewModelProvider.notifier).signOut();
+      // No manual navigation needed - AuthGate handles routing automatically
     }
   }
 

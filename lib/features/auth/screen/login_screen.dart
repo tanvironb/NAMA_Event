@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/features/auth/screen/register_screen.dart';
-import 'package:events_app_trueattempt/features/auth/screen/email_verification_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -79,12 +78,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              // Navigate to verification screen
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => const EmailVerificationScreen(),
-                ),
-              );
+              // No need to navigate - AuthGate will automatically route
+              // the authenticated-but-unverified user to EmailVerificationScreen
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.namaNavyBlue,

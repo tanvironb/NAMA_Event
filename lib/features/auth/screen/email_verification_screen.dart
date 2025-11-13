@@ -5,7 +5,6 @@ import 'dart:async';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/auth/data/auth_repository.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
-import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 
 class EmailVerificationScreen extends ConsumerStatefulWidget {
@@ -20,11 +19,88 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
   bool _hasBeenSent = false;
   int _cooldownSeconds = 0;
   Timer? _cooldownTimer;
+  bool _isSigningOut = false;
+  Timer? _autoCheckTimer;
+  
+  @override
+  void initState() {
+    super.initState();
+    // Auto-check email verification every 3 seconds
+    _startAutoCheck();
+  }
   
   @override
   void dispose() {
     _cooldownTimer?.cancel();
+    _autoCheckTimer?.cancel();
     super.dispose();
+  }
+
+  void _startAutoCheck() {
+    _autoCheckTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        timer.cancel();
+        return;
+      }
+      
+      // Don't check if already signing out
+      if (_isSigningOut) {
+        return;
+      }
+      
+      try {
+        // Reload user to get latest verification status
+        await user.reload();
+        final refreshedUser = FirebaseAuth.instance.currentUser;
+        
+        if (refreshedUser?.emailVerified == true) {
+          // Email verified! Cancel timer and sign out user
+          timer.cancel();
+          
+          if (mounted) {
+            _showSnackBar('Email verified! Please login to continue.', isError: false);
+            
+            // Wait for user to see message
+            await Future.delayed(const Duration(seconds: 2));
+            
+            // Sign out and let AuthGate handle routing
+            await _signOutAndNavigate();
+          }
+        }
+      } catch (e) {
+        // Silent fail - user can still manually check
+        print('Auto-check verification error: $e');
+      }
+    });
+  }
+
+  /// Sign out user and let AuthGate handle routing automatically
+  Future<void> _signOutAndNavigate() async {
+    if (_isSigningOut) return; // Prevent double-tap
+    
+    setState(() => _isSigningOut = true);
+    
+    try {
+      // Sign out - AuthGate will automatically show LoginScreen
+      await ref.read(authViewModelProvider.notifier).signOut();
+      
+      // Pop this screen from navigation stack so AuthGate's LoginScreen can be seen
+      if (mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      print('Error during sign-out: $e');
+      if (mounted) {
+        setState(() => _isSigningOut = false);
+        _showSnackBar('Failed to sign out. Please try again.');
+      }
+    }
   }
 
   void _startCooldown() {
@@ -92,22 +168,14 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
 
       if (refreshedUser?.emailVerified == true) {
         if (mounted) {
-          // Email verified! Sign out and ask user to re-login
+          // Email verified! Sign out and redirect to login
           _showSnackBar('Email verified! Please login to continue.', isError: false);
           
-          // Give user time to see the message
+          // Wait for user to see message
           await Future.delayed(const Duration(seconds: 2));
           
-          // Sign out user
-          await ref.read(authViewModelProvider.notifier).signOut();
-          
-          if (mounted) {
-            // Navigate to login screen
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const LoginScreen()),
-              (route) => false,
-            );
-          }
+          // Sign out and navigate using our verified method
+          await _signOutAndNavigate();
         }
       } else {
         if (mounted) {
@@ -140,13 +208,8 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
     
     return WillPopScope(
       onWillPop: () async {
-        // Sign out and navigate to login screen
-        await ref.read(authViewModelProvider.notifier).signOut();
-        if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-            (route) => false,
-          );
+        if (!_isSigningOut) {
+          _signOutAndNavigate();
         }
         return false; // Prevent default back behavior
       },
@@ -155,19 +218,19 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          leading: IconButton(
-            icon: Icon(Icons.arrow_back, color: AppColors.namaNavyBlue),
-            onPressed: () async {
-              // Sign out and navigate to login screen
-              await ref.read(authViewModelProvider.notifier).signOut();
-              if (mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  (route) => false,
-                );
-              }
-            },
-          ),
+          leading: _isSigningOut
+              ? const Padding(
+                  padding: EdgeInsets.all(14.0),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : IconButton(
+                  icon: Icon(Icons.arrow_back, color: AppColors.namaNavyBlue),
+                  onPressed: _signOutAndNavigate,
+                ),
         ),
         body: SafeArea(
           child: SingleChildScrollView(
@@ -323,22 +386,23 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
                 
                 // Sign out button
                 TextButton(
-                  onPressed: () async {
-                    await ref.read(authViewModelProvider.notifier).signOut();
-                    if (mounted) {
-                      Navigator.of(context).pushAndRemoveUntil(
-                        MaterialPageRoute(builder: (context) => const LoginScreen()),
-                        (route) => false,
-                      );
-                    }
-                  },
-                  child: Text(
-                    'Sign Out',
-                    style: TextStyle(
-                      color: AppColors.namaMediumGray,
-                      fontSize: 14,
-                    ),
-                  ),
+                  onPressed: _isSigningOut ? null : _signOutAndNavigate,
+                  child: _isSigningOut
+                      ? SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.namaMediumGray),
+                          ),
+                        )
+                      : Text(
+                          'Sign Out',
+                          style: TextStyle(
+                            color: AppColors.namaMediumGray,
+                            fontSize: 14,
+                          ),
+                        ),
                 ),
                 
                 const SizedBox(height: 32),

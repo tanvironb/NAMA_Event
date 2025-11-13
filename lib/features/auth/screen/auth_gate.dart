@@ -9,6 +9,9 @@ import 'package:events_app_trueattempt/features/auth/screen/pending_approval_scr
 import 'package:events_app_trueattempt/features/auth/screen/blocked_screen.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 
+// Session timeout: 10 days of inactivity
+const Duration _sessionTimeout = Duration(days: 10);
+
 // AuthGate handles the initial routing based on user's authentication state.
 class AuthGate extends ConsumerWidget {
   const AuthGate({super.key});
@@ -50,6 +53,38 @@ class AuthGate extends ConsumerWidget {
                     ),
                   ),
                 );
+              }
+
+              // Check session timeout (10 days of inactivity)
+              if (appUser.lastSeen != null) {
+                final daysSinceLastSeen = DateTime.now().difference(appUser.lastSeen!).inDays;
+                
+                if (daysSinceLastSeen >= 10) {
+                  // Session expired - sign out user
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    ref.read(authViewModelProvider.notifier).signOut();
+                  });
+                  
+                  return Scaffold(
+                    body: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.timer_off, size: 64, color: Theme.of(context).colorScheme.error),
+                          const SizedBox(height: 16),
+                          Text('Session Expired', style: Theme.of(context).textTheme.headlineSmall),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Your session has expired due to inactivity.\nPlease sign in again.',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          const CircularProgressIndicator(),
+                        ],
+                      ),
+                    ),
+                  );
+                }
               }
 
               // Check user status
