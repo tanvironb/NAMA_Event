@@ -298,12 +298,19 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
+      isDismissible: true,
+      enableDrag: true,
+      useSafeArea: true,
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.6,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
+        minChildSize: 0.3,
+        maxChildSize: 0.95,
+        expand: false,
+        snap: true,
+        snapSizes: const [0.6, 0.95],
         builder: (context, scrollController) => EntryDetailsSheet(
           entry: entry,
+          scrollController: scrollController,
         ),
       ),
     );

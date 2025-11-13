@@ -11,8 +11,13 @@ import 'package:events_app_trueattempt/features/agenda/screen/session_detail_scr
 /// Bottom sheet showing calendar entry details
 class EntryDetailsSheet extends ConsumerStatefulWidget {
   final CalendarEntry entry;
+  final ScrollController scrollController;
 
-  const EntryDetailsSheet({super.key, required this.entry});
+  const EntryDetailsSheet({
+    super.key,
+    required this.entry,
+    required this.scrollController,
+  });
 
   @override
   ConsumerState<EntryDetailsSheet> createState() => _EntryDetailsSheetState();
@@ -59,6 +64,7 @@ class _EntryDetailsSheetState extends ConsumerState<EntryDetailsSheet> {
           // Content
           Flexible(
             child: SingleChildScrollView(
+              controller: widget.scrollController,
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
