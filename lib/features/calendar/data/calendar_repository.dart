@@ -5,7 +5,6 @@ import 'package:async/async.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/core/models/meeting_model.dart';
-import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/features/calendar/models/calendar_entry.dart';
 import 'package:events_app_trueattempt/features/calendar/models/calendar_entry_type.dart';
 
@@ -19,32 +18,42 @@ class CalendarRepository {
     required String userId,
     required String eventId,
     required List<String> bookmarkedSessionIds,
-  }) {
+  }) async* {
     // Combine both streams (sessions and meetings) and merge them
     final sessionsStream = _getBookmarkedSessionsStream(eventId, bookmarkedSessionIds);
     final meetingsStream = _getApprovedMeetingsStream(userId);
     
-    return StreamZip([sessionsStream, meetingsStream]).map((results) {
+    await for (final results in StreamZip([sessionsStream, meetingsStream])) {
       final sessions = results[0] as List<Session>;
       final meetings = results[1] as List<Meeting>;
       
       final List<CalendarEntry> entries = [];
       
-      // Convert sessions to calendar entries
+      // Convert sessions to calendar entries WITH notes
       for (final session in sessions) {
-        entries.add(CalendarEntry.fromSession(session));
+        final notes = await getEntryNotes(
+          userId: userId,
+          entryId: session.id,
+          entryType: CalendarEntryType.session,
+        );
+        entries.add(CalendarEntry.fromSession(session, notes: notes));
       }
       
-      // Convert meetings to calendar entries
+      // Convert meetings to calendar entries WITH notes
       for (final meeting in meetings) {
-        entries.add(CalendarEntry.fromMeeting(meeting));
+        final notes = await getEntryNotes(
+          userId: userId,
+          entryId: meeting.id,
+          entryType: CalendarEntryType.meeting,
+        );
+        entries.add(CalendarEntry.fromMeeting(meeting, notes: notes));
       }
       
       // Sort by start time
       entries.sort((a, b) => a.startTime.compareTo(b.startTime));
       
-      return entries;
-    });
+      yield entries;
+    }
   }
 
   /// Get all calendar entries for a user (bookmarked sessions + approved meetings)

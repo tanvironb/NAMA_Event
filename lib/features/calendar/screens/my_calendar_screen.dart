@@ -9,11 +9,24 @@ import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:intl/intl.dart';
 
 /// Multi-day calendar view showing scrollable list of days
-class MyCalendarScreen extends ConsumerWidget {
+class MyCalendarScreen extends ConsumerStatefulWidget {
   const MyCalendarScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MyCalendarScreen> createState() => _MyCalendarScreenState();
+}
+
+class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh calendar data when screen becomes visible
+    // This ensures data is fresh when user returns from day view
+    ref.invalidate(calendarEntriesProvider);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final entriesAsync = ref.watch(calendarEntriesProvider);
     final groupedEntries = ref.watch(calendarEntriesByDateProvider);
 
@@ -42,7 +55,6 @@ class MyCalendarScreen extends ConsumerWidget {
 
               return _buildDayCard(
                 context,
-                ref,
                 date,
                 entriesForDate,
               );
@@ -92,7 +104,6 @@ class MyCalendarScreen extends ConsumerWidget {
 
   Widget _buildDayCard(
     BuildContext context,
-    WidgetRef ref,
     DateTime date,
     List<dynamic> entries,
   ) {

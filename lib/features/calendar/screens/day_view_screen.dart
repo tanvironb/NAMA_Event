@@ -86,10 +86,10 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
       controller: _scrollController,
       child: Stack(
         children: [
-          // Hour rows (7 AM to midnight)
+          // Hour rows (7 AM to 6 AM next day = 24 hours)
           Column(
-            children: List.generate(17, (index) {
-              final hour = index + 7; // Start from 7 AM
+            children: List.generate(24, (index) {
+              final hour = (index + 7) % 24; // Start from 7 AM, wrap to next day
               final time = DateTime(widget.selectedDate.year, widget.selectedDate.month, widget.selectedDate.day, hour);
               return _buildHourRow(time);
             }),
@@ -97,6 +97,9 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
           
           // Calendar entries
           ..._buildAllEntries(layouts),
+          
+          // Current time indicator
+          if (_isToday(widget.selectedDate)) _buildCurrentTimeIndicator(),
         ],
       ),
     );
@@ -105,28 +108,16 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   Widget _buildHourRow(DateTime time) {
     final format = DateFormat('h a');
     
-    return Container(
+    return SizedBox(
       height: _hourHeight,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
+        clipBehavior: Clip.none, // Allow label to overflow above the hour row
         children: [
-          // Hour label
-          Container(
-            width: 60,
-            padding: const EdgeInsets.only(right: 8, top: 4),
-            child: Text(
-              format.format(time),
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppColors.namaMediumGray,
-              ),
-            ),
-          ),
-
           // Hour line
-          Expanded(
+          Positioned(
+            left: 60,
+            right: 0,
+            top: 0,
             child: Container(
               decoration: BoxDecoration(
                 border: Border(
@@ -134,6 +125,25 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                     color: AppColors.namaMediumGray.withOpacity(0.2),
                     width: 1,
                   ),
+                ),
+              ),
+            ),
+          ),
+          // Hour label (vertically centered on the line)
+          Positioned(
+            left: 0,
+            top: -6, // Centers the label on the hour line
+            width: 60,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                format.format(time),
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.namaMediumGray,
+                  height: 1.0,
                 ),
               ),
             ),
@@ -185,7 +195,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
             left: layout.isOverlapping ? 8 : 2,
             right: 2,
             top: 2,
-            bottom: 4, // Increased bottom margin for spacing between adjacent entries
+            bottom: 3, // Reduced slightly to prevent overflow
           ),
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
@@ -300,5 +310,40 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
+  }
+
+  Widget _buildCurrentTimeIndicator() {
+    final now = DateTime.now();
+    final hour = now.hour;
+    final minute = now.minute;
+    
+    // Calculate position from 7 AM start
+    final topOffset = ((hour - 7) * _hourHeight) + ((minute / 60.0) * _hourHeight);
+    
+    return Positioned(
+      top: topOffset,
+      left: 60,
+      right: 0,
+      child: Row(
+        children: [
+          // Red dot
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+          ),
+          // Red line
+          Expanded(
+            child: Container(
+              height: 2,
+              color: Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
