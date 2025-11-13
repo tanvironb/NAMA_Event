@@ -36,8 +36,8 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     final now = DateTime.now();
     if (_isToday(widget.selectedDate)) {
       final currentHour = now.hour;
-      // Offset by 7 AM start
-      final offset = (currentHour - 7) * _hourHeight - 100;
+      // Scroll to current hour (offset from midnight)
+      final offset = currentHour * _hourHeight - 100;
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           offset.clamp(0, _scrollController.position.maxScrollExtent),
@@ -86,10 +86,10 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
       controller: _scrollController,
       child: Stack(
         children: [
-          // Hour rows (7 AM to 6 AM next day = 24 hours)
+          // Hour rows (00:00 to 23:00 = 24 hours)
           Column(
             children: List.generate(24, (index) {
-              final hour = (index + 7) % 24; // Start from 7 AM, wrap to next day
+              final hour = index; // 0 (midnight) to 23 (11 PM)
               final time = DateTime(widget.selectedDate.year, widget.selectedDate.month, widget.selectedDate.day, hour);
               return _buildHourRow(time);
             }),
@@ -106,7 +106,9 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   }
 
   Widget _buildHourRow(DateTime time) {
-    final format = DateFormat('h a');
+    // Use 24-hour format (HH:mm), but empty for midnight
+    final hour = time.hour;
+    final label = hour == 0 ? '' : '${hour.toString().padLeft(2, '0')}:00';
     
     return SizedBox(
       height: _hourHeight,
@@ -137,7 +139,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
             child: Padding(
               padding: const EdgeInsets.only(right: 8),
               child: Text(
-                format.format(time),
+                label,
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   fontSize: 11,
@@ -169,7 +171,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     // Calculate top position
     final hour = entry.startTime.hour;
     final minute = entry.startTime.minute;
-    final topOffset = ((hour - 7) * _hourHeight) + ((minute / 60.0) * _hourHeight); // Offset by 7 AM start
+    final topOffset = (hour * _hourHeight) + ((minute / 60.0) * _hourHeight); // Offset from midnight
     
     // Calculate height based on duration
     final durationMinutes = entry.durationMinutes;
@@ -317,8 +319,8 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     final hour = now.hour;
     final minute = now.minute;
     
-    // Calculate position from 7 AM start
-    final topOffset = ((hour - 7) * _hourHeight) + ((minute / 60.0) * _hourHeight);
+    // Calculate position from midnight
+    final topOffset = (hour * _hourHeight) + ((minute / 60.0) * _hourHeight);
     
     return Positioned(
       top: topOffset,
