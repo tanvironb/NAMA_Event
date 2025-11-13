@@ -3,111 +3,152 @@
 import 'package:events_app_trueattempt/features/calendar/models/calendar_entry.dart';
 import 'package:events_app_trueattempt/features/calendar/models/calendar_entry_type.dart';
 
-/// Helper class to handle overlapping calendar entries with proper conflict detection
+/// Google Calendar-style column layout handler for overlapping entries
 class OverlapHandler {
-  /// Group entries by actual time conflicts (not just hour overlap)
-  /// This ensures entries can share space if they don't actually conflict in time
-  static List<OverlapGroup> groupOverlappingEntries(List<CalendarEntry> entries) {
-    final List<OverlapGroup> groups = [];
-    final Set<CalendarEntry> processed = {};
+  /// Layout entries using Google Calendar's column-based algorithm
+  /// Returns layout information for each entry (column, width, whether it overlaps)
+  static List<EntryLayout> layoutEntries(List<CalendarEntry> entries) {
+    if (entries.isEmpty) return [];
 
-    // Sort entries by start time
+    // Sort entries by priority: Sessions > Longest > Earliest start
     final sortedEntries = List<CalendarEntry>.from(entries);
-    sortedEntries.sort((a, b) => a.startTime.compareTo(b.startTime));
-
-    for (final entry in sortedEntries) {
-      if (processed.contains(entry)) continue;
-
-      // Find all entries that ACTUALLY overlap with this one in time
-      // Not just in the same hour, but actually conflict
-      final conflicting = <CalendarEntry>[];
-      conflicting.add(entry); // Add self first
-      
-      for (final other in sortedEntries) {
-        if (processed.contains(other) || other == entry) continue;
-        
-        // Check if this entry conflicts with ANY entry already in the group
-        bool hasConflict = false;
-        for (final existing in conflicting) {
-          if (existing.overlapsWith(other)) {
-            hasConflict = true;
-            break;
-          }
-        }
-        
-        if (hasConflict) {
-          conflicting.add(other);
-        }
+    sortedEntries.sort((a, b) {
+      // Priority 1: Sessions before meetings
+      if (a.type != b.type) {
+        return a.type == CalendarEntryType.session ? -1 : 1;
       }
+      
+      // Priority 2: Longer duration first
+      final durationCompare = b.durationMinutes.compareTo(a.durationMinutes);
+      if (durationCompare != 0) return durationCompare;
+      
+      // Priority 3: Earlier start time
+      final startCompare = a.startTime.compareTo(b.startTime);
+      if (startCompare != 0) return startCompare;
+      
+      // Priority 4: Alphabetical by title
+      return a.title.compareTo(b.title);
+    });
 
-      // Sort conflicting entries by priority: 1) Sessions first, 2) Longest duration
-      conflicting.sort((a, b) {
+    // Build layout for each entry
+    final layouts = <EntryLayout>[];
+    
+    for (int i = 0; i < sortedEntries.length; i++) {
+      final entry = sortedEntries[i];
+      
+      // Find all entries that overlap with this one
+      final overlappingEntries = sortedEntries.where((other) => 
+        other != entry && entry.overlapsWith(other)
+      ).toList();
+      
+      if (overlappingEntries.isEmpty) {
+        // No overlap - full width
+        layouts.add(EntryLayout(
+          entry: entry,
+          column: 0,
+          totalColumns: 1,
+          isOverlapping: false,
+        ));
+      } else {
+        // Has overlaps - determine layout type
+        final layout = _determineLayout(entry, overlappingEntries, sortedEntries);
+        layouts.add(layout);
+      }
+    }
+
+    return layouts;
+  }
+
+  /// Determine layout for an entry with overlaps
+  static EntryLayout _determineLayout(
+    CalendarEntry entry,
+    List<CalendarEntry> overlappingEntries,
+    List<CalendarEntry> allEntries,
+  ) {
+    // Find ALL entries (including this one) that start at similar time
+    final allSimultaneous = [entry];
+    
+    for (final other in overlappingEntries) {
+      final timeDiff = entry.startTime.difference(other.startTime).abs();
+      if (timeDiff.inMinutes < 5) { // Within 5 minutes = simultaneous
+        allSimultaneous.add(other);
+      }
+    }
+
+    if (allSimultaneous.length > 1) {
+      // COLUMN LAYOUT: Multiple entries start at similar time
+      // Sort by priority within the group to determine column order
+      allSimultaneous.sort((a, b) {
         // Priority 1: Sessions before meetings
         if (a.type != b.type) {
           return a.type == CalendarEntryType.session ? -1 : 1;
         }
         
         // Priority 2: Longer duration first
-        return b.durationMinutes.compareTo(a.durationMinutes);
+        final durationCompare = b.durationMinutes.compareTo(a.durationMinutes);
+        if (durationCompare != 0) return durationCompare;
+        
+        // Priority 3: Earlier start time
+        final startCompare = a.startTime.compareTo(b.startTime);
+        if (startCompare != 0) return startCompare;
+        
+        // Priority 4: Alphabetical by title
+        return a.title.compareTo(b.title);
       });
-
-      final positions = _assignPositions(conflicting);
-      groups.add(OverlapGroup(entries: conflicting, positions: positions));
-      processed.addAll(conflicting);
+      
+      final totalColumns = allSimultaneous.length;
+      final column = allSimultaneous.indexOf(entry);
+      
+      return EntryLayout(
+        entry: entry,
+        column: column,
+        totalColumns: totalColumns,
+        isOverlapping: false,
+      );
+    } else {
+      // OVERLAP LAYOUT: Entry starts during another long entry
+      // This entry will overlap on top with outline + padding
+      return EntryLayout(
+        entry: entry,
+        column: 0,
+        totalColumns: 1,
+        isOverlapping: true,
+        overlapOffset: 0.15, // 15% offset from left
+      );
     }
-
-    return groups;
-  }
-
-  /// Assign left/right positions to conflicting entries
-  /// Returns list of positions (0 = left, 1 = right, 2+ = overflow)
-  static List<int> _assignPositions(List<CalendarEntry> entries) {
-    if (entries.length == 1) {
-      return [0]; // Single entry gets full width (position 0, but will be rendered differently)
-    }
-    
-    if (entries.length == 2) {
-      return [0, 1]; // Two entries side by side
-    }
-
-    // For 3+ entries, first two get positions, rest are overflow
-    final List<int> positions = [];
-    for (int i = 0; i < entries.length; i++) {
-      if (i < 2) {
-        positions.add(i); // First two get positions 0 and 1
-      } else {
-        positions.add(2); // Rest are in overflow (position 2)
-      }
-    }
-    return positions;
   }
 }
 
-/// Represents a group of conflicting entries (entries that actually overlap in time)
-class OverlapGroup {
-  final List<CalendarEntry> entries;
-  final List<int> positions; // Position for each entry (0 = left/full, 1 = right, 2 = overflow)
+/// Layout information for a calendar entry
+class EntryLayout {
+  final CalendarEntry entry;
+  final int column; // Which column (0-based index)
+  final int totalColumns; // Total columns in the layout
+  final bool isOverlapping; // Whether this overlaps another entry (with outline)
+  final double overlapOffset; // Left offset when overlapping (0.0 - 1.0)
 
-  OverlapGroup({
-    required this.entries,
-    required this.positions,
+  EntryLayout({
+    required this.entry,
+    required this.column,
+    required this.totalColumns,
+    required this.isOverlapping,
+    this.overlapOffset = 0.0,
   });
 
-  bool get hasOverflow => entries.length > 2;
-  
-  int get overflowCount => entries.length > 2 ? entries.length - 2 : 0;
-  
-  List<CalendarEntry> get visibleEntries => entries.take(2).toList();
-  
-  List<CalendarEntry> get overflowEntries => entries.skip(2).toList();
-  
-  /// Get the earliest start time in this group
-  DateTime get groupStartTime {
-    return entries.map((e) => e.startTime).reduce((a, b) => a.isBefore(b) ? a : b);
+  /// Calculate left position factor (0.0 = left edge, 1.0 = right edge)
+  double get leftFactor {
+    if (isOverlapping) {
+      return overlapOffset;
+    }
+    return column / totalColumns;
   }
-  
-  /// Get the latest end time in this group
-  DateTime get groupEndTime {
-    return entries.map((e) => e.endTime).reduce((a, b) => a.isAfter(b) ? a : b);
+
+  /// Calculate width factor (0.0 - 1.0 of available space)
+  double get widthFactor {
+    if (isOverlapping) {
+      return 1.0 - overlapOffset; // Take remaining space after offset
+    }
+    return 1.0 / totalColumns;
   }
 }
+

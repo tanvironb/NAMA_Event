@@ -10,7 +10,7 @@ import 'package:events_app_trueattempt/features/calendar/widgets/overlap_handler
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:intl/intl.dart';
 
-/// Single-day view with hour-by-hour timeline
+/// Single-day view with Google Calendar-style timeline
 class DayViewScreen extends ConsumerStatefulWidget {
   final DateTime selectedDate;
 
@@ -22,12 +22,11 @@ class DayViewScreen extends ConsumerStatefulWidget {
 
 class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   final ScrollController _scrollController = ScrollController();
-  static const double _hourHeight = 80.0; // Height of each hour row
+  static const double _hourHeight = 80.0;
 
   @override
   void initState() {
     super.initState();
-    // Scroll to current hour after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToCurrentHour();
     });
@@ -37,7 +36,8 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     final now = DateTime.now();
     if (_isToday(widget.selectedDate)) {
       final currentHour = now.hour;
-      final offset = currentHour * _hourHeight - 100; // Show some context above
+      // Offset by 7 AM start
+      final offset = (currentHour - 7) * _hourHeight - 100;
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           offset.clamp(0, _scrollController.position.maxScrollExtent),
@@ -79,85 +79,34 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   }
 
   Widget _buildDayTimeline(List<CalendarEntry> entries) {
-    // Group overlapping entries
-    final groups = OverlapHandler.groupOverlappingEntries(entries);
-    
-    // Calculate overflow box info for each hour
-    final Map<int, double> hourPadding = {};
-    
-    for (final group in groups) {
-      if (group.hasOverflow) {
-        // Find which hour the overflow box will be in
-        final latestEndTime = group.visibleEntries
-            .map((e) => e.endTime)
-            .reduce((a, b) => a.isAfter(b) ? a : b);
-        
-        final overflowHour = latestEndTime.hour;
-        final overflowBoxHeight = (group.overflowCount * 24.0) + 16.0; // Height needed
-        
-        // Add padding to this hour and potentially next hours
-        final currentPadding = hourPadding[overflowHour] ?? 0.0;
-        hourPadding[overflowHour] = currentPadding + overflowBoxHeight;
-      }
-    }
+    // Get layout information for all entries
+    final layouts = OverlapHandler.layoutEntries(entries);
 
     return SingleChildScrollView(
       controller: _scrollController,
-      child: Column(
+      child: Stack(
         children: [
-          Stack(
-            children: [
-              // Hour rows with dynamic padding
-              Column(
-                children: List.generate(24, (hour) {
-                  final extraPadding = hourPadding[hour] ?? 0.0;
-                  return _buildHourRow(hour, extraPadding);
-                }),
-              ),
-              
-              // All entries and overflow boxes positioned absolutely
-              ..._buildAllEntries(groups, hourPadding),
-              
-              // Current time indicator (if today)
-              if (_isToday(widget.selectedDate))
-                _buildCurrentTimeIndicator(hourPadding),
-            ],
+          // Hour rows (7 AM to midnight)
+          Column(
+            children: List.generate(17, (index) {
+              final hour = index + 7; // Start from 7 AM
+              final time = DateTime(widget.selectedDate.year, widget.selectedDate.month, widget.selectedDate.day, hour);
+              return _buildHourRow(time);
+            }),
           ),
+          
+          // Calendar entries
+          ..._buildAllEntries(layouts),
         ],
       ),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.event_busy_outlined,
-            size: 64,
-            color: AppColors.namaMediumGray.withOpacity(0.5),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'No entries for this day',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.namaDarkGray,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHourRow(int hour, double extraPadding) {
+  Widget _buildHourRow(DateTime time) {
     final format = DateFormat('h a');
-    final time = DateTime(2000, 1, 1, hour);
-
+    
     return Container(
-      height: _hourHeight + extraPadding,
+      height: _hourHeight,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -194,71 +143,58 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     );
   }
 
-  List<Widget> _buildAllEntries(List<OverlapGroup> groups, Map<int, double> hourPadding) {
-    final List<Widget> widgets = [];
+  List<Widget> _buildAllEntries(List<EntryLayout> layouts) {
+    final widgets = <Widget>[];
     
-    for (final group in groups) {
-      if (group.entries.length == 1) {
-        // Single entry - full width
-        widgets.add(_buildPositionedEntry(group.entries[0], 0.0, 1.0, hourPadding));
-      } else if (group.entries.length == 2) {
-        // Two entries - side by side
-        widgets.add(_buildPositionedEntry(group.entries[0], 0.0, 0.5, hourPadding));
-        widgets.add(_buildPositionedEntry(group.entries[1], 0.5, 0.5, hourPadding));
-      } else {
-        // 3+ overlapping entries
-        // Show first 2 entries (sessions/longest duration based on priority)
-        final firstTwo = [group.entries[0], group.entries[1]];
-        widgets.add(_buildPositionedEntry(firstTwo[0], 0.0, 0.5, hourPadding));
-        widgets.add(_buildPositionedEntry(firstTwo[1], 0.5, 0.5, hourPadding));
-        
-        // Add overflow box for remaining entries
-        final overflowEntries = group.entries.sublist(2);
-        widgets.add(_buildOverflowBox(overflowEntries, firstTwo, hourPadding));
-      }
+    for (final layout in layouts) {
+      widgets.add(_buildEntry(layout));
     }
     
     return widgets;
   }
 
-  Widget _buildPositionedEntry(
-    CalendarEntry entry,
-    double leftFactor,
-    double widthFactor,
-    Map<int, double> hourPadding,
-  ) {
-    // Calculate cumulative padding up to this entry's start time
-    double cumulativePadding = 0.0;
-    for (int h = 0; h < entry.startTime.hour; h++) {
-      cumulativePadding += hourPadding[h] ?? 0.0;
-    }
+  Widget _buildEntry(EntryLayout layout) {
+    final entry = layout.entry;
     
-    // Calculate position based on start time
+    // Calculate top position
     final hour = entry.startTime.hour;
     final minute = entry.startTime.minute;
-    final topOffset = (hour * _hourHeight) + ((minute / 60.0) * _hourHeight) + cumulativePadding;
+    final topOffset = ((hour - 7) * _hourHeight) + ((minute / 60.0) * _hourHeight); // Offset by 7 AM start
     
     // Calculate height based on duration
     final durationMinutes = entry.durationMinutes;
     final height = (durationMinutes / 60.0) * _hourHeight;
+
+    // Calculate horizontal positioning
+    final availableWidth = MediaQuery.of(context).size.width - 60;
+    final leftOffset = 60 + (layout.leftFactor * availableWidth);
+    final width = layout.widthFactor * availableWidth;
 
     final isSession = entry.type == CalendarEntryType.session;
     final color = isSession ? AppColors.namaNavyBlue : AppColors.namaGoldenYellow;
 
     return Positioned(
       top: topOffset,
-      left: 60 + (leftFactor * (MediaQuery.of(context).size.width - 60)),
-      width: widthFactor * (MediaQuery.of(context).size.width - 60),
+      left: leftOffset,
+      width: width,
       height: height.clamp(30, double.infinity),
       child: GestureDetector(
         onTap: () => _showEntryDetails(entry),
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+          margin: EdgeInsets.only(
+            left: layout.isOverlapping ? 8 : 2,
+            right: 2,
+            top: 2,
+            bottom: 4, // Increased bottom margin for spacing between adjacent entries
+          ),
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: color.withOpacity(0.9),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color, width: 1.5),
+            border: Border.all(
+              color: layout.isOverlapping ? Colors.black : color,
+              width: layout.isOverlapping ? 2.0 : 1.5,
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,135 +247,31 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     );
   }
 
-  Widget _buildOverflowBox(
-    List<CalendarEntry> overflowEntries,
-    List<CalendarEntry> displayedEntries,
-    Map<int, double> hourPadding,
-  ) {
-    // Find the latest end time among the displayed entries
-    DateTime latestEndTime = displayedEntries[0].endTime;
-    for (final entry in displayedEntries) {
-      if (entry.endTime.isAfter(latestEndTime)) {
-        latestEndTime = entry.endTime;
-      }
-    }
-    
-    // Calculate cumulative padding up to overflow box position
-    double cumulativePadding = 0.0;
-    for (int h = 0; h < latestEndTime.hour; h++) {
-      cumulativePadding += hourPadding[h] ?? 0.0;
-    }
-    
-    // Position the overflow box right after the latest end time
-    final hour = latestEndTime.hour;
-    final minute = latestEndTime.minute;
-    final topOffset = (hour * _hourHeight) + ((minute / 60.0) * _hourHeight) + cumulativePadding + 4; // Small gap
-
-    return Positioned(
-      top: topOffset,
-      left: 60,
-      right: 0,
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: AppColors.namaMediumGray.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: AppColors.namaMediumGray.withOpacity(0.3),
-            width: 1,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.more_horiz,
-                  size: 16,
-                  color: AppColors.namaDarkGray,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '+${overflowEntries.length} more overlapping',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.namaDarkGray,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            ...overflowEntries.map((entry) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: GestureDetector(
-                onTap: () => _showEntryDetails(entry),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 4,
-                      height: 16,
-                      decoration: BoxDecoration(
-                        color: entry.type == CalendarEntryType.session
-                            ? AppColors.namaNavyBlue
-                            : AppColors.namaGoldenYellow,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${DateFormat('h:mm a').format(entry.startTime)} - ${entry.title}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppColors.namaDarkGray,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCurrentTimeIndicator(Map<int, double> hourPadding) {
-    final now = DateTime.now();
-    
-    // Calculate cumulative padding up to current hour
-    double cumulativePadding = 0.0;
-    for (int h = 0; h < now.hour; h++) {
-      cumulativePadding += hourPadding[h] ?? 0.0;
-    }
-    
-    final minutesSinceMidnight = now.hour * 60 + now.minute;
-    final topOffset = (minutesSinceMidnight / 60.0) * _hourHeight + cumulativePadding;
-
-    return Positioned(
-      top: topOffset,
-      left: 60,
-      right: 0,
-      child: Row(
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-              color: Colors.red,
-              shape: BoxShape.circle,
+          Icon(
+            Icons.calendar_today,
+            size: 64,
+            color: AppColors.namaMediumGray.withOpacity(0.5),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No events for this day',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w500,
+              color: AppColors.namaDarkGray,
             ),
           ),
-          Expanded(
-            child: Container(
-              height: 2,
-              color: Colors.red,
+          const SizedBox(height: 8),
+          Text(
+            'Your schedule is clear!',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.namaMediumGray,
             ),
           ),
         ],
