@@ -85,7 +85,7 @@ class AdminSessionManagementScreen extends ConsumerWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          DateFormat('EEEE, MMMM d, y').format(date),
+                          DateFormat('EEE, MMM d, y').format(date),
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             color: AppColors.namaNavyBlue,
