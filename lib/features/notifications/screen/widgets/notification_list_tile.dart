@@ -15,19 +15,13 @@ class NotificationListTile extends ConsumerWidget {
   final AppNotification notification;
   const NotificationListTile({super.key, required this.notification});
 
-  String _formatTimeRange(DateTime from, DateTime? to) {
-    final dateFormat = DateFormat('MMM d, h:mm a');
-    if (to == null) {
-      return 'From: ${dateFormat.format(from)}';
-    }
-    
-    // If same day, show date once
-    if (from.year == to.year && from.month == to.month && from.day == to.day) {
-      final dayFormat = DateFormat('MMM d, yyyy');
-      final timeFormat = DateFormat('h:mm a');
-      return '${dayFormat.format(from)} • ${timeFormat.format(from)} - ${timeFormat.format(to)}';
+  String _formatEventTimestamp(DateTime eventTime, bool includeDate) {
+    if (includeDate) {
+      final format = DateFormat('MMM d, yyyy • h:mm a');
+      return format.format(eventTime);
     } else {
-      return '${dateFormat.format(from)} - ${dateFormat.format(to)}';
+      final format = DateFormat('h:mm a');
+      return format.format(eventTime);
     }
   }
 
@@ -104,15 +98,15 @@ class NotificationListTile extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 6),
-            // Time range (if present)
-            if (notification.timeFrom != null) ...[
+            // Event timestamp (if present)
+            if (notification.eventTimestamp != null) ...[
               Row(
                 children: [
                   Icon(Icons.event, size: 14, color: Colors.grey.shade600),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      _formatTimeRange(notification.timeFrom!, notification.timeTo),
+                      _formatEventTimestamp(notification.eventTimestamp!, notification.includeDate),
                       style: TextStyle(
                         fontSize: 12,
                         color: notification.isRead 

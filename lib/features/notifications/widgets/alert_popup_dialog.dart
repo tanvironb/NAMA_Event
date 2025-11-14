@@ -70,24 +70,19 @@ class _AlertPopupDialogState extends State<AlertPopupDialog> with SingleTickerPr
     super.dispose();
   }
 
-  String _formatTimeRange() {
-    if (widget.notification.timeFrom == null) return '';
+  String _formatEventTimestamp() {
+    if (widget.notification.eventTimestamp == null) return '';
     
-    final dateFormat = DateFormat('MMM d, h:mm a');
-    final from = widget.notification.timeFrom!;
-    final to = widget.notification.timeTo;
+    final eventTime = widget.notification.eventTimestamp!;
     
-    if (to == null) {
-      return 'From: ${dateFormat.format(from)}';
-    }
-    
-    // If same day, show date once
-    if (from.year == to.year && from.month == to.month && from.day == to.day) {
-      final dayFormat = DateFormat('MMM d, yyyy');
-      final timeFormat = DateFormat('h:mm a');
-      return '${dayFormat.format(from)} • ${timeFormat.format(from)} - ${timeFormat.format(to)}';
+    if (widget.notification.includeDate) {
+      // Show full date + time
+      final format = DateFormat('MMM d, yyyy • h:mm a');
+      return format.format(eventTime);
     } else {
-      return '${dateFormat.format(from)} - ${dateFormat.format(to)}';
+      // Show time only
+      final format = DateFormat('h:mm a');
+      return format.format(eventTime);
     }
   }
 
@@ -228,8 +223,8 @@ class _AlertPopupDialogState extends State<AlertPopupDialog> with SingleTickerPr
                 ),
               ),
               
-              // Time range (if present)
-              if (widget.notification.timeFrom != null) ...[
+              // Event timestamp (if present)
+              if (widget.notification.eventTimestamp != null) ...[
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -237,7 +232,7 @@ class _AlertPopupDialogState extends State<AlertPopupDialog> with SingleTickerPr
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _formatTimeRange(),
+                        _formatEventTimestamp(),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,

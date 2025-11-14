@@ -8,8 +8,8 @@ class AppNotification {
   final String? subtitle; // NEW: Optional side note/mini title
   final String body;
   final Timestamp timestamp;
-  final DateTime? timeFrom; // NEW: Optional start time for events
-  final DateTime? timeTo; // NEW: Optional end time for events
+  final DateTime? eventTimestamp; // NEW: Single event timestamp (replaces timeFrom/timeTo)
+  final bool includeDate; // NEW: Whether to show date or just time
   final bool isRead;
   final AppNotificationType type;
   final String targetRole; // ('all', 'attendee', 'speaker', 'staff', 'admin')
@@ -21,8 +21,8 @@ class AppNotification {
     this.subtitle,
     required this.body,
     required this.timestamp,
-    this.timeFrom,
-    this.timeTo,
+    this.eventTimestamp,
+    this.includeDate = true,
     this.isRead = false,
     this.type = AppNotificationType.generic,
     this.targetRole = 'all',
@@ -58,8 +58,8 @@ class AppNotification {
       subtitle: docData['subtitle'] as String?,
       body: docData['body'] as String,
       timestamp: docData['timestamp'] as Timestamp,
-      timeFrom: (docData['timeFrom'] as Timestamp?)?.toDate(),
-      timeTo: (docData['timeTo'] as Timestamp?)?.toDate(),
+      eventTimestamp: (docData['eventTimestamp'] as Timestamp?)?.toDate(),
+      includeDate: docData['includeDate'] as bool? ?? true,
       isRead: docData['isRead'] as bool? ?? false,
       type: _typeFromString(docData['type'] as String?),
       targetRole: docData['targetRole'] as String? ?? 'all',

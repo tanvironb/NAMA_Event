@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 
@@ -21,9 +22,9 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
   AppNotificationType _selectedType = AppNotificationType.announcement;
   String _selectedAudience = 'all';
   bool _isSending = false;
-  bool _hasTimeRange = false;
-  DateTime? _timeFrom;
-  DateTime? _timeTo;
+  bool _hasTimestamp = false;
+  DateTime? _selectedDateTime;
+  bool _includeDate = true; // Toggle for date+time vs time-only
 
   @override
   void dispose() {
@@ -44,6 +45,10 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
 
     setState(() => _isSending = true);
 
+    int successCount = 0;
+    int failureCount = 0;
+    final failedUsers = <String>[];
+
     try {
       // Get all users based on audience
       final usersQuery = _selectedAudience == 'all'
@@ -54,8 +59,18 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
 
       final usersSnapshot = await usersQuery.get();
       
-      // Create notification for each user
-      final batch = FirebaseFirestore.instance.batch();
+      if (usersSnapshot.docs.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No users found for the selected audience'),
+              backgroundColor: AppColors.warningAmber,
+            ),
+          );
+        }
+        return;
+      }
+
       final timestamp = Timestamp.now();
       // Generate a single shared notification ID for all users
       final sharedNotificationId = FirebaseFirestore.instance.collection('temp').doc().id;
@@ -73,71 +88,133 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
       if (_subtitleController.text.trim().isNotEmpty) {
         adminNotificationData['subtitle'] = _subtitleController.text.trim();
       }
-      if (_hasTimeRange && _timeFrom != null) {
-        adminNotificationData['timeFrom'] = Timestamp.fromDate(_timeFrom!);
-      }
-      if (_hasTimeRange && _timeTo != null) {
-        adminNotificationData['timeTo'] = Timestamp.fromDate(_timeTo!);
+      if (_hasTimestamp && _selectedDateTime != null) {
+        // Store the timestamp
+        adminNotificationData['eventTimestamp'] = Timestamp.fromDate(_selectedDateTime!);
+        // Store whether it includes date or is time-only
+        adminNotificationData['includeDate'] = _includeDate;
       }
 
       final adminNotifRef = FirebaseFirestore.instance
           .collection('adminNotifications')
           .doc(sharedNotificationId);
       
-      batch.set(adminNotifRef, adminNotificationData);
+      await adminNotifRef.set(adminNotificationData);
 
-      // Then distribute to all users
+      // Send to users individually with error tracking
       for (final userDoc in usersSnapshot.docs) {
-        final notificationRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(userDoc.id)
-            .collection('notifications')
-            .doc();
+        try {
+          final notificationRef = FirebaseFirestore.instance
+              .collection('users')
+              .doc(userDoc.id)
+              .collection('notifications')
+              .doc();
 
-        final notificationData = {
-          'title': _titleController.text.trim(),
-          'body': _bodyController.text.trim(),
-          'timestamp': timestamp,
-          'isRead': false,
-          'type': _selectedType.toString().split('.').last,
-          'targetRole': _selectedAudience,
-          'data': {
-            'notificationId': sharedNotificationId, // Shared ID for all users - enables edit/delete
-            'type': 'admin_notification',
-          },
-        };
+          final notificationData = {
+            'title': _titleController.text.trim(),
+            'body': _bodyController.text.trim(),
+            'timestamp': timestamp,
+            'isRead': false,
+            'type': _selectedType.toString().split('.').last,
+            'targetRole': _selectedAudience,
+            'data': {
+              'notificationId': sharedNotificationId,
+              'type': 'admin_notification',
+            },
+          };
 
-        // Add optional fields
-        if (_subtitleController.text.trim().isNotEmpty) {
-          notificationData['subtitle'] = _subtitleController.text.trim();
-        }
-        if (_hasTimeRange && _timeFrom != null) {
-          notificationData['timeFrom'] = Timestamp.fromDate(_timeFrom!);
-        }
-        if (_hasTimeRange && _timeTo != null) {
-          notificationData['timeTo'] = Timestamp.fromDate(_timeTo!);
-        }
+          // Add optional fields
+          if (_subtitleController.text.trim().isNotEmpty) {
+            notificationData['subtitle'] = _subtitleController.text.trim();
+          }
+          if (_hasTimestamp && _selectedDateTime != null) {
+            notificationData['eventTimestamp'] = Timestamp.fromDate(_selectedDateTime!);
+            notificationData['includeDate'] = _includeDate;
+          }
 
-        batch.set(notificationRef, notificationData);
+          await notificationRef.set(notificationData);
+          successCount++;
+        } catch (e) {
+          failureCount++;
+          failedUsers.add(userDoc.id);
+          debugPrint('Failed to send notification to user ${userDoc.id}: $e');
+        }
       }
-
-      await batch.commit();
 
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Notification sent to ${usersSnapshot.docs.length} user(s)'),
-            backgroundColor: AppColors.successGreen,
-          ),
-        );
+        
+        // Show detailed result
+        if (failureCount == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✅ Notification sent to all $successCount user(s)'),
+              backgroundColor: AppColors.successGreen,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else if (successCount > 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ Sent to $successCount users, failed for $failureCount users'),
+              backgroundColor: AppColors.warningAmber,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Details',
+                textColor: Colors.white,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Send Results'),
+                      content: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('✅ Success: $successCount users'),
+                            Text('❌ Failed: $failureCount users'),
+                            if (failedUsers.isNotEmpty) ...[
+                              const SizedBox(height: 12),
+                              const Text('Failed User IDs:', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 4),
+                              ...failedUsers.take(10).map((id) => Text('• ${id.substring(0, 8)}...')),
+                              if (failedUsers.length > 10)
+                                Text('...and ${failedUsers.length - 10} more'),
+                            ],
+                          ],
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Close'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('❌ Failed to send notification to all $failureCount user(s)'),
+              backgroundColor: AppColors.errorRed,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
       }
     } catch (e) {
+      debugPrint('Error sending notification: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to send notification: $e'),
             backgroundColor: AppColors.errorRed,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -369,106 +446,172 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
 
                     const SizedBox(height: 24),
 
-                    // Time Range Toggle
+                    // Event Timestamp Toggle
                     Row(
                       children: [
                         Checkbox(
-                          value: _hasTimeRange,
+                          value: _hasTimestamp,
                           onChanged: (value) {
-                            setState(() => _hasTimeRange = value ?? false);
+                            setState(() {
+                              _hasTimestamp = value ?? false;
+                              if (!_hasTimestamp) {
+                                _selectedDateTime = null;
+                              }
+                            });
                           },
                         ),
-                        Text(
-                          'Add Time Range (for events/maintenance)',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
+                        Expanded(
+                          child: Text(
+                            'Add Event Timestamp (optional)',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
                     ),
 
-                    if (_hasTimeRange) ...[
+                    if (_hasTimestamp) ...[
                       const SizedBox(height: 16),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Date/Time toggle
+                            Row(
                               children: [
-                                const Text('From:'),
-                                const SizedBox(height: 8),
-                                OutlinedButton.icon(
-                                  onPressed: () async {
-                                    final date = await showDatePicker(
-                                      context: context,
-                                      initialDate: DateTime.now(),
-                                      firstDate: DateTime.now(),
-                                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                                    );
-                                    if (date != null && mounted) {
-                                      final time = await showTimePicker(
-                                        context: context,
-                                        initialTime: TimeOfDay.now(),
-                                        builder: (context, child) {
-                                          return MediaQuery(
-                                            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
-                                            child: child!,
-                                          );
-                                        },
-                                      );
-                                      if (time != null) {
-                                        setState(() {
-                                          _timeFrom = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-                                        });
-                                      }
-                                    }
-                                  },
-                                  icon: const Icon(Icons.calendar_today),
-                                  label: Text(_timeFrom == null ? 'Select' : '${_timeFrom!.month}/${_timeFrom!.day} ${_timeFrom!.hour}:${_timeFrom!.minute.toString().padLeft(2, '0')}'),
+                                Expanded(
+                                  child: RadioListTile<bool>(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('Date + Time'),
+                                    value: true,
+                                    groupValue: _includeDate,
+                                    onChanged: (value) {
+                                      setState(() => _includeDate = value ?? true);
+                                    },
+                                  ),
+                                ),
+                                Expanded(
+                                  child: RadioListTile<bool>(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    title: const Text('Time Only'),
+                                    value: false,
+                                    groupValue: _includeDate,
+                                    onChanged: (value) {
+                                      setState(() => _includeDate = value ?? true);
+                                    },
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text('To:'),
-                                const SizedBox(height: 8),
-                                OutlinedButton.icon(
-                                  onPressed: () async {
-                                    final date = await showDatePicker(
+                            
+                            const SizedBox(height: 12),
+                            
+                            // Date + Time picker
+                            if (_includeDate) ...[
+                              OutlinedButton.icon(
+                                onPressed: () async {
+                                  final date = await showDatePicker(
+                                    context: context,
+                                    initialDate: _selectedDateTime ?? DateTime.now(),
+                                    firstDate: DateTime.now().subtract(const Duration(days: 1)),
+                                    lastDate: DateTime.now().add(const Duration(days: 365)),
+                                  );
+                                  if (date != null && mounted) {
+                                    final time = await showTimePicker(
                                       context: context,
-                                      initialDate: _timeFrom ?? DateTime.now(),
-                                      firstDate: _timeFrom ?? DateTime.now(),
-                                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                                      initialTime: TimeOfDay.fromDateTime(_selectedDateTime ?? DateTime.now()),
+                                      builder: (context, child) {
+                                        return MediaQuery(
+                                          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+                                          child: child!,
+                                        );
+                                      },
                                     );
-                                    if (date != null && mounted) {
-                                      final time = await showTimePicker(
-                                        context: context,
-                                        initialTime: TimeOfDay.now(),
-                                        builder: (context, child) {
-                                          return MediaQuery(
-                                            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
-                                            child: child!,
-                                          );
-                                        },
-                                      );
-                                      if (time != null) {
-                                        setState(() {
-                                          _timeTo = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-                                        });
-                                      }
+                                    if (time != null) {
+                                      setState(() {
+                                        _selectedDateTime = DateTime(
+                                          date.year,
+                                          date.month,
+                                          date.day,
+                                          time.hour,
+                                          time.minute,
+                                        );
+                                      });
                                     }
-                                  },
-                                  icon: const Icon(Icons.calendar_today),
-                                  label: Text(_timeTo == null ? 'Select' : '${_timeTo!.month}/${_timeTo!.day} ${_timeTo!.hour}:${_timeTo!.minute.toString().padLeft(2, '0')}'),
+                                  }
+                                },
+                                icon: const Icon(Icons.calendar_today),
+                                label: Text(
+                                  _selectedDateTime == null
+                                      ? 'Select Date & Time'
+                                      : DateFormat('M/d/yyyy h:mm a').format(_selectedDateTime!),
                                 ),
-                              ],
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 48),
+                                ),
+                              ),
+                            ] else ...[
+                              // Time Only picker
+                              OutlinedButton.icon(
+                                onPressed: () async {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: TimeOfDay.fromDateTime(_selectedDateTime ?? DateTime.now()),
+                                    builder: (context, child) {
+                                      return MediaQuery(
+                                        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
+                                        child: child!,
+                                      );
+                                    },
+                                  );
+                                  if (time != null) {
+                                    setState(() {
+                                      // Use today's date but only show time to users
+                                      final now = DateTime.now();
+                                      _selectedDateTime = DateTime(
+                                        now.year,
+                                        now.month,
+                                        now.day,
+                                        time.hour,
+                                        time.minute,
+                                      );
+                                    });
+                                  }
+                                },
+                                icon: const Icon(Icons.access_time),
+                                label: Text(
+                                  _selectedDateTime == null
+                                      ? 'Select Time'
+                                      : DateFormat('h:mm a').format(_selectedDateTime!),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size(double.infinity, 48),
+                                ),
+                              ),
+                            ],
+                            
+                            const SizedBox(height: 8),
+                            Text(
+                              _includeDate
+                                  ? 'Users will see the full date and time'
+                                  : 'Users will see only the time (e.g., "3:30 PM")',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
 

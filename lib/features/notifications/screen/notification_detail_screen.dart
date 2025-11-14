@@ -233,6 +233,19 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
     });
   }
 
+  String _formatEventTimestamp() {
+    if (widget.notification.eventTimestamp == null) return '';
+    
+    final eventTime = widget.notification.eventTimestamp!;
+    if (widget.notification.includeDate) {
+      final format = DateFormat('EEEE, MMMM d, yyyy • h:mm a');
+      return format.format(eventTime);
+    } else {
+      final format = DateFormat('h:mm a');
+      return format.format(eventTime);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Get current user from stream provider
@@ -326,14 +339,14 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
                   ),
                   const SizedBox(height: 12),
 
-                  // Time Range (for events)
-                  if (widget.notification.timeFrom != null && widget.notification.timeTo != null)
+                  // Event Timestamp (if specified)
+                  if (widget.notification.eventTimestamp != null)
                     _buildInfoCard(
-                      'Event Time',
-                      '${DateFormat('MMM dd, yyyy hh:mm a').format(widget.notification.timeFrom!)} - ${DateFormat('hh:mm a').format(widget.notification.timeTo!)}',
+                      widget.notification.includeDate ? 'Event Time' : 'Time',
+                      _formatEventTimestamp(),
                       Icons.event,
                     ),
-                  if (widget.notification.timeFrom != null && widget.notification.timeTo != null)
+                  if (widget.notification.eventTimestamp != null)
                     const SizedBox(height: 12),
 
                   // Timestamps

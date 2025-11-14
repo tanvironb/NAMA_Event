@@ -66,26 +66,19 @@ class _NotificationDetailViewState extends ConsumerState<NotificationDetailView>
     }
   }
 
-  String _formatTimeRange() {
-    if (widget.notification.timeFrom == null) return '';
+  String _formatEventTimestamp() {
+    if (widget.notification.eventTimestamp == null) return '';
     
-    final dateFormat = DateFormat('EEEE, MMMM d, yyyy • h:mm a');
-    final from = widget.notification.timeFrom!;
-    final to = widget.notification.timeTo;
+    final eventTime = widget.notification.eventTimestamp!;
     
-    if (to == null) {
-      return 'From: ${dateFormat.format(from)}';
-    }
-    
-    // If same day, show date once
-    if (from.year == to.year && from.month == to.month && from.day == to.day) {
-      final dayFormat = DateFormat('EEEE, MMMM d, yyyy');
-      final timeFormat = DateFormat('h:mm a');
-      return '${dayFormat.format(from)}\n${timeFormat.format(from)} - ${timeFormat.format(to)}';
+    if (widget.notification.includeDate) {
+      // Show full date + time
+      final format = DateFormat('EEEE, MMMM d, yyyy • h:mm a');
+      return format.format(eventTime);
     } else {
-      final fromFormatted = dateFormat.format(from);
-      final toFormatted = dateFormat.format(to);
-      return 'From: $fromFormatted\nTo: $toFormatted';
+      // Show time only
+      final format = DateFormat('h:mm a');
+      return format.format(eventTime);
     }
   }
 
@@ -262,8 +255,8 @@ class _NotificationDetailViewState extends ConsumerState<NotificationDetailView>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Time range (if present)
-                  if (widget.notification.timeFrom != null) ...[
+                  // Event timestamp (if present)
+                  if (widget.notification.eventTimestamp != null) ...[
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
@@ -286,7 +279,7 @@ class _NotificationDetailViewState extends ConsumerState<NotificationDetailView>
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'Event Schedule',
+                                widget.notification.includeDate ? 'Event Time' : 'Time',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
@@ -298,7 +291,7 @@ class _NotificationDetailViewState extends ConsumerState<NotificationDetailView>
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            _formatTimeRange(),
+                            _formatEventTimestamp(),
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
