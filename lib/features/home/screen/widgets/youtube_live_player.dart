@@ -56,11 +56,12 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
     _controller = YoutubePlayerController(
       initialVideoId: videoId,
       flags: const YoutubePlayerFlags(
-        autoPlay: true, // Auto-play when video appears
+        autoPlay: true,
         mute: false,
         enableCaption: true,
         loop: false,
-        forceHD: false, // Allow quality selection
+        forceHD: false,
+        useHybridComposition: true, // Improves performance on Android
       ),
     );
 
@@ -75,12 +76,7 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
 
     return activeLiveSession.when(
       data: (session) {
-        print('🎥 YoutubeLivePlayer: Active session = ${session?.title ?? 'null'}');
-        print('🔗 YoutubeLivePlayer: Live stream URL = ${session?.liveStreamUrl ?? 'null'}');
-        print('🔥 YoutubeLivePlayer: Priority = ${session?.priority ?? 'null'} (1=Low, 5=Max Urgent)');
-        
         if (session == null || session.liveStreamUrl.isEmpty || _isClosed) {
-          print('❌ YoutubeLivePlayer: No active session or empty URL, hiding player');
           // No active live session with stream URL, hide the player
           if (_controller != null && (session == null || session.liveStreamUrl.isEmpty)) {
             _controller!.pause(); // Pause before disposing
@@ -186,14 +182,16 @@ class _YoutubeLivePlayerState extends ConsumerState<YoutubeLivePlayer>
           // YouTube Player - single instance
           Expanded(
             child: _controller != null
-                ? YoutubePlayer(
-                    key: ValueKey(_controller!.initialVideoId),
-                    controller: _controller!,
-                    showVideoProgressIndicator: true,
-                    progressIndicatorColor: AppColors.goldenYellow,
-                    onReady: () {
-                      _controller!.addListener(() {});
-                    },
+                ? RepaintBoundary(
+                    child: YoutubePlayer(
+                      key: ValueKey(_controller!.initialVideoId),
+                      controller: _controller!,
+                      showVideoProgressIndicator: true,
+                      progressIndicatorColor: AppColors.goldenYellow,
+                      onReady: () {
+                        _controller!.addListener(() {});
+                      },
+                    ),
                   )
                 : const Center(
                     child: CircularProgressIndicator(
