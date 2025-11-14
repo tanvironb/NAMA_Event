@@ -5,6 +5,7 @@ import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.d
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
 import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
+import 'package:events_app_trueattempt/features/calendar/screens/my_calendar_screen.dart';
 
 /// Staff-specific Quick Actions Grid with rectangular buttons (2 per row)
 class StaffQuickActions extends ConsumerWidget {
@@ -54,11 +55,8 @@ class StaffQuickActions extends ConsumerWidget {
         'icon': Icons.calendar_today_outlined,
         'label': 'My Calendar',
         'onTap': () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Major refactoring, found a better approach to implement this. Upcoming soon...'),
-              duration: Duration(seconds: 3),
-            ),
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const MyCalendarScreen()),
           );
         },
       },
