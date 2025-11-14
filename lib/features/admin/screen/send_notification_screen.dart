@@ -322,21 +322,19 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
                         );
                       }).toList(),
                       onChanged: (value) async {
-                        if (value != null) {
-                          // Show confirmation if selecting Alert type
-                          if (value == AppNotificationType.alert && _selectedType != AppNotificationType.alert) {
-                            final confirmed = await _showAlertTypeConfirmation();
-                            if (confirmed) {
-                              setState(() => _selectedType = value);
-                            }
-                            // If user cancels, _selectedType stays as it was (not alert)
-                            // Force rebuild to show correct value in dropdown
-                            else {
-                              setState(() {}); // Force rebuild without changing _selectedType
-                            }
-                          } else {
+                        if (value == null) return;
+                        
+                        // Show confirmation if selecting Alert type
+                        if (value == AppNotificationType.alert) {
+                          final confirmed = await _showAlertTypeConfirmation();
+                          if (confirmed) {
                             setState(() => _selectedType = value);
+                          } else {
+                            // User canceled - default back to information
+                            setState(() => _selectedType = AppNotificationType.information);
                           }
+                        } else {
+                          setState(() => _selectedType = value);
                         }
                       },
                     ),
