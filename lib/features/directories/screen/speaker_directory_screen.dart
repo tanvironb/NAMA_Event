@@ -98,7 +98,9 @@ class _SpeakerDirectoryScreenState extends ConsumerState<SpeakerDirectoryScreen>
     final speakersAsync = ref.watch(speakersFutureProvider);
     final currentUserAsync = ref.watch(userAppProfileStreamProvider);
     
-    return Column(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Column(
       children: [
         // Search bar
         Padding(
@@ -233,8 +235,9 @@ class _SpeakerDirectoryScreenState extends ConsumerState<SpeakerDirectoryScreen>
             loading: () => const LoadingIndicator(),
             error: (err, stack) => Center(child: Text('Error loading profile: $err')),
           ),
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 }
