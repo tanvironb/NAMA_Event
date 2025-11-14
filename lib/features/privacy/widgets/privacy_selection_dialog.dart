@@ -22,11 +22,13 @@ class PrivacySelectionDialog extends StatefulWidget {
 
 class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
   late ProfileVisibility _selectedLevel;
+  ProfileVisibility? _expandedLevel;
 
   @override
   void initState() {
     super.initState();
     _selectedLevel = widget.initialSelection;
+    _expandedLevel = widget.initialSelection; // Default expand the selected one
   }
 
   @override
@@ -63,55 +65,23 @@ class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
                     ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               
-              // Privacy Level Cards
-              _buildPrivacyCard(ProfileVisibility.full),
-              const SizedBox(height: 12),
-              _buildPrivacyCard(ProfileVisibility.minimal),
-              const SizedBox(height: 12),
-              _buildPrivacyCard(ProfileVisibility.anonymous),
-              const SizedBox(height: 24),
-              
-              // Description of selected level
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.namaNavyBlue.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _selectedLevel.icon,
-                      style: const TextStyle(fontSize: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedLevel.displayName,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.namaNavyBlue,
-                                ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _selectedLevel.description,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.grey.shade700,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              // Icons row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildIconButton(ProfileVisibility.full),
+                  _buildIconButton(ProfileVisibility.minimal),
+                  _buildIconButton(ProfileVisibility.anonymous),
+                ],
               ),
+              
+              const SizedBox(height: 8),
+              
+              // Detail box below icons
+              if (_expandedLevel != null) _buildDetailBox(_expandedLevel!),
+              
               const SizedBox(height: 24),
               
               // Confirm Button
@@ -140,113 +110,92 @@ class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
     );
   }
 
-  Widget _buildPrivacyCard(ProfileVisibility level) {
+  Widget _buildIconButton(ProfileVisibility level) {
     final isSelected = _selectedLevel == level;
-    final isRecommended = level == ProfileVisibility.full;
+    final isExpanded = _expandedLevel == level;
 
-    return InkWell(
-      onTap: () => setState(() => _selectedLevel = level),
-      borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedLevel = level;
+          _expandedLevel = level;
+        });
+      },
       child: Container(
-        padding: const EdgeInsets.all(16),
+        width: 70,
+        height: 70,
         decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.namaNavyBlue.withOpacity(0.1)
-              : Colors.grey.shade50,
-          border: Border.all(
-            color: isSelected ? AppColors.namaNavyBlue : Colors.grey.shade300,
-            width: isSelected ? 2 : 1,
-          ),
+          color: isExpanded ? AppColors.namaNavyBlue.withOpacity(0.05) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
+          border: isExpanded
+              ? Border.all(color: AppColors.namaNavyBlue, width: 2)
+              : null,
         ),
-        child: Row(
-          children: [
-            // Icon
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? AppColors.namaNavyBlue
-                    : Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Center(
-                child: Text(
-                  level.icon,
-                  style: const TextStyle(fontSize: 24),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            
-            // Title
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        level.displayName,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                              color: isSelected ? AppColors.namaNavyBlue : Colors.black87,
-                            ),
+        child: Center(
+          child: Text(
+            level.icon,
+            style: TextStyle(
+              fontSize: 40,
+              shadows: isSelected
+                  ? [
+                      Shadow(
+                        color: AppColors.namaNavyBlue.withOpacity(0.3),
+                        blurRadius: 8,
                       ),
-                      if (isRecommended) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.namaGoldenYellow.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            'Recommended for networking',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.namaGoldenYellow,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            
-            // Radio indicator
-            Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: isSelected ? AppColors.namaNavyBlue : Colors.grey.shade400,
-                  width: 2,
-                ),
-              ),
-              child: isSelected
-                  ? Center(
-                      child: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: const BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.namaNavyBlue,
-                        ),
-                      ),
-                    )
+                    ]
                   : null,
             ),
-          ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDetailBox(ProfileVisibility level) {
+    final isRecommended = level == ProfileVisibility.full;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.namaNavyBlue.withOpacity(0.05),
+        border: Border.all(
+          color: AppColors.namaNavyBlue,
+          width: 2,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            level.displayName,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.namaNavyBlue,
+                ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            level.description,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey.shade700,
+                  height: 1.4,
+                ),
+          ),
+          if (isRecommended) ...[
+            const SizedBox(height: 12),
+            Text(
+              'Recommended for networking',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.namaGoldenYellow.withOpacity(0.8),
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                  ),
+            ),
+          ],
+        ],
       ),
     );
   }

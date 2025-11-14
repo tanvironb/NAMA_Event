@@ -12,7 +12,7 @@ class AppTextConstants {
   static const String privacyMinimalDescription = 
       'Only your name and email are visible. Other profile details remain private.';
   static const String privacyFullDescription = 
-      'Your full profile is visible to all attendees. Recommended for networking.';
+      'Your full profile is visible to all attendees.';
   
   // Privacy level display names
   static const String privacyAnonymousLabel = 'Anonymous';
