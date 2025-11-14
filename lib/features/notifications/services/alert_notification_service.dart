@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:events_app_trueattempt/features/notifications/widgets/alert_popup_dialog.dart';
+import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 
 /// Service to handle alert notifications with popup display
 /// Listens for high-priority notifications and shows popup with 3-second timer
@@ -17,11 +18,13 @@ class AlertNotificationService {
 
   /// Initialize the service and start listening for alerts
   Future<void> initialize(BuildContext context) async {
-    _startListening(context);
+    _startListening();
+    // Small delay to ensure listener is set up before checking for unshown alerts
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   /// Start listening for alert notifications
-  void _startListening(BuildContext context) {
+  void _startListening() {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) {
       debugPrint('AlertNotificationService: No user logged in');
@@ -39,7 +42,7 @@ class AlertNotificationService {
       for (final change in snapshot.docChanges) {
         if (change.type == DocumentChangeType.added) {
           final notification = AppNotification.fromFirestore(change.doc);
-          _handleAlertNotification(context, notification);
+          _handleAlertNotification(notification);
         }
       }
     });
@@ -48,7 +51,7 @@ class AlertNotificationService {
   }
 
   /// Handle an alert notification by showing popup
-  Future<void> _handleAlertNotification(BuildContext context, AppNotification notification) async {
+  Future<void> _handleAlertNotification(AppNotification notification) async {
     // Skip if already shown
     if (_shownAlertIds.contains(notification.id)) {
       debugPrint('AlertNotificationService: Alert ${notification.id} already shown');
@@ -74,12 +77,19 @@ class AlertNotificationService {
     // Mark as shown
     _shownAlertIds.add(notification.id);
 
-    // Show popup dialog
-    _showAlertPopup(context, notification);
+    // Show popup dialog using global navigator context
+    _showAlertPopup(notification);
   }
 
   /// Show the alert popup dialog
-  void _showAlertPopup(BuildContext context, AppNotification notification) {
+  void _showAlertPopup(AppNotification notification) {
+    // Get context from global navigator key
+    final context = NotificationHandler.navigatorKey.currentContext;
+    if (context == null) {
+      debugPrint('AlertNotificationService: No context available to show popup');
+      return;
+    }
+
     // Use root navigator to ensure popup shows even if user is in a nested route
     showDialog(
       context: context,
@@ -133,16 +143,32 @@ class AlertNotificationService {
 
       debugPrint('AlertNotificationService: Found ${snapshot.docs.length} unread alerts');
 
-      for (final doc in snapshot.docs) {
-        final notification = AppNotification.fromFirestore(doc);
+      // Only show the most recent alert to avoid stacking multiple popups
+      if (snapshot.docs.isNotEmpty) {
+        // Sort by timestamp to get most recent
+        final sortedDocs = snapshot.docs..sort((a, b) {
+          final aTime = (a.data()['timestamp'] as Timestamp).toDate();
+          final bTime = (b.data()['timestamp'] as Timestamp).toDate();
+          return bTime.compareTo(aTime); // Most recent first
+        });
+
+        final mostRecentDoc = sortedDocs.first;
+        final notification = AppNotification.fromFirestore(mostRecentDoc);
         
         // Only show if not already shown and is a popup type
         if (!_shownAlertIds.contains(notification.id) && notification.showsPopup) {
-          // Add small delay between popups if multiple alerts
-          await Future.delayed(const Duration(milliseconds: 500));
-          if (context.mounted) {
-            _handleAlertNotification(context, notification);
+          // Check if was previously dismissed
+          final notificationId = notification.data['notificationId'] ?? notification.id;
+          final wasDismissed = await AlertPopupDialog.hasBeenDismissed(notificationId);
+          
+          if (!wasDismissed && context.mounted) {
+            _handleAlertNotification(notification);
           }
+        }
+
+        // If there are more alerts, user can see them in notifications screen
+        if (snapshot.docs.length > 1) {
+          debugPrint('AlertNotificationService: ${snapshot.docs.length - 1} more alerts available in notifications');
         }
       }
     } catch (e) {

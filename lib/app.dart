@@ -21,10 +21,13 @@ class _MyAppState extends ConsumerState<MyApp> {
   void initState() {
     super.initState();
     // Initialize alert service after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted && NotificationHandler.navigatorKey.currentContext != null) {
-        _alertService.initialize(NotificationHandler.navigatorKey.currentContext!);
-        _alertService.checkForUnshownAlerts(NotificationHandler.navigatorKey.currentContext!);
+        await _alertService.initialize(NotificationHandler.navigatorKey.currentContext!);
+        // Check for unshown alerts after initialization completes
+        if (mounted && NotificationHandler.navigatorKey.currentContext != null) {
+          await _alertService.checkForUnshownAlerts(NotificationHandler.navigatorKey.currentContext!);
+        }
       }
     });
   }
