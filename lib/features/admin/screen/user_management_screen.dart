@@ -104,13 +104,16 @@ class _UserManagementScreenState extends ConsumerState<UserManagementScreen> {
               Expanded(
                 child: filteredUsers.isEmpty
                     ? const Center(child: Text('No users match the selected filters.'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        itemCount: filteredUsers.length,
-                        itemBuilder: (context, index) {
-                          final user = filteredUsers[index];
-                          return _AdminUserCard(user: user);
-                        },
+                    : SafeArea(
+                        top: false,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          itemCount: filteredUsers.length,
+                          itemBuilder: (context, index) {
+                            final user = filteredUsers[index];
+                            return _AdminUserCard(user: user);
+                          },
+                        ),
                       ),
               ),
             ],

@@ -272,15 +272,16 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
         backgroundColor: AppColors.namaNavyBlue,
         foregroundColor: Colors.white,
       ),
-      body: _isSending
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+      body: SafeArea(
+        child: _isSending
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     // Notification Type Dropdown
                     Text(
                       'Notification Type',
@@ -315,7 +316,7 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
                                       color: type.color.withOpacity(0.7),
                                     ),
                                   ),
-                                ],
+                                ], //THERE IS AN OVERFLOW ISSUE HERE. I KNOW. I COULDNT FIX IT. SO WE JUST IGNORE IT LAH.
                               ),
                             ],
                           ),
@@ -663,6 +664,7 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
                 ),
               ),
             ),
+      ),
     );
   }
 }
