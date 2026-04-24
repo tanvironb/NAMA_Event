@@ -15,6 +15,7 @@ import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.da
 import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
+import 'package:events_app_trueattempt/core/services/notification_services.dart';
 
 class AttendeeShell extends ConsumerStatefulWidget {
   const AttendeeShell({super.key});
@@ -25,6 +26,7 @@ class AttendeeShell extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<AttendeeShell> {
   int _selectedIndex = 0;
+  NotificationService? _notificationService;
 
   static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
     const HomeDashboardScreen(), // The dynamic home dashboard
@@ -52,6 +54,7 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
       debugPrint('AttendeeShell: Initializing notifications for user ${user.uid}');
       final notificationService = ref.read(notificationServiceProvider(user.uid));
       if (notificationService != null) {
+        _notificationService = notificationService;
         await notificationService.initialize();
         debugPrint('AttendeeShell: Notification service initialized successfully');
       } else {
@@ -60,6 +63,12 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
     } else {
       debugPrint('AttendeeShell: No authenticated user found');
     }
+  }
+
+  @override
+  void dispose() {
+    _notificationService?.dispose();
+    super.dispose();
   }
 
   void _onItemTapped(int index) {

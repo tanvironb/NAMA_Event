@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:events_app_trueattempt/features/auth/data/auth_repository.dart';
 
 // Enum to represent the current authentication form state
@@ -36,33 +37,29 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
     state = const AsyncValue.loading();
     try {
       await _authRepository.createUserWithEmailAndPassword(email, password, name: name);
-      // DON'T send verification email automatically - user will do it manually
       if (mounted) {
         state = const AsyncValue.data(null);
       }
     } on FirebaseAuthException catch (e, stack) {
       if (mounted) {
-        state = AsyncValue.error(e.message ?? 'Registration failed.', stack);
+        // Store the full exception so callers can inspect the error code if needed.
+        state = AsyncValue.error(e, stack);
       }
     }
   }
 
   // Handles user sign-out.
   Future<void> signOut() async {
-    if (!mounted) return; // Check if still mounted before proceeding
-    
-    state = const AsyncValue.loading();
+    if (!mounted) return;
+    // Reset state immediately so LoginScreen renders with a clean, interactive
+    // form as soon as AuthGate routes to it — avoids a loading-spinner window.
+    state = const AsyncValue.data(null);
     try {
       await _authRepository.signOut();
-      if (mounted) {
-        state = const AsyncValue.data(null);
-        // Note: All .autoDispose providers will automatically clean up when
-        // authStateChangesProvider fires due to Firebase Auth sign-out
-      }
-    } on Exception catch (e, stack) {
-      if (mounted) {
-        state = AsyncValue.error(e.toString(), stack);
-      }
+    } on Exception catch (e) {
+      // signOut errors are not surfaced to the UI since the user is navigating
+      // away regardless. Log for debugging only.
+      debugPrint('AuthViewModel: signOut error: $e');
     }
   }
 }

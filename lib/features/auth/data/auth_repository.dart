@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
@@ -65,7 +66,7 @@ class AuthRepository {
       );
     } catch (e) {
       // Don't fail login if timestamp update fails
-      print('Warning: Failed to update lastSeen on login: $e');
+      debugPrint('Warning: Failed to update lastSeen on login: $e');
     }
     
     return userCredential;
@@ -133,13 +134,13 @@ class AuthRepository {
         ).timeout(
           const Duration(seconds: 10),
           onTimeout: () {
-            print('Warning: Firestore update timed out during sign-out');
+            debugPrint('Warning: Firestore update timed out during sign-out');
           },
         );
       } catch (e) {
         // If Firestore update fails (e.g., no network), continue with sign-out
         // This ensures user can still sign out locally
-        print('Warning: Failed to update user session data on sign-out: $e');
+        debugPrint('Warning: Failed to update user session data on sign-out: $e');
       }
     }
     

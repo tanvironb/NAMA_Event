@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,9 +10,18 @@ class NotificationService {
   final UserProfileRepository _userProfileRepository;
   final String _userId;
 
+  bool _isInitialized = false;
+  StreamSubscription<RemoteMessage>? _onMessageSub;
+  StreamSubscription<RemoteMessage>? _onMessageOpenedAppSub;
+
   NotificationService(this._userProfileRepository, this._userId);
 
   Future<void> initialize() async {
+    if (_isInitialized) {
+      debugPrint('NotificationService: Already initialized, skipping duplicate call.');
+      return;
+    }
+    _isInitialized = true;
     try {
       debugPrint('NotificationService: Starting initialization...');
       
@@ -59,7 +69,7 @@ class NotificationService {
   Future<void> _setupInteractions() async {
     try {
       // Handle messages received while the app is in the foreground
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      _onMessageSub = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         debugPrint('Foreground message received: ${message.notification?.title}');
         debugPrint('Message data: ${message.data}');
         if (message.notification != null) {
@@ -69,7 +79,7 @@ class NotificationService {
       });
 
       // Handle when a user taps a notification and the app opens from the background
-      FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      _onMessageOpenedAppSub = FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
         debugPrint('A new onMessageOpenedApp event was published!');
         NotificationHandler.handleNotificationTap(message);
       });
@@ -97,5 +107,16 @@ class NotificationService {
     if (context != null) {
       NotificationHandler.handleForegroundMessage(context, message);
     }
+  }
+
+  /// Cancel stream subscriptions and reset initialization state.
+  /// Should be called when the user signs out so a fresh session starts clean.
+  void dispose() {
+    _onMessageSub?.cancel();
+    _onMessageOpenedAppSub?.cancel();
+    _onMessageSub = null;
+    _onMessageOpenedAppSub = null;
+    _isInitialized = false;
+    debugPrint('NotificationService: Disposed for user $_userId');
   }
 }

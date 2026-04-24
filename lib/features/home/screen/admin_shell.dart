@@ -15,6 +15,7 @@ import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_scr
 import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
+import 'package:events_app_trueattempt/core/services/notification_services.dart';
 
 class AdminShell extends ConsumerStatefulWidget {
   const AdminShell({super.key});
@@ -25,6 +26,7 @@ class AdminShell extends ConsumerStatefulWidget {
 
 class _AdminShellState extends ConsumerState<AdminShell> {
   int _selectedIndex = 0;
+  NotificationService? _notificationService;
 
   static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
     const AdminDashboardScreen(), // Admin Dashboard with quick actions
@@ -51,6 +53,7 @@ class _AdminShellState extends ConsumerState<AdminShell> {
       debugPrint('AdminShell: Initializing notifications for user ${user.uid}');
       final notificationService = ref.read(notificationServiceProvider(user.uid));
       if (notificationService != null) {
+        _notificationService = notificationService;
         await notificationService.initialize();
         debugPrint('AdminShell: Notification service initialized successfully');
       } else {
@@ -59,6 +62,12 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     } else {
       debugPrint('AdminShell: No authenticated user found');
     }
+  }
+
+  @override
+  void dispose() {
+    _notificationService?.dispose();
+    super.dispose();
   }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);

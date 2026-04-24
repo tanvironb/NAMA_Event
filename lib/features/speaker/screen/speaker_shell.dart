@@ -15,6 +15,7 @@ import 'package:events_app_trueattempt/common_widgets/notification_icon_with_bad
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
+import 'package:events_app_trueattempt/core/services/notification_services.dart';
 
 class SpeakerShell extends ConsumerStatefulWidget {
   const SpeakerShell({super.key});
@@ -25,6 +26,7 @@ class SpeakerShell extends ConsumerStatefulWidget {
 
 class _SpeakerShellState extends ConsumerState<SpeakerShell> {
   int _selectedIndex = 0;
+  NotificationService? _notificationService;
 
   static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
     const SpeakerHomeDashboard(), // Speaker-specific home with action cards
@@ -41,13 +43,21 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
   Future<void> _initializeNotifications() async {
     // Wait for the widget to be built before accessing providers
     await Future.delayed(Duration.zero);
+    if (!mounted) return;
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user != null) {
       final notificationService = ref.read(notificationServiceProvider(user.uid));
       if (notificationService != null) {
+        _notificationService = notificationService;
         await notificationService.initialize();
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _notificationService?.dispose();
+    super.dispose();
   }
 
   void _onItemTapped(int index) => setState(() => _selectedIndex = index);

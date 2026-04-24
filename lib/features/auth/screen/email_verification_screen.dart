@@ -75,27 +75,24 @@ class _EmailVerificationScreenState extends ConsumerState<EmailVerificationScree
         }
       } catch (e) {
         // Silent fail - user can still manually check
-        print('Auto-check verification error: $e');
+        debugPrint('EmailVerificationScreen: auto-check error: $e');
       }
     });
   }
 
-  /// Sign out user and let AuthGate handle routing automatically
+  /// Sign out user and let AuthGate handle routing automatically.
   Future<void> _signOutAndNavigate() async {
     if (_isSigningOut) return; // Prevent double-tap
     
     setState(() => _isSigningOut = true);
     
     try {
-      // Sign out - AuthGate will automatically show LoginScreen
+      // Sign out — AuthGate will rebuild and show LoginScreen automatically.
       await ref.read(authViewModelProvider.notifier).signOut();
-      
-      // Pop this screen from navigation stack so AuthGate's LoginScreen can be seen
-      if (mounted && Navigator.of(context).canPop()) {
-        Navigator.of(context).pop();
-      }
+      // No manual navigation needed: AuthGate observes authStateChanges and
+      // routes to LoginScreen once the user is signed out.
     } catch (e) {
-      print('Error during sign-out: $e');
+      debugPrint('EmailVerificationScreen: sign-out error: $e');
       if (mounted) {
         setState(() => _isSigningOut = false);
         _showSnackBar('Failed to sign out. Please try again.');

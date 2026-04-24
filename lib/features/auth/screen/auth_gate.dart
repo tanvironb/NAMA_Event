@@ -13,11 +13,30 @@ import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart
 const Duration _sessionTimeout = Duration(days: 10);
 
 // AuthGate handles the initial routing based on user's authentication state.
-class AuthGate extends ConsumerWidget {
+class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AuthGate> createState() => _AuthGateState();
+}
+
+class _AuthGateState extends ConsumerState<AuthGate> {
+  // Guards against scheduling multiple signOut calls while the stream keeps
+  // emitting during the async sign-out process.
+  bool _sessionTimeoutTriggered = false;
+
+  void _triggerSessionTimeout() {
+    if (_sessionTimeoutTriggered) return;
+    _sessionTimeoutTriggered = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(authViewModelProvider.notifier).signOut();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authStateChangesProvider);
 
     return authState.when(
@@ -60,10 +79,9 @@ class AuthGate extends ConsumerWidget {
                 final daysSinceLastSeen = DateTime.now().difference(appUser.lastSeen!).inDays;
                 
                 if (daysSinceLastSeen >= 10) {
-                  // Session expired - sign out user
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    ref.read(authViewModelProvider.notifier).signOut();
-                  });
+                  // Session expired — trigger sign-out exactly once regardless of how
+                  // many times the stream rebuilds this widget while signing out.
+                  _triggerSessionTimeout();
                   
                   return Scaffold(
                     body: Center(
@@ -90,6 +108,8 @@ class AuthGate extends ConsumerWidget {
               // Check user status
               switch (appUser.status) {
                 case 'approved':
+                  // Clear any stale timeout flag from a previous session.
+                  _sessionTimeoutTriggered = false;
                   return const MainHubScreen();
                 case 'rejected':
                   return Scaffold(

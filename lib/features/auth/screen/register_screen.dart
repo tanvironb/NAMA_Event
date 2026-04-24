@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/features/auth/screen/email_verification_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
@@ -83,7 +84,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     
     await viewModel.signUp(
       _emailController.text.trim(),
-      _passwordController.text.trim(),
+      _passwordController.text,
       name: _nameController.text.trim(),
     );
 
@@ -92,11 +93,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final authState = ref.read(authViewModelProvider);
     
     if (authState.hasError) {
-      final errorMessage = authState.error.toString();
+      final error = authState.error;
+      final message = error is FirebaseAuthException
+          ? (error.message ?? 'Registration failed.')
+          : 'Registration failed. Please try again.';
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(errorMessage),
+          content: Text(message),
           backgroundColor: AppColors.errorRed,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

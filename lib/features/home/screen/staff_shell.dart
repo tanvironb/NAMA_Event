@@ -15,6 +15,7 @@ import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.da
 import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
+import 'package:events_app_trueattempt/core/services/notification_services.dart';
 
 /// Staff Shell - Identical to AttendeeShell but with separate UI files for testing
 /// Staff users have all attendee features PLUS check-in functionality via QR Scanner
@@ -27,6 +28,7 @@ class StaffShell extends ConsumerStatefulWidget {
 
 class _StaffShellState extends ConsumerState<StaffShell> {
   int _selectedIndex = 0;
+  NotificationService? _notificationService;
 
   static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
     const StaffHomeDashboard(), // Staff version of home dashboard
@@ -53,6 +55,7 @@ class _StaffShellState extends ConsumerState<StaffShell> {
       debugPrint('StaffShell: Initializing notifications for user ${user.uid}');
       final notificationService = ref.read(notificationServiceProvider(user.uid));
       if (notificationService != null) {
+        _notificationService = notificationService;
         await notificationService.initialize();
         debugPrint('StaffShell: Notification service initialized successfully');
       } else {
@@ -61,6 +64,12 @@ class _StaffShellState extends ConsumerState<StaffShell> {
     } else {
       debugPrint('StaffShell: No authenticated user found');
     }
+  }
+
+  @override
+  void dispose() {
+    _notificationService?.dispose();
+    super.dispose();
   }
 
   void _onItemTapped(int index) {
