@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -8,106 +9,94 @@ import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/common_widgets/session_list_tile.dart';
 
-// AgendaScreen displays the list of sessions grouped by day for the active event.
+
 class AgendaScreen extends ConsumerWidget {
   const AgendaScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch the stream of sessions from Firestore
     final sessionsAsyncValue = ref.watch(sessionsStreamProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Event Agenda'),
-      ),
+      backgroundColor: Colors.white,
       body: sessionsAsyncValue.when(
         data: (sessions) {
           if (sessions.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No sessions scheduled yet.',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                  ),
-                ],
-              ),
-            );
+            return const Center(child: Text('No sessions scheduled yet.'));
           }
 
-          // Sort sessions by startTime
           final sortedSessions = List<Session>.from(sessions)
             ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
-          // Group sessions by day
           final groupedSessions = groupBy(sortedSessions, (Session session) {
             return DateFormat('yyyy-MM-dd').format(session.startTime);
           });
 
-          return AnimationLimiter(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16.0),
-              itemCount: groupedSessions.length,
-              itemBuilder: (context, dayIndex) {
-                final dayKey = groupedSessions.keys.elementAt(dayIndex);
-                final daySessions = groupedSessions[dayKey]!;
-                final dayDate = DateTime.parse(dayKey);
-                
-                return AnimationConfiguration.staggeredList(
-                  position: dayIndex,
-                  duration: const Duration(milliseconds: 375),
-                  child: SlideAnimation(
-                    verticalOffset: 50.0,
-                    child: FadeInAnimation(
-                      child: _DaySection(
-                        date: dayDate,
-                        sessions: daySessions,
-                        dayIndex: dayIndex,
-                      ),
-                    ),
+          return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              /// 🔥 Floating Title (THIS IS THE FIX)
+              SliverAppBar(
+  floating: true,
+  snap: true,
+  backgroundColor: Colors.white.withOpacity(0.92),
+  elevation: 0,
+  automaticallyImplyLeading: false,
+  titleSpacing: 26,
+  toolbarHeight: 70,
+  flexibleSpace: ClipRect(
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+      child: Container(
+        color: Colors.white.withOpacity(0.72),
+      ),
+    ),
+  ),
+  title: const Text(
+    'Event Agenda',
+    style: TextStyle(
+      color: Color(0xFF0B0B83),
+      fontSize: 22,
+      fontWeight: FontWeight.w800,
+    ),
+  ),
+),
+
+              /// Content
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(26, 10, 26, 110),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, dayIndex) {
+                      final dayKey = groupedSessions.keys.elementAt(dayIndex);
+                      final daySessions = groupedSessions[dayKey]!;
+                      final dayDate = DateTime.parse(dayKey);
+
+                      return AnimationConfiguration.staggeredList(
+                        position: dayIndex,
+                        duration: const Duration(milliseconds: 375),
+                        child: SlideAnimation(
+                          verticalOffset: 30,
+                          child: FadeInAnimation(
+                            child: _DaySection(
+                              date: dayDate,
+                              sessions: daySessions,
+                              dayIndex: dayIndex,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    childCount: groupedSessions.length,
                   ),
-                );
-              },
-            ),
+                ),
+              ),
+            ],
           );
         },
         loading: () => const LoadingIndicator(),
         error: (err, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Error loading agenda',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                err.toString(),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
+          child: Text('Error loading agenda\n$err'),
         ),
       ),
     );
@@ -127,122 +116,61 @@ class _DaySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isToday = _isToday(date);
-    final dayName = DateFormat('EEEE').format(date);
-    final dayDate = DateFormat('MMMM d, y').format(date);
+    final dateText = DateFormat('MMMM d, yyyy').format(date);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Day header
         Container(
-          margin: EdgeInsets.only(bottom: 16, top: dayIndex == 0 ? 0 : 24),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          margin: EdgeInsets.only(bottom: 14, top: dayIndex == 0 ? 0 : 18),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
           decoration: BoxDecoration(
-            color: isToday
-                ? Theme.of(context).colorScheme.primary
-                : Theme.of(context).colorScheme.surfaceVariant,
-            borderRadius: BorderRadius.circular(12),
-            border: isToday
-                ? Border.all(
-                    color: Theme.of(context).colorScheme.primary,
-                    width: 2,
-                  )
-                : null,
+            color: const Color(0xFFC3C1DF),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
             children: [
-              Icon(
-                isToday ? Icons.today : Icons.calendar_today,
-                color: isToday
-                    ? Theme.of(context).colorScheme.onPrimary
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
+              const Icon(Icons.calendar_today_outlined, size: 21),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      dayName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: isToday
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.bold,
+                      dateText,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
+                    const SizedBox(height: 5),
                     Text(
-                      dayDate,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: isToday
-                            ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.8)
-                            : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
+                      DateFormat('EEEE').format(date),
+                      style: const TextStyle(
+                        fontSize: 10.5,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (isToday)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'TODAY',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
               Text(
-                '${sessions.length} session${sessions.length != 1 ? 's' : ''}',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: isToday
-                      ? Theme.of(context).colorScheme.onPrimary.withOpacity(0.8)
-                      : Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
-                ),
+                '${sessions.length} Session${sessions.length == 1 ? '' : 's'}',
+                style: const TextStyle(fontSize: 10),
               ),
             ],
           ),
         ),
-        
-        // Sessions for this day
-        AnimationLimiter(
-          child: Column(
-            children: sessions.asMap().entries.map((entry) {
-              final index = entry.key;
-              final session = entry.value;
-              
-              return AnimationConfiguration.staggeredList(
-                position: index,
-                duration: const Duration(milliseconds: 300),
-                delay: Duration(milliseconds: dayIndex * 100),
-                child: SlideAnimation(
-                  verticalOffset: 30.0,
-                  child: FadeInAnimation(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: SessionListTile(session: session),
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
+
+        Column(
+          children: sessions.map((session) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 11),
+              child: SessionListTile(session: session),
+            );
+          }).toList(),
         ),
       ],
     );
   }
-
-  bool _isToday(DateTime date) {
-    final now = DateTime.now();
-    return date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
-  }
 }
+//taahmmed123@gmail.com

@@ -5,8 +5,6 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 
-/// A specialized widget for booking all sessions by a speaker.
-/// Follows the app's architecture by handling data logic in the data layer.
 class SpeakerSessionsBookmarkButton extends ConsumerWidget {
   final String speakerId;
 
@@ -19,148 +17,107 @@ class SpeakerSessionsBookmarkButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final speakerSessionsAsync = ref.watch(speakerSessionsProvider(speakerId));
     final currentUserAsync = ref.watch(userAppProfileStreamProvider);
-    
+
     return speakerSessionsAsync.when(
       data: (sessions) {
-        if (sessions.isEmpty) {
-          return const SizedBox.shrink();
-        }
+        if (sessions.isEmpty) return const SizedBox.shrink();
 
         return currentUserAsync.when(
           data: (currentUser) {
             if (currentUser == null) return const SizedBox.shrink();
-            
-            // Check bookmark status for all sessions
-            final unbookmarkedSessions = sessions.where((session) =>
-              !currentUser.bookmarkedSessions.contains(session.id)
-            ).toList();
 
-            // Show different UI based on bookmark status
+            final unbookmarkedSessions = sessions.where((session) =>
+                !currentUser.bookmarkedSessions.contains(session.id)).toList();
+
+            // 🔹 ALL BOOKED (FIXED STYLE)
             if (unbookmarkedSessions.isEmpty) {
-              return Container(
-                width: double.infinity,
-                margin: const EdgeInsets.symmetric(horizontal: 16),
+              return SizedBox(
+                width: 240,
+                height: 40,
                 child: OutlinedButton.icon(
-                  onPressed: null, // Disabled since all are bookmarked
-                  icon: const Icon(Icons.bookmark, color: AppColors.goldenYellow),
-                  label: Text('All ${sessions.length} Sessions Bookmarked'),
+                  onPressed: null,
+                  icon: const Icon(Icons.bookmark, size: 16),
+                  label: Text(
+                    'All ${sessions.length} Sessions',
+                    style: const TextStyle(fontSize: 13),
+                  ),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    foregroundColor: AppColors.goldenYellow,
                     side: const BorderSide(color: AppColors.goldenYellow),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               );
             }
 
-            return Container(
-              width: double.infinity,
-              margin: const EdgeInsets.symmetric(horizontal: 16),
+            // 🔹 BOOK BUTTON (FIXED STYLE)
+            return SizedBox(
+              width: 240,
+              height: 40,
               child: ElevatedButton.icon(
-                onPressed: () => _bookAllSessions(context, unbookmarkedSessions, currentUser.uid, ref),
-                icon: const Icon(Icons.bookmark_add),
-                label: Text('Book ${unbookmarkedSessions.length} Session${unbookmarkedSessions.length == 1 ? '' : 's'}'),
+                onPressed: () => _bookAllSessions(
+                    context, unbookmarkedSessions, currentUser.uid, ref),
+                icon: const Icon(Icons.bookmark_add, size: 16),
+                label: Text(
+                  'Book ${unbookmarkedSessions.length} Session${unbookmarkedSessions.length == 1 ? '' : 's'}',
+                  style: const TextStyle(fontSize: 13),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.namaGoldenYellow,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  elevation: 2,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
             );
           },
-          loading: () => Container(
-            width: double.infinity,
-            height: 56,
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Center(child: CircularProgressIndicator()),
+          loading: () => const SizedBox(
+            height: 40,
+            width: 240,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           ),
           error: (_, __) => const SizedBox.shrink(),
         );
       },
-      loading: () => Container(
-        width: double.infinity,
-        height: 56,
-        margin: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Center(child: CircularProgressIndicator()),
+      loading: () => const SizedBox(
+        height: 40,
+        width: 240,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
       error: (_, __) => const SizedBox.shrink(),
     );
   }
 
-  Future<void> _bookAllSessions(BuildContext context, List<Session> sessions, String userId, WidgetRef ref) async {
+  Future<void> _bookAllSessions(
+    BuildContext context,
+    List<Session> sessions,
+    String userId,
+    WidgetRef ref,
+  ) async {
     final repo = ref.read(userProfileRepositoryProvider);
-    
+
     try {
-      // Show loading snackbar
+      final sessionIds = sessions.map((s) => s.id).toList();
+      await repo.bulkUpdateUserBookmarks(userId, sessionIds, true);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Booked ${sessions.length} sessions'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (_) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Row(
-              children: [
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                ),
-                SizedBox(width: 12),
-                Text('Booking sessions...'),
-              ],
-            ),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      // Use bulk update for better performance - data layer handles the logic
-      final sessionIds = sessions.map((session) => session.id).toList();
-      await repo.bulkUpdateUserBookmarks(userId, sessionIds, true);
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text('Successfully booked ${sessions.length} session${sessions.length == 1 ? '' : 's'}!'),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green[600],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline, color: Colors.white),
-                const SizedBox(width: 12),
-                const Expanded(child: Text('Failed to book sessions')),
-              ],
-            ),
-            backgroundColor: Colors.red[600],
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            margin: const EdgeInsets.all(16),
+            content: Text('Failed to book sessions'),
+            backgroundColor: Colors.red,
           ),
         );
       }

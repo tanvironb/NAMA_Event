@@ -9,99 +9,139 @@ import 'package:events_app_trueattempt/features/profile/screen/user_details_scre
 class ConnectionsScreen extends ConsumerWidget {
   const ConnectionsScreen({super.key});
 
+  static const Color _primaryPurple = Color(0xFF4A3B95);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUserAsync = ref.watch(userAppProfileStreamProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My QR Connections'),
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
-        elevation: 0,
-      ),
-      body: currentUserAsync.when(
-        data: (currentUser) {
-          if (currentUser == null) {
-            return const Center(
-              child: Text(
-                'You must be logged in',
-                style: TextStyle(fontSize: 16, color: AppColors.namaMediumGray),
+      backgroundColor: AppColors.namaWhite,
+      body: SafeArea(
+        child: currentUserAsync.when(
+          data: (currentUser) {
+            if (currentUser == null) {
+              return const Center(
+                child: Text(
+                  'You must be logged in',
+                  style: TextStyle(color: AppColors.namaMediumGray),
+                ),
+              );
+            }
+
+            return DefaultTabController(
+              length: 2,
+              child: Column(
+                children: [
+                  /// 🔹 HEADER (CENTERED TITLE)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 16, 8, 12),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            color: AppColors.namaNavyBlue,
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ),
+                        const Text(
+                          'My Connections',
+                          style: TextStyle(
+                            fontSize: 18, // ↓ reduced
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.namaNavyBlue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  /// 🔹 SMALL PILL TAB
+                  Container(
+                    height: 34,
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE7E4F0),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: TabBar(
+                      dividerColor: Colors.transparent,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      indicator: BoxDecoration(
+                        color: _primaryPurple,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.black87,
+                      labelPadding: EdgeInsets.zero,
+                      tabs: [
+                        Tab(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.qr_code, size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                'I Scanned (${currentUser.usersIScanned.length})',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Tab(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.qr_code_scanner, size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Scanned Me (${currentUser.scannedByUsers.length})',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  /// 🔹 CONTENT
+                  Expanded(
+                    child: TabBarView(
+                      children: [
+                        _buildConnectionsList(
+                          context,
+                          ref,
+                          currentUser.usersIScanned,
+                          'You haven\'t scanned anyone yet',
+                          'Scan someone\'s QR code to connect',
+                        ),
+                        _buildConnectionsList(
+                          context,
+                          ref,
+                          currentUser.scannedByUsers,
+                          'No one has scanned you yet',
+                          'Share your QR code to get connections',
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             );
-          }
-
-          return DefaultTabController(
-            length: 2,
-            child: Column(
-              children: [
-                Container(
-                  color: AppColors.namaWhite,
-                  child: TabBar(
-                    labelColor: AppColors.namaNavyBlue,
-                    unselectedLabelColor: AppColors.namaMediumGray,
-                    indicatorColor: AppColors.namaNavyBlue,
-                    indicatorWeight: 3,
-                    tabs: [
-                      Tab(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.qr_code_scanner, size: 18),
-                            const SizedBox(width: 8),
-                            Text('I Scanned (${currentUser.usersIScanned.length})'),
-                          ],
-                        ),
-                      ),
-                      Tab(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.qr_code, size: 18),
-                            const SizedBox(width: 8),
-                            Text('Scanned Me (${currentUser.scannedByUsers.length})'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      _buildConnectionsList(
-                        context,
-                        ref,
-                        currentUser.usersIScanned,
-                        'You haven\'t scanned anyone yet',
-                        'Scan someone\'s QR code to connect',
-                      ),
-                      _buildConnectionsList(
-                        context,
-                        ref,
-                        currentUser.scannedByUsers,
-                        'No one has scanned you yet',
-                        'Share your QR code to get connections',
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+          },
+          loading: () => const Center(child: LoadingIndicator()),
+          error: (error, stack) => const Center(
+            child: Text(
+              'Error loading connections',
+              style: TextStyle(color: AppColors.namaMediumGray),
             ),
-          );
-        },
-        loading: () => const Center(child: LoadingIndicator()),
-        error: (error, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 64, color: AppColors.namaMediumGray),
-              const SizedBox(height: 16),
-              Text(
-                'Error loading connections',
-                style: const TextStyle(fontSize: 16, color: AppColors.namaMediumGray),
-              ),
-            ],
           ),
         ),
       ),
@@ -122,23 +162,23 @@ class ConnectionsScreen extends ConsumerWidget {
           children: [
             Icon(
               Icons.people_outline,
-              size: 80,
+              size: 60,
               color: AppColors.namaMediumGray.withOpacity(0.5),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Text(
               emptyTitle,
               style: const TextStyle(
-                fontSize: 18,
+                fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: AppColors.namaMediumGray,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               emptySubtitle,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 12,
                 color: AppColors.namaMediumGray.withOpacity(0.7),
               ),
             ),
@@ -154,27 +194,10 @@ class ConnectionsScreen extends ConsumerWidget {
           return const Center(child: LoadingIndicator());
         }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Error loading connections',
-              style: const TextStyle(color: AppColors.namaMediumGray),
-            ),
-          );
-        }
-
         final users = snapshot.data ?? [];
-        if (users.isEmpty) {
-          return Center(
-            child: Text(
-              'No connections found',
-              style: const TextStyle(color: AppColors.namaMediumGray),
-            ),
-          );
-        }
 
         return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           itemCount: users.length,
           itemBuilder: (context, index) {
             final user = users[index];
@@ -187,32 +210,33 @@ class ConnectionsScreen extends ConsumerWidget {
 
   Widget _buildConnectionTile(BuildContext context, AppUser user) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: AppColors.namaWhite,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 6,
           ),
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         leading: CircleAvatar(
-          radius: 28,
+          radius: 22,
           backgroundImage: user.profileImageUrl.isNotEmpty
               ? NetworkImage(user.profileImageUrl)
               : null,
           backgroundColor: AppColors.namaNavyBlue.withOpacity(0.1),
           child: user.profileImageUrl.isEmpty
               ? Text(
-                  user.name.isNotEmpty ? user.name[0].toUpperCase() : 'U',
+                  user.name.isNotEmpty
+                      ? user.name[0].toUpperCase()
+                      : 'U',
                   style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
                     color: AppColors.namaNavyBlue,
                   ),
                 )
@@ -221,81 +245,22 @@ class ConnectionsScreen extends ConsumerWidget {
         title: Text(
           user.name,
           style: const TextStyle(
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppColors.namaNavyBlue,
           ),
         ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (user.title.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                user.title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: AppColors.namaMediumGray,
-                ),
-              ),
-            ],
-            if (user.company.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  const Icon(Icons.business, size: 12, color: AppColors.namaMediumGray),
-                  const SizedBox(width: 4),
-                  Text(
-                    user.company,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.namaMediumGray,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Privacy indicator
-            if (user.isAnonymous)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.namaMediumGray.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '🕵️',
-                      style: TextStyle(fontSize: 10),
-                    ),
-                    SizedBox(width: 4),
-                    Text(
-                      'Anonymous',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: AppColors.namaMediumGray,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, color: AppColors.namaMediumGray),
-          ],
+        trailing: const Icon(
+          Icons.chevron_right,
+          size: 18,
+          color: AppColors.namaMediumGray,
         ),
         onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => UserDetailsScreen(userId: user.uid),
+              builder: (context) =>
+                  UserDetailsScreen(userId: user.uid),
             ),
           );
         },

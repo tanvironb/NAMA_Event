@@ -1,32 +1,44 @@
-// lib/common_widgets/splash_screen.dart
 import 'package:flutter/material.dart';
-import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  bool _showLogo = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() => _showLogo = true);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Company logo
-            Image.asset(
-              AppConstants.logoCombinationPath, 
-              height: 80, 
-              color: Theme.of(context).colorScheme.primary,
+        child: AnimatedOpacity(
+          opacity: _showLogo ? 1 : 0,
+          duration: const Duration(milliseconds: 500),
+          child: AnimatedScale(
+            scale: _showLogo ? 1 : 0.85,
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOutBack,
+            child: Image.asset(
+              AppConstants.logoCombinationPath,
+              width: 170,
+              fit: BoxFit.contain,
             ),
-            const SizedBox(height: 40),
-            const LoadingIndicator(),
-            const SizedBox(height: 16),
-            Text(
-              'Initializing Event...',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ],
+          ),
         ),
       ),
     );

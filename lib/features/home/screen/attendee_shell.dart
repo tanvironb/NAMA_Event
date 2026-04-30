@@ -8,11 +8,7 @@ import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/home_dashboard_screen.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live_player.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
-import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
-import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
-import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
-import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 import 'package:events_app_trueattempt/core/services/notification_services.dart';
@@ -29,18 +25,16 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
   NotificationService? _notificationService;
 
   static List<Widget> _widgetOptions(String currentUserId) => <Widget>[
-    const HomeDashboardScreen(), // The dynamic home dashboard
-    const AgendaScreen(),
-    const DirectoriesHubScreen(), // Networking tab
-    // const ExploreScreen(),
-    const QRHubScreen(), // QR Code Hub
-    const ProfileTabScreen(), // Updated to use ProfileTabScreen
-  ];
+        const HomeDashboardScreen(),
+        const AgendaScreen(),
+        const DirectoriesHubScreen(),
+        const QRHubScreen(),
+        const ProfileTabScreen(),
+      ];
 
   @override
   void initState() {
     super.initState();
-    // Use addPostFrameCallback to ensure providers are ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeNotifications();
     });
@@ -48,11 +42,12 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
 
   Future<void> _initializeNotifications() async {
     if (!mounted) return;
-    
+
     final user = ref.read(firebaseAuthProvider).currentUser;
     if (user != null) {
       debugPrint('AttendeeShell: Initializing notifications for user ${user.uid}');
       final notificationService = ref.read(notificationServiceProvider(user.uid));
+
       if (notificationService != null) {
         _notificationService = notificationService;
         await notificationService.initialize();
@@ -79,53 +74,9 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
 
   @override
   Widget build(BuildContext context) {
-    // Watch the activeEventProvider to get the event name for the AppBar
     final eventAsync = ref.watch(activeEventFutureProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset(
-              AppConstants.logoEmblemPath,
-              height: 30,
-              errorBuilder: (context, error, stackTrace) => Text(
-                AppConstants.appName,
-                style: Theme.of(context).appBarTheme.titleTextStyle,
-              ),
-            ),
-          ],
-        ),
-        centerTitle: true,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () {
-              Scaffold.of(context).openDrawer(); // Open the drawer
-            },
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const MessageIconWithBadge(),
-            onPressed: () {
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (context) => const ConversationsScreen(),
-              ));
-            },
-          ),
-          IconButton(
-            icon: const NotificationIconWithBadge(),
-            onPressed: () {
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (context) => const NotificationsScreen(),
-              ));
-            },
-          ),
-        ],
-      ),
       drawer: Drawer(
         backgroundColor: Theme.of(context).colorScheme.surface,
         child: ListView(
@@ -139,23 +90,32 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Image.asset(
-                    AppConstants.logoCombinationPath, // Combination logo for the drawer header
+                    AppConstants.logoCombinationPath,
                     height: 50,
-                    color: Colors.white, // Assuming the logo itself might need recoloring if it's not white
+                    color: Colors.white,
                     errorBuilder: (context, error, stackTrace) => Text(
                       AppConstants.appName,
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: Colors.white),
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(color: Colors.white),
                     ),
                   ),
                   const SizedBox(height: 8),
                   eventAsync.when(
                     data: (event) => Text(
                       event.name,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white70),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(color: Colors.white70),
                     ),
                     loading: () => Text(
                       'Loading Event...',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white70),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(color: Colors.white70),
                     ),
                     error: (err, stack) => const SizedBox.shrink(),
                   ),
@@ -163,46 +123,77 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
               ),
             ),
             ListTile(
-              leading: Icon(Icons.info_outline, color: Theme.of(context).colorScheme.onSurface),
-              title: Text('About Event', style: Theme.of(context).textTheme.titleMedium),
+              leading: Icon(
+                Icons.info_outline,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              title: Text(
+                'About Event',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               onTap: () {
                 Navigator.pop(context);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('About Event details will be here!')),
+                  const SnackBar(
+                    content: Text('About Event details will be here!'),
+                  ),
                 );
               },
             ),
             ListTile(
-              leading: Icon(Icons.calendar_today_outlined, color: Theme.of(context).colorScheme.onSurface),
-              title: Text('My Meetings', style: Theme.of(context).textTheme.titleMedium),
+              leading: Icon(
+                Icons.calendar_today_outlined,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              title: Text(
+                'My Meetings',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const MyMeetingsScreen(),
-                ));
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const MyMeetingsScreen(),
+                  ),
+                );
               },
             ),
             ListTile(
-              leading: Icon(Icons.handshake_outlined, color: Theme.of(context).colorScheme.onSurface),
-              title: Text('Connections', style: Theme.of(context).textTheme.titleMedium),
+              leading: Icon(
+                Icons.handshake_outlined,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              title: Text(
+                'Connections',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const ConnectionsScreen(),
-                ));
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const ConnectionsScreen(),
+                  ),
+                );
               },
             ),
             ListTile(
-              leading: Icon(Icons.privacy_tip_outlined, color: Theme.of(context).colorScheme.onSurface),
-              title: Text('Privacy & Settings', style: Theme.of(context).textTheme.titleMedium),
+              leading: Icon(
+                Icons.privacy_tip_outlined,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              title: Text(
+                'Privacy & Settings',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const PrivacyScreen(),
-                ));
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const PrivacyScreen(),
+                  ),
+                );
               },
             ),
-            // TODO: Add more drawer items for other features in later phases (e.g., Leaderboard, Support)
           ],
         ),
       ),
@@ -210,19 +201,20 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
         children: [
           Consumer(
             builder: (context, ref, child) {
-              final currentUserId = ref.watch(firebaseAuthProvider).currentUser?.uid ?? '';
+              final currentUserId =
+                  ref.watch(firebaseAuthProvider).currentUser?.uid ?? '';
+
               return IndexedStack(
                 index: _selectedIndex,
                 children: _widgetOptions(currentUserId),
               );
             },
           ),
-          // YouTube Live Player positioned at the bottom
-          Positioned(
+          const Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            child: const YoutubeLivePlayer(),
+            child: YoutubeLivePlayer(),
           ),
         ],
       ),
@@ -261,4 +253,3 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
     );
   }
 }
-

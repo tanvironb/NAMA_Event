@@ -5,12 +5,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
-import 'package:events_app_trueattempt/features/agenda/screen/my_bookmarks_screen.dart';
 import 'package:events_app_trueattempt/features/calendar/screens/my_calendar_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
-import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
+import 'package:events_app_trueattempt/features/settings/screen/settings_screen.dart';
 
 class ProfileTabScreen extends ConsumerWidget {
   const ProfileTabScreen({super.key});
@@ -18,173 +16,147 @@ class ProfileTabScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userProfileAsync = ref.watch(userAppProfileStreamProvider);
-    
+
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
       body: SafeArea(
         child: userProfileAsync.when(
           data: (appUser) {
             if (appUser == null) {
-              return const Center(
-                child: Text('Profile not found'),
-              );
+              return const Center(child: Text('Profile not found'));
             }
 
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  // Header
-                  Text(
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+                  child: Text(
                     'Profile',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 22,
+                          color: const Color(0xFF24158A),
+                        ),
                   ),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Profile Image
-                  Stack(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: AppColors.namaGoldenYellow,
-                            width: 3,
+                ),
+
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            _showProfileImage(context, appUser.profileImageUrl);
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              border: Border.all(
+                                color: AppColors.namaGoldenYellow,
+                                width: 2.5,
+                              ),
+                            ),
+                            child: CircleAvatar(
+                              radius: 54,
+                              backgroundImage:
+                                  appUser.profileImageUrl.isNotEmpty
+                                      ? CachedNetworkImageProvider(
+                                          appUser.profileImageUrl,
+                                        )
+                                      : null,
+                              backgroundColor: AppColors.avatarPlaceholder,
+                              child: appUser.profileImageUrl.isEmpty
+                                  ? Icon(
+                                      Icons.person,
+                                      size: 54,
+                                      color: AppColors.avatarPlaceholderText,
+                                    )
+                                  : null,
+                            ),
                           ),
                         ),
-                        child: CircleAvatar(
-                          radius: 60,
-                          backgroundImage: appUser.profileImageUrl.isNotEmpty
-                              ? CachedNetworkImageProvider(appUser.profileImageUrl)
-                              : null,
-                          backgroundColor: AppColors.avatarPlaceholder,
-                          child: appUser.profileImageUrl.isEmpty
-                              ? Icon(
-                                  Icons.person,
-                                  size: 60,
-                                  color: AppColors.avatarPlaceholderText,
-                                )
-                              : null,
+
+                        const SizedBox(height: 34),
+
+                        _buildMenuItem(
+                          context,
+                          icon: Icons.person,
+                          title: 'My Account',
+                          subtitle: 'View and edit your profile',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    UserDetailsScreen(userId: appUser.uid),
+                              ),
+                            );
+                          },
                         ),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: AppColors.namaNavyBlue,
-                          child: const Icon(
-                            Icons.camera_alt,
-                            size: 18,
-                            color: Colors.white,
-                          ),
+
+                        const SizedBox(height: 14),
+
+                        _buildMenuItem(
+                          context,
+                          icon: Icons.notifications_outlined,
+                          title: 'Notifications',
+                          subtitle: 'Manage notifications',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const NotificationsScreen(),
+                              ),
+                            );
+                          },
                         ),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 40),
-                  
-                  // Menu Items
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.person,
-                    title: 'My Account',
-                    subtitle: 'View and edit your profile',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => UserDetailsScreen(userId: appUser.uid),
+
+                        const SizedBox(height: 14),
+
+                        _buildMenuItem(
+                          context,
+                          icon: Icons.calendar_month_outlined,
+                          title: 'My Calendar',
+                          subtitle: 'View your schedule',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const MyCalendarScreen(),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.notifications_outlined,
-                    title: 'Notifications',
-                    subtitle: 'Manage your notification preferences',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const NotificationsScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.calendar_month_outlined,
-                    title: 'My Calendar',
-                    subtitle: 'View your schedule',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const MyCalendarScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  _buildMenuItem(
-                    context,
-                    icon: Icons.help_outline,
-                    title: 'Help Center',
-                    subtitle: 'Get help and support',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const HelpCenterScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Log Out Button
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        final confirmed = await _showLogoutDialog(context);
-                        if (confirmed == true) {
-                          await ref.read(authViewModelProvider.notifier).signOut();
-                        }
-                      },
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Log Out'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.error,
-                        foregroundColor: Theme.of(context).colorScheme.onError,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
+
+                        const SizedBox(height: 14),
+
+                       _buildMenuItem(
+  context,
+  icon: Icons.settings_outlined,
+  title: 'Settings',
+  subtitle: 'App settings and preferences',
+ onTap: () {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) {
+        return const SettingsScreen();
+      },
+    ),
+  );
+},
+),
+
+                        const SizedBox(height: 20),
+                      ],
                     ),
                   ),
-                  
-                  const SizedBox(height: 32),
-                ],
-              ),
+                ),
+              ],
             );
           },
           loading: () => const LoadingIndicator(),
@@ -195,7 +167,7 @@ class ProfileTabScreen extends ConsumerWidget {
       ),
     );
   }
-  
+
   Widget _buildMenuItem(
     BuildContext context, {
     required IconData icon,
@@ -205,11 +177,12 @@ class ProfileTabScreen extends ConsumerWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(16),
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.25),
+        borderRadius: BorderRadius.circular(15),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
@@ -219,51 +192,73 @@ class ProfileTabScreen extends ConsumerWidget {
           child: Icon(
             icon,
             color: AppColors.navyBlue,
-            size: 24,
+            size: 21,
           ),
         ),
         title: Text(
           title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                fontSize: 14.5,
+              ),
         ),
         subtitle: Text(
           subtitle,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-          ),
+                fontSize: 12,
+                color:
+                    Theme.of(context).colorScheme.onSurface.withOpacity(0.55),
+              ),
         ),
         trailing: Icon(
           Icons.chevron_right,
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+          size: 22,
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.35),
         ),
         onTap: onTap,
       ),
     );
   }
-  
-  Future<bool?> _showLogoutDialog(BuildContext context) async {
-    return showDialog<bool>(
+
+  void _showProfileImage(BuildContext context, String imageUrl) {
+    showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Log Out'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(24),
+          child: GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: imageUrl.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => const SizedBox(
+                          height: 260,
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                        errorWidget: (context, url, error) =>
+                            const Icon(Icons.person, size: 120),
+                      ),
+                    )
+                  : const SizedBox(
+                      height: 260,
+                      child: Center(
+                        child: Icon(Icons.person, size: 120),
+                      ),
+                    ),
             ),
-            child: const Text('Log Out'),
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

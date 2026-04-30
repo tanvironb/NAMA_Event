@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/enums/profile_visibility.dart';
 
-/// Modal dialog for privacy level selection
-/// Shown to users after approval or when changing privacy settings
 class PrivacySelectionDialog extends StatefulWidget {
   final ProfileVisibility initialSelection;
   final Function(ProfileVisibility) onConfirm;
-  final bool canDismiss; // false for first-time selection
+  final bool canDismiss;
 
   const PrivacySelectionDialog({
     super.key,
@@ -28,7 +26,7 @@ class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
   void initState() {
     super.initState();
     _selectedLevel = widget.initialSelection;
-    _expandedLevel = widget.initialSelection; // Default expand the selected one
+    _expandedLevel = widget.initialSelection;
   }
 
   @override
@@ -39,7 +37,7 @@ class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Container(
           constraints: const BoxConstraints(maxWidth: 500),
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(20), // slightly reduced
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -48,26 +46,30 @@ class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
               Text(
                 'Choose Your Privacy Level',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontSize: 18,
                       color: AppColors.namaNavyBlue,
                       fontWeight: FontWeight.bold,
                     ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 8),
-              
+
+              const SizedBox(height: 6),
+
               // Subtitle
               Text(
                 widget.canDismiss
                     ? 'Update how others see your profile'
                     : 'Select how you want to appear to other attendees',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 13,
                       color: Colors.grey.shade600,
                     ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
-              
-              // Icons row
+
+              const SizedBox(height: 24),
+
+              // Icons
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -76,33 +78,39 @@ class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
                   _buildIconButton(ProfileVisibility.anonymous),
                 ],
               ),
-              
+
               const SizedBox(height: 8),
-              
-              // Detail box below icons
+
+              // Detail box
               if (_expandedLevel != null) _buildDetailBox(_expandedLevel!),
-              
-              const SizedBox(height: 24),
-              
-              // Confirm Button
-              ElevatedButton(
-                onPressed: () => widget.onConfirm(_selectedLevel),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.namaNavyBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Confirm',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+
+              const SizedBox(height: 20),
+
+              // Confirm Button (smaller)
+              Center(
+  child: SizedBox(
+    width: 150, // ⬅️ reduced width (before full width)
+    height: 40, // ⬅️ reduced height
+    child: ElevatedButton(
+      onPressed: () => widget.onConfirm(_selectedLevel),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.namaNavyBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      child: const Text(
+        'Confirm',
+        style: TextStyle(
+          fontSize: 13, // ⬅️ smaller text
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+  ),
+),
             ],
           ),
         ),
@@ -122,25 +130,27 @@ class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
         });
       },
       child: Container(
-        width: 70,
-        height: 70,
+        width: 64, // reduced
+        height: 64, // reduced
         decoration: BoxDecoration(
-          color: isExpanded ? AppColors.namaNavyBlue.withOpacity(0.05) : Colors.transparent,
+          color: isExpanded
+              ? AppColors.namaNavyBlue.withOpacity(0.05)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: isExpanded
-              ? Border.all(color: AppColors.namaNavyBlue, width: 2)
+              ? Border.all(color: AppColors.namaNavyBlue, width: 1.8)
               : null,
         ),
         child: Center(
           child: Text(
             level.icon,
             style: TextStyle(
-              fontSize: 40,
+              fontSize: 32, // reduced from 40
               shadows: isSelected
                   ? [
                       Shadow(
-                        color: AppColors.namaNavyBlue.withOpacity(0.3),
-                        blurRadius: 8,
+                        color: AppColors.namaNavyBlue.withOpacity(0.25),
+                        blurRadius: 6,
                       ),
                     ]
                   : null,
@@ -157,12 +167,12 @@ class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16), // reduced
       decoration: BoxDecoration(
         color: AppColors.namaNavyBlue.withOpacity(0.05),
         border: Border.all(
           color: AppColors.namaNavyBlue,
-          width: 2,
+          width: 1.8,
         ),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -172,25 +182,31 @@ class _PrivacySelectionDialogState extends State<PrivacySelectionDialog> {
           Text(
             level.displayName,
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: AppColors.namaNavyBlue,
                 ),
           ),
-          const SizedBox(height: 12),
+
+          const SizedBox(height: 8),
+
           Text(
             level.description,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 13,
                   color: Colors.grey.shade700,
-                  height: 1.4,
+                  height: 1.3,
                 ),
           ),
+
           if (isRecommended) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(
               'Recommended for networking',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.namaGoldenYellow.withOpacity(0.8),
-                    fontSize: 12,
+                    fontSize: 11,
+                    color:
+                        AppColors.namaGoldenYellow.withOpacity(0.85),
                     fontStyle: FontStyle.italic,
                   ),
             ),

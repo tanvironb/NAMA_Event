@@ -8,7 +8,6 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/privacy/widgets/privacy_selection_dialog.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/change_password_screen.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 
 class PrivacyScreen extends ConsumerStatefulWidget {
   const PrivacyScreen({super.key});
@@ -42,12 +41,12 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     final currentUser = currentUserAsync.value;
     if (currentUser == null) return;
 
-    final currentVisibility = ProfileVisibility.fromString(currentUser.profileVisibility);
+    final currentVisibility =
+        ProfileVisibility.fromString(currentUser.profileVisibility);
     final scannedByCount = currentUser.scannedByUsers.length;
 
-    // Show warning if changing from Full to Anonymous/Minimal and users have scanned them
-    bool shouldShowWarning = (currentVisibility == ProfileVisibility.full) && 
-                              scannedByCount > 0;
+    final shouldShowWarning =
+        currentVisibility == ProfileVisibility.full && scannedByCount > 0;
 
     if (shouldShowWarning) {
       final shouldContinue = await showDialog<bool>(
@@ -73,7 +72,6 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
       if (shouldContinue != true) return;
     }
 
-    // Show privacy selection dialog
     await showDialog(
       context: context,
       barrierDismissible: true,
@@ -95,10 +93,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .update({
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
         'profileVisibility': newLevel.value,
         'privacySelectedAt': FieldValue.serverTimestamp(),
       });
@@ -112,7 +107,6 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
         );
       }
 
-      // Refresh user data
       ref.invalidate(userAppProfileStreamProvider);
     } catch (e) {
       if (mounted) {
@@ -130,157 +124,134 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    final shouldLogout = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Logout'),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldLogout == true) {
-      await ref.read(authViewModelProvider.notifier).signOut();
-      // No manual navigation needed - AuthGate handles routing automatically
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentUserAsync = ref.watch(userAppProfileStreamProvider);
 
     return Scaffold(
       backgroundColor: AppColors.namaWhite,
-      appBar: AppBar(
-        title: const Text('Privacy & Settings'),
-        backgroundColor: AppColors.namaNavyBlue,
-        foregroundColor: Colors.white,
-      ),
-      body: currentUserAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text('Error: $error'),
-        ),
-        data: (user) {
-          if (user == null) {
-            return const Center(child: Text('User not found'));
-          }
-
-          final currentVisibility = ProfileVisibility.fromString(user.profileVisibility);
-          final scannedByCount = user.scannedByUsers.length;
-          final usersIScannedCount = user.usersIScanned.length;
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Privacy Section
-                _buildSectionHeader('Privacy Level'),
-                const SizedBox(height: 8),
-                _buildCurrentPrivacyCard(currentVisibility),
-                const SizedBox(height: 16),
-                
-                ElevatedButton.icon(
-                  onPressed: _isLoading ? null : _changePrivacyLevel,
-                  icon: const Icon(AppIcons.edit),
-                  label: const Text('Change Privacy Level'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.namaNavyBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // Connection Stats
-                _buildSectionHeader('Connection Statistics'),
-                const SizedBox(height: 8),
-                _buildStatCard(
-                  icon: AppIcons.people,
-                  title: 'Users who scanned you',
-                  value: scannedByCount.toString(),
-                  color: AppColors.namaGoldenYellow,
-                ),
-                const SizedBox(height: 8),
-                _buildStatCard(
-                  icon: AppIcons.qrCodeScanner,
-                  title: 'Users you scanned',
-                  value: usersIScannedCount.toString(),
-                  color: AppColors.namaNavyBlue,
-                ),
-                const SizedBox(height: 24),
-                
-                // Account Section
-                _buildSectionHeader('Account'),
-                const SizedBox(height: 8),
-                
-                // Change Password Button
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const ChangePasswordScreen(),
-                      ),
-                    );
-                  },
-                  icon: const Icon(AppIcons.lock),
-                  label: const Text('Change Password'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.namaNavyBlue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // App Info Section
-                _buildSectionHeader('Application'),
-                const SizedBox(height: 8),
-                _buildInfoCard(
-                  icon: AppIcons.info,
-                  title: 'App Version',
-                  value: _appVersion,
-                ),
-                const SizedBox(height: 16),
-                
-                // Logout Button
-                ElevatedButton.icon(
-                  onPressed: _logout,
-                  icon: const Icon(AppIcons.logout),
-                  label: const Text('Logout'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-                // Bottom padding for devices with navigation buttons
-                SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-              ],
+      body: SafeArea(
+        child: currentUserAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stack) => Center(
+            child: Text(
+              'Error: $error',
+              style: const TextStyle(fontSize: 13),
             ),
-          );
-        },
+          ),
+          data: (user) {
+            if (user == null) {
+              return const Center(
+                child: Text(
+                  'User not found',
+                  style: TextStyle(fontSize: 13),
+                ),
+              );
+            }
+
+            final currentVisibility =
+                ProfileVisibility.fromString(user.profileVisibility);
+            final scannedByCount = user.scannedByUsers.length;
+            final usersIScannedCount = user.usersIScanned.length;
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(
+                            Icons.arrow_back,
+                            color: AppColors.namaNavyBlue,
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                      const Text(
+                        'Privacy',
+                        style: TextStyle(
+                          color: AppColors.namaNavyBlue,
+                          fontSize: 21,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 22),
+
+                  _buildSectionHeader('Privacy Level'),
+                  const SizedBox(height: 8),
+                  _buildCurrentPrivacyCard(currentVisibility),
+                  const SizedBox(height: 14),
+
+                  Center(
+                    child: _buildSmallButton(
+                      icon: AppIcons.edit,
+                      text: 'Change Privacy Level',
+                      onPressed: _isLoading ? null : _changePrivacyLevel,
+                    ),
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  _buildSectionHeader('Connection Statistics'),
+                  const SizedBox(height: 8),
+                  _buildStatCard(
+                    icon: AppIcons.people,
+                    title: 'Users who scanned you',
+                    value: scannedByCount.toString(),
+                    color: AppColors.namaGoldenYellow,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildStatCard(
+                    icon: AppIcons.qrCodeScanner,
+                    title: 'Users you scanned',
+                    value: usersIScannedCount.toString(),
+                    color: AppColors.namaNavyBlue,
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  _buildSectionHeader('Account'),
+                  const SizedBox(height: 10),
+
+                  Center(
+                    child: _buildSmallButton(
+                      icon: AppIcons.lock,
+                      text: 'Change Password',
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ChangePasswordScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  _buildSectionHeader('Application'),
+                  const SizedBox(height: 8),
+                  _buildInfoCard(
+                    icon: AppIcons.info,
+                    title: 'App Version',
+                    value: _appVersion,
+                  ),
+
+                  SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -288,16 +259,48 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
   Widget _buildSectionHeader(String title) {
     return Text(
       title,
-      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            color: AppColors.namaNavyBlue,
-            fontWeight: FontWeight.bold,
+      style: const TextStyle(
+        color: AppColors.namaNavyBlue,
+        fontSize: 17,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  Widget _buildSmallButton({
+    required IconData icon,
+    required String text,
+    required VoidCallback? onPressed,
+  }) {
+    return SizedBox(
+      width: 260,
+      height: 42,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 17),
+        label: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
           ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.namaNavyBlue,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildCurrentPrivacyCard(ProfileVisibility level) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.namaNavyBlue.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
@@ -308,8 +311,8 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
       child: Row(
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
               color: AppColors.namaNavyBlue,
               borderRadius: BorderRadius.circular(12),
@@ -317,28 +320,31 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
             child: Center(
               child: Text(
                 level.icon,
-                style: const TextStyle(fontSize: 28),
+                style: const TextStyle(fontSize: 25),
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   level.displayName,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.namaNavyBlue,
-                      ),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.namaNavyBlue,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   level.description,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade700,
-                      ),
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.3,
+                    color: Colors.grey.shade700,
+                  ),
                 ),
               ],
             ),
@@ -355,7 +361,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
       decoration: BoxDecoration(
         color: color.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
@@ -366,27 +372,35 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
       child: Row(
         children: [
           Container(
-            width: 48,
-            height: 48,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(9),
             ),
-            child: Icon(icon, color: Colors.white),
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 22,
+            ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+              ),
             ),
           ),
           Text(
             value,
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.bold,
-                ),
+            style: TextStyle(
+              fontSize: 22,
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ],
       ),
@@ -399,7 +413,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12),
@@ -407,19 +421,27 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
       ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.grey.shade600),
-          const SizedBox(width: 16),
+          Icon(
+            icon,
+            color: Colors.grey.shade600,
+            size: 21,
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Text(
               title,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: const TextStyle(
+                fontSize: 13,
+                color: Colors.black87,
+              ),
             ),
           ),
           Text(
             value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey.shade600,
-                ),
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.grey.shade600,
+            ),
           ),
         ],
       ),

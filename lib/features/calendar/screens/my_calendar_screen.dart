@@ -8,7 +8,6 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:intl/intl.dart';
 
-/// Multi-day calendar view showing scrollable list of days
 class MyCalendarScreen extends ConsumerStatefulWidget {
   const MyCalendarScreen({super.key});
 
@@ -20,8 +19,6 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Refresh calendar data when screen becomes visible
-    // This ensures data is fresh when user returns from day view
     ref.invalidate(calendarEntriesProvider);
   }
 
@@ -31,42 +28,79 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
     final groupedEntries = ref.watch(calendarEntriesByDateProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Calendar'),
-        elevation: 0,
-        backgroundColor: AppColors.namaNavyBlue,
-        foregroundColor: Colors.white,
-      ),
+      backgroundColor: const Color(0xFFF7F7F7),
       body: SafeArea(
-        child: entriesAsync.when(
-          data: (entries) {
-            if (entries.isEmpty) {
-              return _buildEmptyState();
-            }
+        child: Column(
+          children: [
+            _buildHeader(context),
+            Expanded(
+              child: entriesAsync.when(
+                data: (entries) {
+                  if (entries.isEmpty) {
+                    return _buildEmptyState();
+                  }
 
-            // Get sorted list of dates
-            final dates = groupedEntries.keys.toList()..sort();
+                  final dates = groupedEntries.keys.toList()..sort();
 
-            return ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: dates.length,
-            itemBuilder: (context, index) {
-              final date = dates[index];
-              final entriesForDate = groupedEntries[date] ?? [];
+                  return ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(14, 8, 14, 16),
+                    itemCount: dates.length,
+                    itemBuilder: (context, index) {
+                      final date = dates[index];
+                      final entriesForDate = groupedEntries[date] ?? [];
 
-              return _buildDayCard(
-                context,
-                date,
-                entriesForDate,
-              );
-            },
-          );
-        },
-          loading: () => const Center(child: LoadingIndicator()),
-          error: (error, stack) => Center(
-            child: Text('Error loading calendar: $error'),
-          ),
+                      return _buildDayCard(
+                        context,
+                        date,
+                        entriesForDate,
+                      );
+                    },
+                  );
+                },
+                loading: () => const Center(child: LoadingIndicator()),
+                error: (error, stack) => Center(
+                  child: Text('Error loading calendar: $error'),
+                ),
+              ),
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 10, 16, 14),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.namaNavyBlue.withOpacity(0.08),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              icon: const Icon(
+                Icons.arrow_back,
+                color: AppColors.namaNavyBlue,
+                size: 22,
+              ),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Text(
+            'My Calendar',
+            style: TextStyle(
+              fontSize: 21,
+              fontWeight: FontWeight.w700,
+              color: AppColors.namaNavyBlue,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -78,24 +112,24 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
         children: [
           Icon(
             Icons.calendar_today_outlined,
-            size: 64,
+            size: 52,
             color: AppColors.namaMediumGray.withOpacity(0.5),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           const Text(
             'No calendar entries',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w600,
               color: AppColors.namaDarkGray,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             'Bookmark sessions or schedule meetings\nto see them here',
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: AppColors.namaMediumGray,
             ),
           ),
@@ -124,31 +158,29 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
       },
       child: Card(
         margin: const EdgeInsets.only(bottom: 12),
-        elevation: 2,
+        elevation: 1.5,
+        color: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           side: isToday
-              ? const BorderSide(color: AppColors.namaNavyBlue, width: 2)
+              ? const BorderSide(color: AppColors.namaNavyBlue, width: 1.5)
               : BorderSide.none,
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Date indicator
               _buildDateIndicator(dayName, dayNumber, isToday),
-              const SizedBox(width: 16),
-
-              // Entries preview
+              const SizedBox(width: 12),
               Expanded(
                 child: _buildEntriesPreview(entries),
               ),
-
-              // Arrow icon
-              Icon(
+              const SizedBox(width: 4),
+              const Icon(
                 Icons.chevron_right_rounded,
                 color: AppColors.namaMediumGray,
+                size: 22,
               ),
             ],
           ),
@@ -159,27 +191,29 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
 
   Widget _buildDateIndicator(String dayName, String dayNumber, bool isToday) {
     return Container(
-      width: 60,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      width: 52,
+      padding: const EdgeInsets.symmetric(vertical: 7),
       decoration: BoxDecoration(
-        color: isToday ? AppColors.namaNavyBlue : AppColors.namaMediumGray.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+        color: isToday
+            ? AppColors.namaNavyBlue
+            : AppColors.namaMediumGray.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(11),
       ),
       child: Column(
         children: [
           Text(
             dayName,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.w600,
               color: isToday ? Colors.white : AppColors.namaMediumGray,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
             dayNumber,
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 21,
               fontWeight: FontWeight.bold,
               color: isToday ? Colors.white : AppColors.namaDarkGray,
             ),
@@ -195,7 +229,7 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
         'No entries',
         style: TextStyle(
           color: AppColors.namaMediumGray,
-          fontSize: 14,
+          fontSize: 13,
         ),
       );
     }
@@ -204,7 +238,7 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: entries.map((entry) {
         return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.only(bottom: 7),
           child: _buildEntryChip(entry),
         );
       }).toList(),
@@ -214,34 +248,35 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
   Widget _buildEntryChip(dynamic entry) {
     final isSession = entry.type.toString().contains('session');
     final timeFormat = DateFormat('h:mm a');
-    
+
+    final chipColor =
+        isSession ? AppColors.namaNavyBlue : AppColors.namaGoldenYellow;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: isSession 
-            ? AppColors.namaNavyBlue.withOpacity(0.1)
-            : AppColors.namaGoldenYellow.withOpacity(0.1),
+        color: chipColor.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isSession ? AppColors.namaNavyBlue : AppColors.namaGoldenYellow,
-          width: 1,
+          color: chipColor,
+          width: 0.9,
         ),
       ),
       child: Row(
         children: [
           Icon(
             isSession ? Icons.event_note : Icons.people,
-            size: 16,
-            color: isSession ? AppColors.namaNavyBlue : AppColors.namaGoldenYellow,
+            size: 14,
+            color: chipColor,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 7),
           Expanded(
             child: Text(
               entry.title,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: isSession ? AppColors.namaNavyBlue : AppColors.namaGoldenYellow,
+                color: chipColor,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -251,8 +286,8 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
           Text(
             timeFormat.format(entry.startTime),
             style: TextStyle(
-              fontSize: 11,
-              color: (isSession ? AppColors.namaNavyBlue : AppColors.namaGoldenYellow).withOpacity(0.7),
+              fontSize: 10,
+              color: chipColor.withOpacity(0.75),
             ),
           ),
         ],

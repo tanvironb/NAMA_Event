@@ -12,6 +12,8 @@ class MyMeetingsScreen extends ConsumerWidget {
 
   const MyMeetingsScreen({super.key, this.initialTab = 0});
 
+  static const Color tabColor = Color(0xFF3D3D9E);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final meetingsAsync = ref.watch(meetingsStreamProvider);
@@ -19,39 +21,160 @@ class MyMeetingsScreen extends ConsumerWidget {
     return DefaultTabController(
       length: 3,
       initialIndex: initialTab,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('My Meetings'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Pending'),
-              Tab(text: 'Upcoming'),
-              Tab(text: 'Past'),
-            ],
+      child: Builder(
+        builder: (context) {
+          final tabController = DefaultTabController.of(context);
+
+          return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            body: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 🔥 CENTERED TITLE
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            InkWell(
+                              onTap: () => Navigator.pop(context),
+                              child: const Icon(
+                                Icons.arrow_back,
+                                size: 20,
+                                color: AppColors.namaNavyBlue,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'My Meetings',
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.namaNavyBlue,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 🔵 Tabs
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: AnimatedBuilder(
+                      animation: tabController,
+                      builder: (context, _) {
+                        return Row(
+                          children: [
+                            _buildTabBox(
+                              text: 'Pending',
+                              index: 0,
+                              selectedIndex: tabController.index,
+                              onTap: () => tabController.animateTo(0),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildTabBox(
+                              text: 'Upcoming',
+                              index: 1,
+                              selectedIndex: tabController.index,
+                              onTap: () => tabController.animateTo(1),
+                            ),
+                            const SizedBox(width: 6),
+                            _buildTabBox(
+                              text: 'Past',
+                              index: 2,
+                              selectedIndex: tabController.index,
+                              onTap: () => tabController.animateTo(2),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // 🔽 Content
+                  Expanded(
+                    child: meetingsAsync.when(
+                      data: (meetings) => TabBarView(
+                        children: [
+                          _buildMeetingsList(
+                            context,
+                            ref,
+                            meetings
+                                .where((m) => m.status == 'pending')
+                                .toList(),
+                            'pending',
+                          ),
+                          _buildMeetingsList(
+                            context,
+                            ref,
+                            meetings
+                                .where((m) => m.status == 'accepted')
+                                .toList(),
+                            'upcoming',
+                          ),
+                          _buildMeetingsList(
+                            context,
+                            ref,
+                            meetings
+                                .where((m) => m.status == 'rejected')
+                                .toList(),
+                            'past',
+                          ),
+                        ],
+                      ),
+                      loading: () => const Center(child: LoadingIndicator()),
+                      error: (error, stack) => Center(
+                        child: Text(
+                          'Error loading meetings: $error',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // 🔵 Tab Button
+  Widget _buildTabBox({
+    required String text,
+    required int index,
+    required int selectedIndex,
+    required VoidCallback onTap,
+  }) {
+    final isSelected = selectedIndex == index;
+
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          height: 30,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? tabColor : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
           ),
-        ),
-        body: meetingsAsync.when(
-          data: (meetings) => TabBarView(
-            children: [
-              _buildMeetingsList(context, ref, meetings.where((m) => m.status == 'pending').toList(), 'pending'),
-              _buildMeetingsList(context, ref, meetings.where((m) => m.status == 'accepted').toList(), 'upcoming'),
-              _buildMeetingsList(context, ref, meetings.where((m) => m.status == 'rejected').toList(), 'past'),
-            ],
-          ),
-          loading: () => const Center(child: LoadingIndicator()),
-          error: (error, stack) => Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text('Error loading meetings: $error'),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => ref.refresh(meetingsStreamProvider),
-                  child: const Text('Retry'),
-                ),
-              ],
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : tabColor,
             ),
           ),
         ),
@@ -59,41 +182,32 @@ class MyMeetingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMeetingsList(BuildContext context, WidgetRef ref, List<Meeting> meetings, String type) {
+  // 🔵 List
+  Widget _buildMeetingsList(
+    BuildContext context,
+    WidgetRef ref,
+    List<Meeting> meetings,
+    String type,
+  ) {
     if (meetings.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              type == 'pending' ? Icons.schedule : 
-              type == 'upcoming' ? Icons.calendar_today : Icons.history,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              type == 'pending' ? 'No pending meetings' :
-              type == 'upcoming' ? 'No upcoming meetings' : 'No past meetings',
-              style: const TextStyle(
-                fontSize: 16,
-                color: AppColors.namaMediumGray,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              type == 'pending' ? 'Meeting requests will appear here' :
-              type == 'upcoming' ? 'Accepted meetings will appear here' : 'Completed meetings will appear here',
-              style: const TextStyle(color: AppColors.namaMediumGray),
-            ),
-          ],
+        child: Text(
+          type == 'pending'
+              ? 'No pending meetings'
+              : type == 'upcoming'
+                  ? 'No upcoming meetings'
+                  : 'No past meetings',
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppColors.namaMediumGray,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       itemCount: meetings.length,
       itemBuilder: (context, index) {
         final meeting = meetings[index];
@@ -102,198 +216,87 @@ class MyMeetingsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildMeetingCard(BuildContext context, WidgetRef ref, Meeting meeting, String type) {
+  // 🔵 Card
+  Widget _buildMeetingCard(
+    BuildContext context,
+    WidgetRef ref,
+    Meeting meeting,
+    String type,
+  ) {
     final currentUserId = ref.watch(firebaseAuthProvider).currentUser?.uid;
     final isRequester = meeting.requesterId == currentUserId;
-    final otherUserInfo = isRequester ? meeting.recipientInfo : meeting.requesterInfo;
+    final otherUserInfo =
+        isRequester ? meeting.recipientInfo : meeting.requesterInfo;
     final otherUserName = otherUserInfo['name'] ?? 'Unknown User';
-    
+
     return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 1,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(12),
+        child: Row(
           children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  backgroundColor: AppColors.avatarPlaceholder,
-                  child: Text(
-                    otherUserName.isNotEmpty ? otherUserName[0].toUpperCase() : '?',
-                    style: const TextStyle(
-                      color: AppColors.avatarPlaceholderText,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+            CircleAvatar(
+              radius: 17,
+              backgroundColor: AppColors.avatarPlaceholder,
+              child: Text(
+                otherUserName.isNotEmpty
+                    ? otherUserName[0].toUpperCase()
+                    : '?',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.avatarPlaceholderText,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isRequester ? 'Meeting with $otherUserName' : 'Meeting request from $otherUserName',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 16,
-                            color: Colors.grey[600],
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            DateFormat('MMM dd, yyyy at HH:mm').format(meeting.proposedTime.toDate()),
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (meeting.location.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.location_on,
-                              size: 16,
-                              color: Colors.grey[600],
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                meeting.location,
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                _buildStatusChip(meeting.status),
-              ],
+              ),
             ),
-            
-            // Show action buttons only for pending meetings and if current user is the recipient
-            if (type == 'pending' && !isRequester) ...[
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 8),
-              Row(
+            const SizedBox(width: 11),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => _handleMeetingResponse(context, ref, meeting.id, 'rejected'),
-                      icon: const Icon(Icons.close, size: 18),
-                      label: const Text('Decline'),
-                        style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.errorRed,
-                        side: const BorderSide(color: AppColors.errorRed),
-                      ),
+                  Text(
+                    isRequester
+                        ? 'Meeting with $otherUserName'
+                        : 'Meeting request from $otherUserName',
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _handleMeetingResponse(context, ref, meeting.id, 'accepted'),
-                      icon: const Icon(Icons.check, size: 18),
-                      label: const Text('Accept'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.successGreen,
-                        foregroundColor: AppColors.namaWhite,
-                      ),
-                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    DateFormat('MMM dd, yyyy at HH:mm')
+                        .format(meeting.proposedTime.toDate()),
+                    style: const TextStyle(fontSize: 11.5),
                   ),
                 ],
               ),
-            ],
+            ),
+            _buildStatusChip(meeting.status),
           ],
         ),
       ),
     );
   }
 
+  // 🔵 Status
   Widget _buildStatusChip(String status) {
-    Color backgroundColor;
-    Color textColor;
-    String label;
-
-    switch (status) {
-      case 'pending':
-        backgroundColor = Colors.orange.withOpacity(0.1);
-        textColor = Colors.orange;
-        label = 'Pending';
-        break;
-      case 'accepted':
-        backgroundColor = Colors.green.withOpacity(0.1);
-        textColor = Colors.green;
-        label = 'Accepted';
-        break;
-      case 'rejected':
-        backgroundColor = Colors.red.withOpacity(0.1);
-        textColor = Colors.red;
-        label = 'Declined';
-        break;
-      default:
-        backgroundColor = Colors.grey.withOpacity(0.1);
-        textColor = Colors.grey;
-        label = status;
-    }
-
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(11),
       ),
-      child: Text(
-        label,
+      child: const Text(
+        'Pending',
         style: TextStyle(
-          color: textColor,
-          fontSize: 12,
+          fontSize: 10.5,
           fontWeight: FontWeight.w600,
+          color: Colors.orange,
         ),
       ),
     );
-  }
-
-  Future<void> _handleMeetingResponse(BuildContext context, WidgetRef ref, String meetingId, String status) async {
-    try {
-      await ref.read(meetingRepositoryProvider).updateMeetingStatus(meetingId, status);
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              status == 'accepted' ? 'Meeting accepted!' : 'Meeting declined.',
-            ),
-            backgroundColor: status == 'accepted' ? Colors.green : Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating meeting: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 }

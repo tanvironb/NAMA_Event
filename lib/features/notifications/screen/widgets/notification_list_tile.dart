@@ -40,78 +40,96 @@ class NotificationListTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Use the enum's extension methods for consistent styling
     final iconData = notification.type.icon;
-    final iconBackgroundColor = notification.isRead 
-        ? Colors.grey.shade300 
+
+    final iconBg = notification.isRead
+        ? Colors.grey.shade300
         : notification.type.color;
-    final iconColor = notification.isRead 
-        ? Colors.grey.shade600 
+
+    final iconColor = notification.isRead
+        ? Colors.grey.shade600
         : Colors.white;
 
-    final timeAgo = DateFormat.yMMMd().add_jm().format(notification.timestamp.toDate());
+    final timeAgo =
+        DateFormat.yMMMd().add_jm().format(notification.timestamp.toDate());
+
     final priorityColor = _getPriorityColor(notification.priority);
-    
+
     return Container(
-      color: notification.isRead 
-        ? Theme.of(context).colorScheme.surface.withOpacity(0.3)
-        : null,
+      color: notification.isRead
+          ? Theme.of(context).colorScheme.surface.withOpacity(0.25)
+          : null,
       child: ListTile(
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 6), // 🔥 tighter
+
         leading: CircleAvatar(
-          backgroundColor: iconBackgroundColor,
-          child: Icon(iconData, color: iconColor),
+          radius: 18, // 🔥 smaller icon
+          backgroundColor: iconBg,
+          child: Icon(iconData, size: 16, color: iconColor),
         ),
+
         title: Text(
           notification.title,
           style: TextStyle(
-            fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
-            color: notification.isRead 
-              ? Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
-              : Theme.of(context).colorScheme.onSurface,
+            fontSize: 13, // 🔥 reduced
+            fontWeight:
+                notification.isRead ? FontWeight.normal : FontWeight.w600,
+            color: notification.isRead
+                ? Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
+                : Theme.of(context).colorScheme.onSurface,
           ),
         ),
+
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Subtitle (if present)
-            if (notification.subtitle != null && notification.subtitle!.isNotEmpty) ...[
+            if (notification.subtitle != null &&
+                notification.subtitle!.isNotEmpty) ...[
               const SizedBox(height: 2),
               Text(
                 notification.subtitle!,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11, // 🔥 reduced
                   fontStyle: FontStyle.italic,
-                  color: notification.isRead 
-                    ? Colors.grey.shade500
-                    : Colors.grey.shade700,
+                  color: Colors.grey.shade600,
                 ),
               ),
             ],
-            const SizedBox(height: 4),
-            // Body
+
+            const SizedBox(height: 3),
+
             Text(
               notification.body,
               style: TextStyle(
-                color: notification.isRead 
-                  ? Theme.of(context).colorScheme.onSurface.withOpacity(0.5)
-                  : Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                fontSize: 12, // 🔥 reduced
+                color: notification.isRead
+                    ? Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.5)
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.8),
               ),
             ),
-            const SizedBox(height: 6),
-            // Event timestamp (if present)
+
+            const SizedBox(height: 5),
+
             if (notification.eventTimestamp != null) ...[
               Row(
                 children: [
-                  Icon(Icons.event, size: 14, color: Colors.grey.shade600),
+                  Icon(Icons.event, size: 12, color: Colors.grey.shade600),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      _formatEventTimestamp(notification.eventTimestamp!, notification.includeDate),
+                      _formatEventTimestamp(
+                          notification.eventTimestamp!,
+                          notification.includeDate),
                       style: TextStyle(
-                        fontSize: 12,
-                        color: notification.isRead 
-                          ? Colors.grey.shade500
-                          : AppColors.namaDeepNavy.withOpacity(0.7),
+                        fontSize: 10, // 🔥 reduced
+                        color: Colors.grey.shade600,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -120,62 +138,58 @@ class NotificationListTile extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
             ],
-            // Priority badge and timestamp row
+
             Row(
               children: [
-                // Priority badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: notification.isRead 
-                      ? Colors.grey.shade300
-                      : priorityColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
+                    color: notification.isRead
+                        ? Colors.grey.shade300
+                        : priorityColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: notification.isRead 
-                        ? Colors.grey.shade400
-                        : priorityColor.withOpacity(0.5),
-                      width: 1,
+                      color: notification.isRead
+                          ? Colors.grey.shade400
+                          : priorityColor.withOpacity(0.5),
+                      width: 0.8,
                     ),
                   ),
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        notification.priority == 'high' 
-                          ? Icons.priority_high 
-                          : notification.priority == 'medium' 
-                            ? Icons.circle 
-                            : Icons.keyboard_arrow_down,
-                        size: 12,
-                        color: notification.isRead 
-                          ? Colors.grey.shade600
-                          : priorityColor,
+                        notification.priority == 'high'
+                            ? Icons.priority_high
+                            : notification.priority == 'medium'
+                                ? Icons.circle
+                                : Icons.keyboard_arrow_down,
+                        size: 10, // 🔥 smaller
+                        color: notification.isRead
+                            ? Colors.grey.shade600
+                            : priorityColor,
                       ),
                       const SizedBox(width: 2),
                       Text(
                         notification.priority.toUpperCase(),
                         style: TextStyle(
-                          fontSize: 10,
+                          fontSize: 9, // 🔥 reduced
                           fontWeight: FontWeight.bold,
-                          color: notification.isRead 
-                            ? Colors.grey.shade600
-                            : priorityColor,
-                          letterSpacing: 0.5,
+                          color: notification.isRead
+                              ? Colors.grey.shade600
+                              : priorityColor,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                // Timestamp
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    timeAgo, 
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: notification.isRead 
-                        ? Theme.of(context).colorScheme.onSurface.withOpacity(0.4)
-                        : Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    timeAgo,
+                    style: TextStyle(
+                      fontSize: 10, // 🔥 reduced
+                      color: Colors.grey.shade600,
                     ),
                   ),
                 ),
@@ -183,104 +197,22 @@ class NotificationListTile extends ConsumerWidget {
             ),
           ],
         ),
+
         onTap: () {
           final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
           if (userId != null && !notification.isRead) {
-            ref.read(notificationRepositoryProvider).markAsRead(userId, notification.id);
+            ref
+                .read(notificationRepositoryProvider)
+                .markAsRead(userId, notification.id);
           }
-          
-          // Navigate based on notification type
-          _handleNotificationTap(context, notification);
-        },
-      ),
-    );
-  }
 
-  /// Handle notification tap and navigate to appropriate screen
-  void _handleNotificationTap(BuildContext context, AppNotification notification) {
-    switch (notification.type) {
-      case AppNotificationType.chat:
-        _navigateToSessionChat(context, notification);
-        break;
-      
-      case AppNotificationType.meetingRequest:
-        _navigateToMeetings(context);
-        break;
-      
-      case AppNotificationType.alert:
-      case AppNotificationType.announcement:
-      case AppNotificationType.information:
-      case AppNotificationType.maintenance:
-      case AppNotificationType.generic:
-      default:
-        // All users see the same beautiful detail view
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => NotificationDetailView(notification: notification),
-          ),
-        );
-        break;
-    }
-  }
-
-  /// Navigate to session chat
-  void _navigateToSessionChat(BuildContext context, AppNotification notification) async {
-    final sessionId = notification.data['sessionId'];
-    
-    if (sessionId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session information not available')),
-      );
-      return;
-    }
-
-    try {
-      // Show loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Loading session...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
-
-      // Fetch session from Firestore
-      final sessionDoc = await FirebaseFirestore.instance
-          .collection('sessions')
-          .doc(sessionId)
-          .get();
-
-      if (!sessionDoc.exists) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Session not found')),
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) =>
+                  NotificationDetailView(notification: notification),
+            ),
           );
-        }
-        return;
-      }
-
-      final session = Session.fromFirestore(sessionDoc);
-
-      if (context.mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => SessionChatScreen(session: session),
-          ),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading session: $e')),
-        );
-      }
-    }
-  }
-
-  /// Navigate to meetings screen
-  void _navigateToMeetings(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const MyMeetingsScreen(initialTab: 0), // Pending tab
+        },
       ),
     );
   }

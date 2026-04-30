@@ -10,7 +10,6 @@ import 'package:events_app_trueattempt/features/calendar/widgets/overlap_handler
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:intl/intl.dart';
 
-/// Single-day view with Google Calendar-style timeline
 class DayViewScreen extends ConsumerStatefulWidget {
   final DateTime selectedDate;
 
@@ -22,7 +21,9 @@ class DayViewScreen extends ConsumerStatefulWidget {
 
 class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   final ScrollController _scrollController = ScrollController();
-  static const double _hourHeight = 80.0;
+
+  static const double _hourHeight = 72.0;
+  static const double _timeColumnWidth = 58.0;
 
   @override
   void initState() {
@@ -34,10 +35,10 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
 
   void _scrollToCurrentHour() {
     final now = DateTime.now();
+
     if (_isToday(widget.selectedDate)) {
-      final currentHour = now.hour;
-      // Scroll to current hour (offset from midnight)
-      final offset = currentHour * _hourHeight - 100;
+      final offset = now.hour * _hourHeight - 100;
+
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           offset.clamp(0, _scrollController.position.maxScrollExtent),
@@ -61,19 +62,27 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(dateFormat.format(widget.selectedDate)),
+        title: Text(
+          dateFormat.format(widget.selectedDate),
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         elevation: 0,
         backgroundColor: AppColors.namaNavyBlue,
         foregroundColor: Colors.white,
       ),
       body: SafeArea(
         child: entriesAsync.when(
-          data: (entries) => entries.isEmpty
-              ? _buildEmptyState()
-              : _buildDayTimeline(entries),
+          data: (entries) =>
+              entries.isEmpty ? _buildEmptyState() : _buildDayTimeline(entries),
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, stack) => Center(
-            child: Text('Error loading calendar: $error'),
+            child: Text(
+              'Error loading calendar: $error',
+              style: const TextStyle(fontSize: 13),
+            ),
           ),
         ),
       ),
@@ -81,26 +90,24 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   }
 
   Widget _buildDayTimeline(List<CalendarEntry> entries) {
-    // Get layout information for all entries
     final layouts = OverlapHandler.layoutEntries(entries);
 
     return SingleChildScrollView(
       controller: _scrollController,
       child: Stack(
         children: [
-          // Hour rows (00:00 to 23:00 = 24 hours)
           Column(
             children: List.generate(24, (index) {
-              final hour = index; // 0 (midnight) to 23 (11 PM)
-              final time = DateTime(widget.selectedDate.year, widget.selectedDate.month, widget.selectedDate.day, hour);
+              final time = DateTime(
+                widget.selectedDate.year,
+                widget.selectedDate.month,
+                widget.selectedDate.day,
+                index,
+              );
               return _buildHourRow(time);
             }),
           ),
-          
-          // Calendar entries
           ..._buildAllEntries(layouts),
-          
-          // Current time indicator
           if (_isToday(widget.selectedDate)) _buildCurrentTimeIndicator(),
         ],
       ),
@@ -108,46 +115,43 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   }
 
   Widget _buildHourRow(DateTime time) {
-    // Use 24-hour format (HH:mm), but empty for midnight
     final hour = time.hour;
     final label = hour == 0 ? '' : '${hour.toString().padLeft(2, '0')}:00';
-    
+
     return SizedBox(
       height: _hourHeight,
       child: Stack(
-        clipBehavior: Clip.none, // Allow label to overflow above the hour row
+        clipBehavior: Clip.none,
         children: [
-          // Hour line
           Positioned(
-            left: 60,
+            left: _timeColumnWidth,
             right: 0,
             top: 0,
             child: Container(
               decoration: BoxDecoration(
                 border: Border(
                   top: BorderSide(
-                    color: AppColors.namaMediumGray.withOpacity(0.2),
-                    width: 1,
+                    color: AppColors.namaMediumGray.withOpacity(0.18),
+                    width: 0.8,
                   ),
                 ),
               ),
             ),
           ),
-          // Hour label (vertically centered on the line)
           Positioned(
             left: 0,
-            top: -6, // Centers the label on the hour line
-            width: 60,
+            top: -5,
+            width: _timeColumnWidth,
             child: Padding(
-              padding: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.only(right: 7),
               child: Text(
                 label,
                 textAlign: TextAlign.right,
-                style: TextStyle(
-                  fontSize: 11,
+                style: const TextStyle(
+                  fontSize: 10,
                   fontWeight: FontWeight.w500,
                   color: AppColors.namaMediumGray,
-                  height: 1.0,
+                  height: 1,
                 ),
               ),
             ),
@@ -158,94 +162,90 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   }
 
   List<Widget> _buildAllEntries(List<EntryLayout> layouts) {
-    final widgets = <Widget>[];
-    
-    for (final layout in layouts) {
-      widgets.add(_buildEntry(layout));
-    }
-    
-    return widgets;
+    return List.generate(layouts.length, (index) {
+      return _buildEntry(layouts[index], index);
+    });
   }
 
-  Widget _buildEntry(EntryLayout layout) {
+  Widget _buildEntry(EntryLayout layout, int index) {
     final entry = layout.entry;
-    
-    // Calculate top position
+
     final hour = entry.startTime.hour;
     final minute = entry.startTime.minute;
-    final topOffset = (hour * _hourHeight) + ((minute / 60.0) * _hourHeight); // Offset from midnight
-    
-    // Calculate height based on duration
-    final durationMinutes = entry.durationMinutes;
-    final height = (durationMinutes / 60.0) * _hourHeight;
 
-    // Calculate horizontal positioning
-    final availableWidth = MediaQuery.of(context).size.width - 60;
-    final leftOffset = 60 + (layout.leftFactor * availableWidth);
+    final topOffset =
+        (hour * _hourHeight) + ((minute / 60.0) * _hourHeight);
+
+    final durationMinutes = entry.durationMinutes;
+    final calculatedHeight = (durationMinutes / 60.0) * _hourHeight;
+
+    final availableWidth = MediaQuery.of(context).size.width - _timeColumnWidth;
+    final leftOffset = _timeColumnWidth + (layout.leftFactor * availableWidth);
     final width = layout.widthFactor * availableWidth;
 
-    final isSession = entry.type == CalendarEntryType.session;
-    final color = isSession ? AppColors.namaNavyBlue : AppColors.namaGoldenYellow;
+    final color = _getEntryColor(entry, index);
 
     return Positioned(
       top: topOffset,
       left: leftOffset,
       width: width,
-      height: height.clamp(30, double.infinity),
+      height: calculatedHeight.clamp(46, 95),
       child: GestureDetector(
         onTap: () => _showEntryDetails(entry),
         child: Container(
           margin: EdgeInsets.only(
-            left: layout.isOverlapping ? 8 : 2,
+            left: layout.isOverlapping ? 6 : 2,
             right: 2,
             top: 2,
-            bottom: 3, // Reduced slightly to prevent overflow
+            bottom: 3,
           ),
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(7),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.9),
+            color: color.withOpacity(0.92),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: layout.isOverlapping ? Colors.black : color,
-              width: layout.isOverlapping ? 2.0 : 1.5,
+              color: color,
+              width: 1.2,
             ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 entry.title,
                 style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
                   color: Colors.white,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (height > 40) ...[
-                const SizedBox(height: 2),
-                Text(
-                  DateFormat('h:mm a').format(entry.startTime),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.white.withOpacity(0.9),
-                  ),
+              const SizedBox(height: 3),
+              Text(
+                DateFormat('h:mm a').format(entry.startTime),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withOpacity(0.95),
                 ),
-              ],
-              if (height > 55 && entry.location.isNotEmpty) ...[
+              ),
+              if (entry.location.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Icon(Icons.location_on, size: 10, color: Colors.white.withOpacity(0.8)),
+                    Icon(
+                      Icons.location_on,
+                      size: 9,
+                      color: Colors.white.withOpacity(0.85),
+                    ),
                     const SizedBox(width: 2),
                     Expanded(
                       child: Text(
                         entry.location,
                         style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 9.5,
+                          color: Colors.white.withOpacity(0.85),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -261,6 +261,23 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     );
   }
 
+  Color _getEntryColor(CalendarEntry entry, int index) {
+    if (entry.type != CalendarEntryType.session) {
+      return AppColors.namaGoldenYellow;
+    }
+
+    final colors = [
+      AppColors.namaNavyBlue,
+      const Color(0xFF4A3B95),
+      const Color(0xFF006D77),
+      const Color(0xFF065F46),
+      const Color(0xFF9A3412),
+      const Color(0xFF7C2D12),
+    ];
+
+    return colors[index % colors.length];
+  }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -268,23 +285,23 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
         children: [
           Icon(
             Icons.calendar_today,
-            size: 64,
+            size: 52,
             color: AppColors.namaMediumGray.withOpacity(0.5),
           ),
-          const SizedBox(height: 16),
-          Text(
+          const SizedBox(height: 14),
+          const Text(
             'No events for this day',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w500,
               color: AppColors.namaDarkGray,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
+          const SizedBox(height: 6),
+          const Text(
             'Your schedule is clear!',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: AppColors.namaMediumGray,
             ),
           ),
@@ -302,16 +319,46 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
       enableDrag: true,
       useSafeArea: true,
       builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.95,
+        initialChildSize: 0.54,
+        minChildSize: 0.28,
+        maxChildSize: 0.9,
         expand: false,
         snap: true,
-        snapSizes: const [0.6, 0.95],
+        snapSizes: const [0.54, 0.9],
         builder: (context, scrollController) => EntryDetailsSheet(
           entry: entry,
           scrollController: scrollController,
         ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentTimeIndicator() {
+    final now = DateTime.now();
+    final topOffset =
+        (now.hour * _hourHeight) + ((now.minute / 60.0) * _hourHeight);
+
+    return Positioned(
+      top: topOffset,
+      left: _timeColumnWidth,
+      right: 0,
+      child: Row(
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: const BoxDecoration(
+              color: Colors.red,
+              shape: BoxShape.circle,
+            ),
+          ),
+          Expanded(
+            child: Container(
+              height: 1.5,
+              color: Colors.red,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -321,40 +368,5 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
-  }
-
-  Widget _buildCurrentTimeIndicator() {
-    final now = DateTime.now();
-    final hour = now.hour;
-    final minute = now.minute;
-    
-    // Calculate position from midnight
-    final topOffset = (hour * _hourHeight) + ((minute / 60.0) * _hourHeight);
-    
-    return Positioned(
-      top: topOffset,
-      left: 60,
-      right: 0,
-      child: Row(
-        children: [
-          // Red dot
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: Colors.red,
-              shape: BoxShape.circle,
-            ),
-          ),
-          // Red line
-          Expanded(
-            child: Container(
-              height: 2,
-              color: Colors.red,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

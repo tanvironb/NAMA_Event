@@ -1,183 +1,307 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:intl/intl.dart';
-import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
-import 'package:events_app_trueattempt/features/agenda/screen/widgets/session_youtube_player.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/widgets/session_bookmark_button.dart';
-import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
+import 'package:events_app_trueattempt/features/networking/screen/speaker_profile_screen.dart';
 
-// SessionDetailScreen displays the detailed information for a selected session.
-class SessionDetailScreen extends ConsumerWidget {
+class SessionDetailScreen extends StatelessWidget {
   final Session session;
 
-  const SessionDetailScreen({
-    super.key,
-    required this.session,
-  });
+  const SessionDetailScreen({super.key, required this.session});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Get the remote config service
-    final remoteConfig = ref.watch(remoteConfigServiceProvider);
-    final timeFormat = DateFormat('h:mm a');
-    final speakersFuture = ref.watch(sessionSpeakersFutureProvider(session.speakerIds)); // Fetch speaker details
+  Future<List<Map<String, dynamic>>> _loadSpeakers() async {
+    if (session.speakerIds.isEmpty) return [];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          session.title,
-          overflow: TextOverflow.ellipsis, // Handle long titles
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Hero(
-              tag: 'session_title_${session.id}', // Same unique tag
-              child: Material(
-                type: MaterialType.transparency,
-                child: Text(
-                  session.title,
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _InfoTile(icon: Icons.schedule_outlined, text: '${timeFormat.format(session.startTime)} - ${timeFormat.format(session.endTime)}'),
-            _InfoTile(icon: Icons.location_on_outlined, text: session.location),
-            
-            // Functional bookmark button
-            const SizedBox(height: 16),
-            SessionBookmarkButton(sessionId: session.id),
-            const Divider(height: 32),
-            Text('About this session', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            Text(session.description, style: Theme.of(context).textTheme.bodyLarge),
-            const SizedBox(height: 24),
-            Text('Speakers', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            // Display speakers using the FutureProvider
-            speakersFuture.when(
-              data: (speakers) {
-                if (speakers.isEmpty) {
-                  return Text('No speakers listed for this session.', style: Theme.of(context).textTheme.bodyMedium);
-                }
-                return Column(
-                  children: speakers.map((speaker) {
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 6),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          radius: 24,
-                          backgroundColor: AppColors.avatarPlaceholder,
-                          backgroundImage: (speaker.profileImageUrl.isNotEmpty)
-                              ? NetworkImage(speaker.profileImageUrl)
-                              : null,
-                          child: (speaker.profileImageUrl.isEmpty)
-                              ? Text(
-                                  speaker.name[0].toUpperCase(),
-                                  style: const TextStyle(
-                                    color: AppColors.avatarPlaceholderText,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
-                              : null,
-                        ),
-                        title: Text(speaker.name, style: Theme.of(context).textTheme.titleMedium),
-                        subtitle: Text(speaker.title, style: Theme.of(context).textTheme.bodySmall),
-                        trailing: const Icon(Icons.chevron_right, color: AppColors.namaMediumGray),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => UserDetailsScreen(userId: speaker.uid),
-                            ),
-                          );
-                        },
-                      ),
-                    );
-                  }).toList(),
-                );
-              },
-              loading: () => const LoadingIndicator(),
-              error: (e, s) => Text('Could not load speakers: $e', style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ),
-            // (Phase 2)
-            const SizedBox(height: 24),
-            
-            // YouTube Player - Shows during session time with auto-play
-            SessionYoutubePlayer(session: session),
-            
-            if (session.liveStreamUrl.isNotEmpty) // Only show if URL exists
-              ElevatedButton.icon(
-                onPressed: () async {
-                  final url = Uri.parse(session.liveStreamUrl);
-                  if (await canLaunchUrl(url)) {
-                    await launchUrl(url, mode: LaunchMode.externalApplication);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Could not open the link.')),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.videocam_outlined),
-                label: const Text('Join Live Stream'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.goldenYellow, // Use accent for CTA
-                foregroundColor: AppColors.darkGray,
-                minimumSize: const Size(double.infinity, 50), // Full width button
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Conditionally show Session Chat Button - Navigate to Session Chat Screen
-            if (remoteConfig.isChatEnabled)
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (context) => SessionChatScreen(session: session),
-                  ));
-                },
-                icon: const Icon(Icons.chat_outlined, color: AppColors.navyBlue),
-                label: Text('Open Session Chat', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: AppColors.navyBlue)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppColors.navyBlue),
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-            // Bottom padding for devices with navigation buttons
-            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
-          ],
-        ),
-      ),
-    );
+    final firestore = FirebaseFirestore.instance;
+    final speakers = <Map<String, dynamic>>[];
+
+    for (final speakerId in session.speakerIds) {
+      DocumentSnapshot<Map<String, dynamic>> doc =
+          await firestore.collection('speakers').doc(speakerId).get();
+
+      if (!doc.exists) {
+        doc = await firestore.collection('users').doc(speakerId).get();
+      }
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        data['id'] = doc.id;
+        speakers.add(data);
+      }
+    }
+
+    return speakers;
   }
-}
-
-// Reusable widget for displaying an info row with an icon and text.
-class _InfoTile extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _InfoTile({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Icon(icon, color: Theme.of(context).colorScheme.secondary, size: 24),
-          const SizedBox(width: 16),
-          Expanded(child: Text(text, style: Theme.of(context).textTheme.bodyLarge)),
-        ],
+    final time =
+        '${DateFormat('h:mm a').format(session.startTime)} - ${DateFormat('h:mm a').format(session.endTime)}';
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 30),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+
+              // 🔹 TOP BAR (CENTER TITLE)
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Colors.grey.shade300,
+                      child: IconButton(
+                        padding: EdgeInsets.zero,
+                        icon: const Icon(Icons.arrow_back, color: Colors.black),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    'Event Details',
+                    style: TextStyle(
+                      color: Color(0xFF24158A),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 30),
+
+              Center(
+                child: Text(
+                  session.title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              // 🔹 IMAGE + BOOKMARK
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    height: 130,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFEFEF),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                  Positioned(
+                    right: 14,
+                    bottom: -22,
+                    child: Container(
+                      height: 55,
+                      width: 55,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3D3D9E),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 12,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: SessionBookmarkButton(
+                        sessionId: session.id,
+                        iconSize: 30,
+                        bookmarkedColor: Colors.white,
+                        unbookmarkedColor: Colors.white,
+                        padding: EdgeInsets.zero,
+                        alignment: Alignment.center,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              // 🔹 TIME
+              Row(
+                children: [
+                  const Icon(Icons.access_time,
+                      color: Color(0xFFE2BF3C), size: 18),
+                  const SizedBox(width: 12),
+                  Text(time),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // 🔹 LOCATION
+              Row(
+                children: [
+                  const Icon(Icons.location_on,
+                      color: Color(0xFFE2BF3C), size: 18),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(session.location)),
+                ],
+              ),
+
+              const SizedBox(height: 22),
+
+              // 🔹 ABOUT
+              const Text(
+                'About',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+
+              const SizedBox(height: 10),
+
+              Text(session.description),
+
+              const SizedBox(height: 22),
+
+              // 🔹 SPEAKERS TITLE
+              const Text(
+                'Speakers',
+                style: TextStyle(
+                  fontSize: 20,
+                  color: Color(0xFF3D3D9E),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // 🔹 SPEAKERS LIST
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _loadSpeakers(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final speakers = snapshot.data ?? [];
+
+                  if (speakers.isEmpty) {
+                    return _speakerCard(context: context, speaker: {});
+                  }
+
+                  return Column(
+                    children: speakers.map((speaker) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _speakerCard(
+                          context: context,
+                          speaker: speaker,
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 65),
+
+              // 🔹 JOIN BUTTON
+              Center(
+                child: SizedBox(
+                  width: 170,
+                  height: 36,
+                  child: ElevatedButton(
+                    onPressed: () {},
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3D3D9E),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                    ),
+                    child: const Text(
+                      'JOIN EVENT',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
+
+  // 🔹 SPEAKER CARD WITH ROUTING
+  Widget _speakerCard({
+  required BuildContext context,
+  required Map<String, dynamic> speaker,
+}) {
+  final name = speaker['name'] ??
+      speaker['fullName'] ??
+      speaker['displayName'] ??
+      'Speaker';
+
+  final role = speaker['role'] ?? speaker['title'] ?? 'Speaker';
+
+  final company = speaker['company'] ?? '';
+
+  final imageUrl = speaker['profileImageUrl'] ?? '';
+
+  final bio = speaker['bio'] ?? '';
+  final email = speaker['email'] ?? '';
+
+  return InkWell(
+    borderRadius: BorderRadius.circular(18),
+    onTap: () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SpeakerProfileScreen(
+            name: name,
+            role: role,
+            company: company,
+            imageUrl: imageUrl,
+            bio: bio,
+            email: email,
+          ),
+        ),
+      );
+    },
+    child: Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundImage:
+                imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+            child: imageUrl.isEmpty ? const Icon(Icons.person) : null,
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(name)),
+          const Icon(Icons.chevron_right),
+        ],
+      ),
+    ),
+  );
+}
 }

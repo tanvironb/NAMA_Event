@@ -34,7 +34,7 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
       return 'Please enter a subject';
     }
     if (value.trim().length < 3) {
-      return 'Subject must be at least 3 characters';
+      return 'Min 3 characters';
     }
     return null;
   }
@@ -44,15 +44,13 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
       return 'Please enter a message';
     }
     if (value.trim().length < 10) {
-      return 'Message must be at least 10 characters';
+      return 'Min 10 characters';
     }
     return null;
   }
 
   Future<void> _submitTicket() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isSubmitting = true);
 
@@ -60,19 +58,16 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
       final userAsync = ref.read(userAppProfileStreamProvider);
       final user = userAsync.value;
 
-      if (user == null) {
-        throw Exception('User not found');
-      }
+      if (user == null) throw Exception('User not found');
 
       final helpRepo = ref.read(helpRepositoryProvider);
 
-      // Check rate limit
       final canSubmit = await helpRepo.canSubmitTicket(user.uid);
       if (!canSubmit) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Please wait 10 minutes before submitting another ticket'),
+              content: Text('Wait 10 minutes before next ticket'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -80,7 +75,6 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
         return;
       }
 
-      // Submit ticket
       await helpRepo.submitTicket(
         userId: user.uid,
         userName: user.name,
@@ -92,12 +86,11 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Ticket submitted successfully'),
+            content: Text('Ticket submitted'),
             backgroundColor: Colors.green,
           ),
         );
 
-        // Clear form
         _subjectController.clear();
         _messageController.clear();
         _formKey.currentState!.reset();
@@ -122,153 +115,184 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.namaWhite,
-      appBar: AppBar(
-        title: const Text('Help Center'),
-        backgroundColor: AppColors.namaNavyBlue,
-        foregroundColor: Colors.white,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Info card
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.namaNavyBlue.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.namaNavyBlue.withOpacity(0.2),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // 🔹 Custom Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back),
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      AppIcons.info,
+                  const Text(
+                    'Help',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.namaNavyBlue,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Need Help?',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: AppColors.namaNavyBlue,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 🔹 Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 10),
+
+                      // Info card
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: AppColors.namaNavyBlue.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: AppColors.namaNavyBlue.withOpacity(0.2),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Submit a help ticket and our team will assist you. If applicable, an admin will chat with you from the app.',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: AppColors.namaNavyBlue,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // Subject field
-              TextFormField(
-                controller: _subjectController,
-                decoration: InputDecoration(
-                  labelText: 'Subject',
-                  hintText: 'Brief description of your issue',
-                  prefixIcon: Icon(Icons.title, color: AppColors.namaMediumGray),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                textInputAction: TextInputAction.next,
-                validator: _validateSubject,
-              ),
-              const SizedBox(height: 20),
-
-              // Message field
-              TextFormField(
-                controller: _messageController,
-                decoration: InputDecoration(
-                  labelText: 'Message',
-                  hintText: 'Describe your issue in detail...',
-                  prefixIcon: Icon(Icons.message_outlined, color: AppColors.namaMediumGray),
-                  alignLabelWithHint: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                maxLines: 8,
-                textInputAction: TextInputAction.newline,
-                validator: _validateMessage,
-              ),
-              const SizedBox(height: 24),
-
-              // Rate limit note
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Colors.orange.withOpacity(0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.timer_outlined, color: Colors.orange.shade700, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Rate limit: 1 ticket per 10 minutes',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.orange.shade700,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(AppIcons.info,
+                                color: AppColors.namaNavyBlue, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  Text(
+                                    'Need Help?',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.namaNavyBlue,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Submit a ticket and we will assist you.',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.namaNavyBlue,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
 
-              // Submit button
-              ElevatedButton(
-                onPressed: _isSubmitting ? null : _submitTicket,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.namaNavyBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 20),
+
+                      // Subject
+                      TextFormField(
+                        controller: _subjectController,
+                        decoration: InputDecoration(
+                          labelText: 'Subject',
+                          prefixIcon: Icon(Icons.title, size: 18),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        style: const TextStyle(fontSize: 13),
+                        validator: _validateSubject,
+                      ),
+
+                      const SizedBox(height: 14),
+
+                      // Message
+                      TextFormField(
+                        controller: _messageController,
+                        maxLines: 6,
+                        decoration: InputDecoration(
+                          labelText: 'Message',
+                          prefixIcon:
+                              Icon(Icons.message_outlined, size: 18),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        style: const TextStyle(fontSize: 13),
+                        validator: _validateMessage,
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // Rate limit
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.timer_outlined,
+                                size: 16, color: Colors.orange),
+                            SizedBox(width: 6),
+                            Text(
+                              '1 ticket per 10 minutes',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // 🔹 Submit Button (reduced width)
+                      SizedBox(
+                        width: 220, // 👈 reduced width
+                        child: ElevatedButton(
+                          onPressed:
+                              _isSubmitting ? null : _submitTicket,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.namaNavyBlue,
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: _isSubmitting
+                              ? const SizedBox(
+                                  height: 18,
+                                  width: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Submit Ticket',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 30),
+                    ],
                   ),
                 ),
-                child: _isSubmitting
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Text(
-                        'Submit Ticket',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'features/auth/screen/auth_gate.dart';
 import 'config/app_themes.dart';
 import 'package:events_app_trueattempt/core/services/notification_handler.dart';
@@ -17,16 +18,29 @@ class MyApp extends ConsumerStatefulWidget {
 class _MyAppState extends ConsumerState<MyApp> {
   final _alertService = AlertNotificationService();
 
+  bool _showSplash = true;
+
   @override
   void initState() {
     super.initState();
-    // Initialize alert service after first frame
+
+    // Always show splash first for 5 seconds.
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      setState(() => _showSplash = false);
+    });
+
+    // Initialize alert service after first frame.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (mounted && NotificationHandler.navigatorKey.currentContext != null) {
-        await _alertService.initialize(NotificationHandler.navigatorKey.currentContext!);
-        // Check for unshown alerts after initialization completes
+        await _alertService.initialize(
+          NotificationHandler.navigatorKey.currentContext!,
+        );
+
         if (mounted && NotificationHandler.navigatorKey.currentContext != null) {
-          await _alertService.checkForUnshownAlerts(NotificationHandler.navigatorKey.currentContext!);
+          await _alertService.checkForUnshownAlerts(
+            NotificationHandler.navigatorKey.currentContext!,
+          );
         }
       }
     });
@@ -40,45 +54,52 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    // A future that represents all necessary initializations
     final appInitialization = ref.watch(appInitializationProvider);
 
     return MaterialApp(
-      navigatorKey: NotificationHandler.navigatorKey, // Use the global navigatorKey from notification_handler.dart
+      navigatorKey: NotificationHandler.navigatorKey,
       title: 'NAMA Foundation Event App',
-      theme: AppTheme.lightTheme, // Default to light theme reflecting company brand
+      theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.light, // Force light theme as default
+      themeMode: ThemeMode.light,
       debugShowCheckedModeBanner: false,
-      home: appInitialization.when(
-        data: (_) => const AuthGate(),
-        loading: () => const SplashScreen(),
-        error: (err, stack) => Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                Text('Initialization Error: $err'),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () {
-                    // Trigger a restart by invalidating the provider
-                    ref.invalidate(appInitializationProvider);
-                  },
-                  child: const Text('Retry'),
+
+      home: _showSplash
+          ? const SplashScreen()
+          : appInitialization.when(
+              data: (_) => const AuthGate(),
+              loading: () => const SplashScreen(),
+              error: (err, stack) => Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error, size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text('Initialization Error: $err'),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          ref.invalidate(appInitializationProvider);
+                          setState(() => _showSplash = true);
+
+                          Future.delayed(const Duration(seconds: 5), () {
+                            if (!mounted) return;
+                            setState(() => _showSplash = false);
+                          });
+                        },
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
-      // Add basic named routes for notification deep linking
+
       routes: {
-        '/agenda': (context) => const AuthGate(), // Will navigate to agenda tab
-        '/networking': (context) => const AuthGate(), // Will navigate to networking tab
-        '/notifications': (context) => const AuthGate(), // Will navigate to notifications
+        '/agenda': (context) => const AuthGate(),
+        '/networking': (context) => const AuthGate(),
+        '/notifications': (context) => const AuthGate(),
       },
     );
   }
