@@ -1,5 +1,5 @@
 // lib/features/profile/screen/widgets/profile_image_picker.dart
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
@@ -8,20 +8,20 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 class ProfileImagePicker {
   static const int maxFileSizeBytes = 5 * 1024 * 1024; // 5MB
 
-  /// Show bottom sheet with image source options
-  static Future<File?> pickAndCropImage(BuildContext context, {bool hasExistingImage = false}) async {
-    final source = await _showImageSourceBottomSheet(context, hasExistingImage);
-    
+  static Future<XFile?> pickAndCropImage(
+    BuildContext context, {
+    bool hasExistingImage = false,
+  }) async {
+    final source = await _showImageSourceBottomSheet(
+      context,
+      hasExistingImage,
+    );
+
     if (source == null) return null;
-    
-    // Handle remove photo option
-    if (source == ImageSource.gallery && hasExistingImage) {
-      // This is a signal to remove (we'll handle in the calling screen)
-      return null;
-    }
 
     try {
       final picker = ImagePicker();
+
       final XFile? pickedFile = await picker.pickImage(
         source: source,
         maxWidth: 1024,
@@ -31,13 +31,15 @@ class ProfileImagePicker {
 
       if (pickedFile == null) return null;
 
-      // Check file size
-      final fileSize = await File(pickedFile.path).length();
+      final fileSize = await pickedFile.length();
+
       if (fileSize > maxFileSizeBytes) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Image is too large. Please select an image smaller than 5MB.'),
+              content: Text(
+                'Image is too large. Please select an image smaller than 5MB.',
+              ),
               backgroundColor: AppColors.errorRed,
             ),
           );
@@ -45,10 +47,29 @@ class ProfileImagePicker {
         return null;
       }
 
-      // Crop the image
+      // Web fix: skip cropper on Chrome/Web to avoid overflow and cropper JS issues.
+      if (kIsWeb) {
+        final bytes = await pickedFile.readAsBytes();
+
+        return XFile.fromData(
+          bytes,
+          name: 'profile_photo.jpg',
+          mimeType: 'image/jpeg',
+        );
+      }
+
+      // Mobile only: crop image
       final croppedFile = await _cropImage(pickedFile.path);
-      
-      return croppedFile;
+
+      if (croppedFile == null) return null;
+
+      final bytes = await croppedFile.readAsBytes();
+
+      return XFile.fromData(
+        bytes,
+        name: 'profile_photo.jpg',
+        mimeType: 'image/jpeg',
+      );
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -62,81 +83,59 @@ class ProfileImagePicker {
     }
   }
 
-  /// Show bottom sheet with image source options
-  static Future<ImageSource?> _showImageSourceBottomSheet(BuildContext context, bool hasExistingImage) {
+  static Future<ImageSource?> _showImageSourceBottomSheet(
+    BuildContext context,
+    bool hasExistingImage,
+  ) {
     return showModalBottomSheet<ImageSource>(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
         return SafeArea(
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 20),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Title
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: Text(
-                    'Profile Photo',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                Text(
+                  'Profile Photo',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                 ),
-                const Divider(),
-                
-                // Take Photo
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.navyBlue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.camera_alt, color: AppColors.navyBlue),
-                  ),
-                  title: const Text('Take Photo'),
+
+                const SizedBox(height: 10),
+
+                Divider(
+                  height: 1,
+                  color: Colors.grey.withOpacity(0.4),
+                ),
+
+                const SizedBox(height: 6),
+
+                _buildOption(
+                  icon: Icons.camera_alt,
+                  text: 'Take Photo',
                   onTap: () => Navigator.pop(context, ImageSource.camera),
                 ),
-                
-                // Choose from Gallery
-                ListTile(
-                  leading: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.navyBlue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.photo_library, color: AppColors.navyBlue),
-                  ),
-                  title: const Text('Choose from Gallery'),
+
+                _buildOption(
+                  icon: Icons.photo_library,
+                  text: 'Choose from Gallery',
                   onTap: () => Navigator.pop(context, ImageSource.gallery),
                 ),
-                
-                // Remove Photo (only if user has existing image)
-                if (hasExistingImage)
-                  ListTile(
-                    leading: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.errorRed.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.delete_outline, color: AppColors.errorRed),
-                    ),
-                    title: const Text('Remove Photo', style: TextStyle(color: AppColors.errorRed)),
-                    onTap: () => Navigator.pop(context, null), // Signal to remove
-                  ),
-                
-                const SizedBox(height: 8),
-                
-                // Cancel
+
+                const SizedBox(height: 6),
+
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(fontSize: 13),
+                  ),
                 ),
               ],
             ),
@@ -146,9 +145,46 @@ class ProfileImagePicker {
     );
   }
 
-  /// Crop the selected image
-  static Future<File?> _cropImage(String imagePath) async {
-    final croppedFile = await ImageCropper().cropImage(
+  static Widget _buildOption({
+    required IconData icon,
+    required String text,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: AppColors.namaNavyBlue.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                icon,
+                size: 18,
+                color: AppColors.namaNavyBlue,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              text,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Future<CroppedFile?> _cropImage(String imagePath) async {
+    return await ImageCropper().cropImage(
       sourcePath: imagePath,
       aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
       compressQuality: 80,
@@ -171,9 +207,5 @@ class ProfileImagePicker {
         ),
       ],
     );
-
-    if (croppedFile == null) return null;
-    
-    return File(croppedFile.path);
   }
 }

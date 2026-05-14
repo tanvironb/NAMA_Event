@@ -1,89 +1,168 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:card_swiper/card_swiper.dart';
+import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:card_swiper/card_swiper.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class SpeakerCarousel extends ConsumerWidget {
   const SpeakerCarousel({super.key});
 
+  static const Color _primaryColor = Color(0xFF0D1496);
+  static const Color _cardGrey = Color(0xFFEFEFEF);
+  static const Color _textMuted = Color(0xFF8A8A8A);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Get featured speakers from current/upcoming sessions
     final speakersAsync = ref.watch(featuredSpeakersFutureProvider);
 
     return SizedBox(
-      height: 160, // Fixed height for the carousel
+      height: 235,
       child: speakersAsync.when(
         data: (speakers) {
           if (speakers.isEmpty) {
-            return Center(
+            return const Center(
               child: Text(
                 'No featured speakers yet.',
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: TextStyle(
+                  color: _textMuted,
+                  fontSize: 12,
+                ),
               ),
             );
           }
+
           return Swiper(
             itemCount: speakers.length,
+            viewportFraction: 0.54,
+            scale: 0.88,
+            autoplay: speakers.length > 1,
+            autoplayDelay: 4500,
+            duration: 650,
+            loop: speakers.length > 1,
             itemBuilder: (context, index) {
               final speaker = speakers[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundImage: speaker.profileImageUrl.isNotEmpty
-                          ? NetworkImage(speaker.profileImageUrl)
-                          : null,
-                      backgroundColor: AppColors.avatarPlaceholder,
-                      child: speaker.profileImageUrl.isEmpty
-                          ? Text(
-                              speaker.name[0].toUpperCase(),
-                              style: const TextStyle(
-                                color: AppColors.avatarPlaceholderText,
-                                fontWeight: FontWeight.bold,
+
+              return GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => UserDetailsScreen(userId: speaker.uid),
+                    ),
+                  );
+                },
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.13),
+                        blurRadius: 11,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        speaker.profileImageUrl.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: speaker.profileImageUrl,
+                                fit: BoxFit.cover,
+                                placeholder: (_, __) => Container(
+                                  color: _cardGrey,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (_, __, ___) =>
+                                    _speakerFallback(),
+                              )
+                            : _speakerFallback(),
+
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.32),
+                                Colors.black.withOpacity(0.76),
+                              ],
+                              stops: const [0.45, 0.73, 1],
+                            ),
+                          ),
+                        ),
+
+                        Positioned(
+                          left: 15,
+                          right: 15,
+                          bottom: 15,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                speaker.name,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            )
-                          : null,
+                              const SizedBox(height: 4),
+                              Text(
+                                speaker.title,
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.9),
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      speaker.name,
-                      style: Theme.of(context).textTheme.titleSmall,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      speaker.title,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                  ),
                 ),
               );
             },
-            pagination: speakers.length > 1 ? const SwiperPagination() : null,
-            control: speakers.length > 1 ? const SwiperControl() : null,
-            autoplay: speakers.length > 1,
-            autoplayDelay: 4000,
-            viewportFraction: 0.7,
-            scale: 0.9,
           );
         },
-        loading: () => const LoadingIndicator(),
-        error: (err, stack) => Center(
+        loading: () => const Center(child: LoadingIndicator()),
+        error: (_, __) => const Center(
           child: Text(
-            'Error loading speakers: $err',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            'Error loading speakers.',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+            ),
           ),
         ),
+      ),
+    );
+  }
+
+  static Widget _speakerFallback() {
+    return Container(
+      color: _cardGrey,
+      child: const Icon(
+        Icons.person,
+        size: 58,
+        color: _primaryColor,
       ),
     );
   }

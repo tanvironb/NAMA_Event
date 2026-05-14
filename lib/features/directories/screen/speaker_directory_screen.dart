@@ -30,7 +30,9 @@ class _SpeakerDirectoryScreenState
   }
 
   List<AppUser> _applySearchAndPrivacyFilter(
-      List<AppUser> speakers, AppUser? currentUser) {
+    List<AppUser> speakers,
+    AppUser? currentUser,
+  ) {
     if (currentUser == null) return [];
 
     final viewerId = currentUser.uid;
@@ -106,21 +108,32 @@ class _SpeakerDirectoryScreenState
       onTap: () => FocusScope.of(context).unfocus(),
       child: Column(
         children: [
-          // Smaller search bar
+          // Search box like Messages page
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
             child: SizedBox(
-              height: 42,
+              height: 40,
               child: TextField(
                 controller: _searchController,
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search speakers...',
-                  hintStyle: const TextStyle(fontSize: 13),
-                  prefixIcon: const Icon(Icons.search, size: 20),
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade500,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    size: 19,
+                    color: Colors.grey.shade500,
+                  ),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
+                          icon: Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: Colors.grey.shade500,
+                          ),
                           onPressed: () {
                             setState(() {
                               _searchController.clear();
@@ -129,12 +142,22 @@ class _SpeakerDirectoryScreenState
                           },
                         )
                       : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+                  filled: true,
+                  fillColor: const Color(0xFFF7F7F7),
+                  contentPadding: EdgeInsets.zero,
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: BorderSide(
+                      color: Colors.grey.shade300,
+                      width: 1,
+                    ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF24158A),
+                      width: 1,
+                    ),
                   ),
                 ),
                 onChanged: (value) {
@@ -146,7 +169,6 @@ class _SpeakerDirectoryScreenState
             ),
           ),
 
-          // Speakers list
           Expanded(
             child: currentUserAsync.when(
               data: (currentUser) {
@@ -206,8 +228,7 @@ class _SpeakerDirectoryScreenState
                                     vertical: 3,
                                   ),
                                   decoration: BoxDecoration(
-                                    color: AppColors.successGreen
-                                        .withOpacity(0.1),
+                                    color: AppColors.successGreen.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(10),
                                     border: Border.all(
                                       color: AppColors.successGreen,

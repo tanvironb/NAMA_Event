@@ -1,19 +1,19 @@
 // lib/core/services/storage_service.dart
-import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 
 class StorageService {
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
   /// Upload profile image to Firebase Storage
-  /// Returns the download URL of the uploaded image
-  Future<String> uploadProfileImage(String userId, File imageFile) async {
+  /// Works on Web, Android, and iOS
+  Future<String> uploadProfileImage(String userId, XFile imageFile) async {
     try {
-      // Create reference to the file location
       final ref = _storage.ref().child('profile/$userId.jpg');
-      
-      // Set metadata
+
+      final bytes = await imageFile.readAsBytes();
+
       final metadata = SettableMetadata(
         contentType: 'image/jpeg',
         customMetadata: {
@@ -22,29 +22,21 @@ class StorageService {
         },
       );
 
-      // Upload the file
-      final uploadTask = ref.putFile(imageFile, metadata);
-      
-      // Wait for upload to complete
+      final uploadTask = ref.putData(bytes, metadata);
       final snapshot = await uploadTask;
-      
-      // Get download URL
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-      
-      return downloadUrl;
+
+      return await snapshot.ref.getDownloadURL();
     } catch (e) {
       debugPrint('Error uploading profile image: $e');
       rethrow;
     }
   }
 
-  /// Delete profile image from Firebase Storage
   Future<void> deleteProfileImage(String userId) async {
     try {
       final ref = _storage.ref().child('profile/$userId.jpg');
       await ref.delete();
     } catch (e) {
-      // If file doesn't exist, that's fine
       if (e is FirebaseException && e.code == 'object-not-found') {
         debugPrint('Profile image not found for user $userId, skipping deletion');
         return;
@@ -54,7 +46,6 @@ class StorageService {
     }
   }
 
-  /// Get download URL for profile image (if exists)
   Future<String?> getProfileImageUrl(String userId) async {
     try {
       final ref = _storage.ref().child('profile/$userId.jpg');
@@ -68,7 +59,6 @@ class StorageService {
     }
   }
 
-  /// Check if profile image exists
   Future<bool> profileImageExists(String userId) async {
     try {
       final ref = _storage.ref().child('profile/$userId.jpg');

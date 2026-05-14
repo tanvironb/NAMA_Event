@@ -1,5 +1,5 @@
 // lib/features/profile/data/profile_repository.dart
-import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
@@ -82,7 +82,7 @@ class UserProfileRepository {
   }
 
   // Upload profile image and update user document
-  Future<String> uploadProfileImage(String userId, File imageFile) async {
+  Future<String> uploadProfileImage(String userId, XFile imageFile) async {
     try {
       // Upload to Firebase Storage
       final downloadUrl = await _storageService.uploadProfileImage(userId, imageFile);

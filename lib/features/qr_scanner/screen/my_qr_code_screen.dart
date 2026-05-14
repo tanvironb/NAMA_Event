@@ -336,7 +336,7 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
             },
           ),
           ElevatedButton(
-            child: const Text('Check-in User'),
+            child: const Text('Check-in User'), 
             onPressed: () async {
               try {
                 final functions = ref.read(firebaseFunctionsProvider);

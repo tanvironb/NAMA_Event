@@ -44,6 +44,19 @@ class UserDetailsScreen extends ConsumerWidget {
             final canViewFullData =
                 appUser.canViewFullDataBy(currentUserId ?? '', viewerIsAdmin);
 
+            final hasContactInfo = appUser.email.isNotEmpty ||
+                (canViewFullData &&
+                    (appUser.personalEmail.isNotEmpty ||
+                        appUser.phone.isNotEmpty));
+
+            final hasSocialMedia = canViewFullData &&
+                (appUser.linkedin.isNotEmpty ||
+                    appUser.twitter.isNotEmpty ||
+                    appUser.website.isNotEmpty ||
+                    appUser.github.isNotEmpty ||
+                    appUser.medium.isNotEmpty ||
+                    appUser.instagram.isNotEmpty);
+
             return Scaffold(
               backgroundColor: Colors.white,
               body: SafeArea(
@@ -52,11 +65,8 @@ class UserDetailsScreen extends ConsumerWidget {
                   child: Column(
                     children: [
                       _topBar(context, appUser, currentUserId),
-
                       const SizedBox(height: 25),
-
                       _profileImage(appUser),
-
                       const SizedBox(height: 16),
 
                       Text(
@@ -118,10 +128,14 @@ class UserDetailsScreen extends ConsumerWidget {
                           ),
                         ),
 
-                      if (appUser.email.isNotEmpty ||
-                          (canViewFullData && appUser.phone.isNotEmpty)) ...[
+                      if (hasContactInfo) ...[
                         const SizedBox(height: 16),
                         _contactCard(context, appUser, canViewFullData),
+                      ],
+
+                      if (hasSocialMedia) ...[
+                        const SizedBox(height: 16),
+                        _socialMediaCard(context, appUser),
                       ],
                     ],
                   ),
@@ -171,8 +185,11 @@ class UserDetailsScreen extends ConsumerWidget {
               backgroundColor: Colors.grey.shade300,
               child: IconButton(
                 padding: EdgeInsets.zero,
-                icon: const Icon(Icons.edit_outlined,
-                    size: 17, color: Colors.black87),
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 17,
+                  color: Colors.black87,
+                ),
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -189,13 +206,13 @@ class UserDetailsScreen extends ConsumerWidget {
   }
 
   Widget _profileImage(AppUser appUser) {
+    final imageUrl = appUser.profileImageUrl.trim();
+
     return CircleAvatar(
       radius: 45,
       backgroundColor: const Color(0xFFEFEFEF),
-      backgroundImage: appUser.profileImageUrl.isNotEmpty
-          ? NetworkImage(appUser.profileImageUrl)
-          : null,
-      child: appUser.profileImageUrl.isEmpty
+      backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+      child: imageUrl.isEmpty
           ? const Icon(Icons.person, size: 40, color: _mainColor)
           : null,
     );
@@ -347,7 +364,7 @@ class UserDetailsScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           child,
         ],
       ),
@@ -355,7 +372,10 @@ class UserDetailsScreen extends ConsumerWidget {
   }
 
   Widget _contactCard(
-      BuildContext context, AppUser appUser, bool canViewFullData) {
+    BuildContext context,
+    AppUser appUser,
+    bool canViewFullData,
+  ) {
     return _card(
       title: 'Contact',
       icon: Icons.contact_mail_outlined,
@@ -387,6 +407,111 @@ class UserDetailsScreen extends ConsumerWidget {
     );
   }
 
+  Widget _socialMediaCard(BuildContext context, AppUser appUser) {
+    final items = <Widget>[];
+
+    void addItem({
+      required String label,
+      required IconData icon,
+      required String url,
+    }) {
+      if (url.trim().isEmpty) return;
+
+      items.add(
+        _socialGridItem(
+          context,
+          label: label,
+          icon: icon,
+          url: url,
+        ),
+      );
+    }
+
+    addItem(
+      label: 'LinkedIn',
+      icon: Icons.business_center_outlined,
+      url: appUser.linkedin,
+    );
+    addItem(
+      label: 'Twitter',
+      icon: Icons.alternate_email,
+      url: appUser.twitter,
+    );
+    addItem(
+      label: 'Website',
+      icon: Icons.language,
+      url: appUser.website,
+    );
+    addItem(
+      label: 'GitHub',
+      icon: Icons.code,
+      url: appUser.github,
+    );
+    addItem(
+      label: 'Medium',
+      icon: Icons.article_outlined,
+      url: appUser.medium,
+    );
+    addItem(
+      label: 'Instagram',
+      icon: Icons.camera_alt_outlined,
+      url: appUser.instagram,
+    );
+
+    return _card(
+      title: 'Social Media',
+      icon: Icons.public,
+      child: GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 3.4,
+        children: items,
+      ),
+    );
+  }
+
+  Widget _socialGridItem(
+    BuildContext context, {
+    required String label,
+    required IconData icon,
+    required String url,
+  }) {
+    return InkWell(
+      onTap: () => _launchUrl(context, url),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEDECF7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: _mainColor.withOpacity(0.08),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: _mainColor),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: _mainColor,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _contactRow(
     BuildContext context, {
     required IconData icon,
@@ -406,6 +531,7 @@ class UserDetailsScreen extends ConsumerWidget {
               child: Text(
                 text,
                 style: const TextStyle(fontSize: 13),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -467,8 +593,11 @@ class UserDetailsScreen extends ConsumerWidget {
               backgroundColor: Colors.grey.shade300,
               child: IconButton(
                 padding: EdgeInsets.zero,
-                icon: const Icon(Icons.arrow_back,
-                    size: 18, color: Colors.black87),
+                icon: const Icon(
+                  Icons.arrow_back,
+                  size: 18,
+                  color: Colors.black87,
+                ),
                 onPressed: () => Navigator.pop(context),
               ),
             ),

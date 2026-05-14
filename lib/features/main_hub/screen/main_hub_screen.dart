@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/home/screen/attendee_shell.dart';
@@ -21,22 +22,27 @@ class MainHubScreen extends ConsumerStatefulWidget {
 }
 
 class _MainHubScreenState extends ConsumerState<MainHubScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Show privacy selection dialog after first frame if user hasn't selected privacy level yet
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAndShowPrivacySelectionDialog();
-    });
-  }
+  bool _privacyDialogShown = false;
+  String? _lastDialogCheckedUid;
 
-  Future<void> _checkAndShowPrivacySelectionDialog() async {
-    final userProfileAsync = ref.read(userAppProfileStreamProvider);
-    final user = userProfileAsync.value;
-    
-    // Show privacy selection dialog if user hasn't selected privacy level yet
-    if (user != null && user.needsPrivacySelection && mounted) {
-      _showPrivacySelectionDialog(user.profileVisibility);
+  Future<void> _checkAndShowPrivacySelectionDialog({
+    required String uid,
+    required Map<String, dynamic> userData,
+  }) async {
+    if (_privacyDialogShown || !mounted) return;
+
+    if (_lastDialogCheckedUid == uid) return;
+    _lastDialogCheckedUid = uid;
+
+    final privacySelectedAt = userData['privacySelectedAt'];
+    final needsPrivacySelection = privacySelectedAt == null;
+
+    final currentVisibility =
+        (userData['profileVisibility'] ?? 'minimal').toString();
+
+    if (needsPrivacySelection && mounted) {
+      _privacyDialogShown = true;
+      _showPrivacySelectionDialog(currentVisibility);
     }
   }
 
@@ -46,10 +52,10 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen> {
       barrierDismissible: false,
       builder: (context) => PrivacySelectionDialog(
         initialSelection: ProfileVisibility.fromString(currentVisibility),
-        canDismiss: false, // Cannot skip first-time selection
+        canDismiss: false,
         onConfirm: (selectedLevel) async {
-          // Update user's privacy level in Firestore
           final currentUser = ref.read(firebaseAuthProvider).currentUser;
+
           if (currentUser != null) {
             await FirebaseFirestore.instance
                 .collection('users')
@@ -57,8 +63,9 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen> {
                 .update({
               'profileVisibility': selectedLevel.value,
               'privacySelectedAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
             });
-            
+
             if (mounted) {
               Navigator.of(context).pop();
             }
@@ -68,57 +75,142 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen> {
     );
   }
 
+  Widget _buildAccessDenied(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Access Denied',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            const Text('Your account is not authorized for this application.'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                ref.read(authViewModelProvider.notifier).signOut();
+              },
+              child: const Text('Sign Out'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _normalizeRole(Map<String, dynamic> userData) {
+    final rawRole = (userData['role'] ??
+            userData['userRole'] ??
+            userData['userType'] ??
+            userData['type'] ??
+            'attendee')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    if (rawRole == 'administrator') return 'admin';
+    if (rawRole == 'admins') return 'admin';
+    if (rawRole == 'speaker_user') return 'speaker';
+    if (rawRole == 'staff_user') return 'staff';
+    if (rawRole == 'user') return 'attendee';
+
+    return rawRole;
+  }
+
+  Widget _getShellByRole(String role) {
+    switch (role) {
+      case 'admin':
+        return AdminShell(
+          key: ValueKey('admin_shell_$role'),
+        );
+
+      case 'speaker':
+        return SpeakerShell(
+          key: ValueKey('speaker_shell_$role'),
+        );
+
+      case 'staff':
+        return StaffShell(
+          key: ValueKey('staff_shell_$role'),
+        );
+
+      case 'attendee':
+      default:
+        return AttendeeShell(
+          key: ValueKey('attendee_shell_$role'),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final userProfileAsync = ref.watch(userAppProfileStreamProvider);
+    final firebaseUser = ref.watch(firebaseAuthProvider).currentUser;
 
-    return userProfileAsync.when(
-      data: (user) {
-        if (user == null) {
-          // This should never happen due to AuthGate-level security, but as fallback
+    if (firebaseUser == null) {
+      return _buildAccessDenied(context);
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(firebaseUser.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting &&
+            !snapshot.hasData) {
+          return const Scaffold(
+            body: LoadingIndicator(),
+          );
+        }
+
+        if (snapshot.hasError) {
           return Scaffold(
             body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
-                  const SizedBox(height: 16),
-                  Text('Access Denied', style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 8),
-                  const Text('Your account is not authorized for this application.'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => ref.read(authViewModelProvider.notifier).signOut(),
-                    child: const Text('Sign Out'),
-                  ),
-                ],
-              ),
+              child: Text('Error loading profile: ${snapshot.error}'),
             ),
           );
         }
 
-        // Status checking is now handled by AuthGate, so we only route by role here
-        // Route to the correct shell based on user role
-        Widget shell;
-        switch (user.role) {
-          case 'admin':
-            shell = const AdminShell();
-            break;
-          case 'speaker':
-            shell = const SpeakerShell();
-            break;
-          case 'staff':
-            // Staff users get separate UI identical to attendees but with QR check-in privileges
-            shell = const StaffShell();
-            break;
-          case 'attendee':
-          default:
-            shell = const AttendeeShell();
+        if (!snapshot.hasData || !snapshot.data!.exists) {
+          return _buildAccessDenied(context);
         }
-        return InAppNotificationHandler(child: shell);
+
+        final userData = snapshot.data!.data();
+
+        if (userData == null) {
+          return _buildAccessDenied(context);
+        }
+
+        final role = _normalizeRole(userData);
+
+        debugPrint('MainHubScreen current user uid: ${firebaseUser.uid}');
+        debugPrint('MainHubScreen current role: $role');
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _checkAndShowPrivacySelectionDialog(
+            uid: firebaseUser.uid,
+            userData: userData,
+          );
+        });
+
+        final shell = _getShellByRole(role);
+
+        return KeyedSubtree(
+          key: ValueKey('main_hub_shell_${firebaseUser.uid}_$role'),
+          child: InAppNotificationHandler(
+            key: ValueKey('main_hub_notification_${firebaseUser.uid}_$role'),
+            child: shell,
+          ),
+        );
       },
-      loading: () => const Scaffold(body: LoadingIndicator()),
-      error: (err, stack) => Scaffold(body: Center(child: Text('Error loading profile: $err'))),
     );
   }
 }

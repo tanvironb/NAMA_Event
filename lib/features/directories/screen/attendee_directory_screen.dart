@@ -30,7 +30,9 @@ class _AttendeeDirectoryScreenState
   }
 
   List<AppUser> _applySearchAndPrivacyFilter(
-      List<AppUser> attendees, AppUser? currentUser) {
+    List<AppUser> attendees,
+    AppUser? currentUser,
+  ) {
     if (currentUser == null) return [];
 
     final viewerId = currentUser.uid;
@@ -43,6 +45,7 @@ class _AttendeeDirectoryScreenState
     if (_searchQuery.isEmpty) return filtered;
 
     final query = _searchQuery.toLowerCase();
+
     return filtered.where((user) {
       final displayName =
           user.getDisplayNameFor(viewerId, viewerIsAdmin).toLowerCase();
@@ -58,8 +61,7 @@ class _AttendeeDirectoryScreenState
     }).toList();
   }
 
-  void _handleUserTap(
-      BuildContext context, AppUser user, AppUser currentUser) {
+  void _handleUserTap(BuildContext context, AppUser user, AppUser currentUser) {
     final viewerId = currentUser.uid;
     final viewerIsAdmin = currentUser.role == 'admin';
     final privacy = ProfileVisibility.fromString(user.profileVisibility);
@@ -71,8 +73,10 @@ class _AttendeeDirectoryScreenState
         SnackBar(
           content: Row(
             children: [
-              Text(AppIcons.privacyAnonymous,
-                  style: const TextStyle(fontSize: 16)),
+              Text(
+                AppIcons.privacyAnonymous,
+                style: const TextStyle(fontSize: 16),
+              ),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
@@ -88,9 +92,11 @@ class _AttendeeDirectoryScreenState
       return;
     }
 
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (context) => UserDetailsScreen(userId: user.uid),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => UserDetailsScreen(userId: user.uid),
+      ),
+    );
   }
 
   @override
@@ -102,21 +108,32 @@ class _AttendeeDirectoryScreenState
       onTap: () => FocusScope.of(context).unfocus(),
       child: Column(
         children: [
-          // 🔹 SMALLER SEARCH BOX
+          // Search box like Messages page
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
             child: SizedBox(
-              height: 42,
+              height: 40,
               child: TextField(
                 controller: _searchController,
                 style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Search attendees...',
-                  hintStyle: const TextStyle(fontSize: 13),
-                  prefixIcon: const Icon(Icons.search, size: 20),
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade500,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search,
+                    size: 19,
+                    color: Colors.grey.shade500,
+                  ),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
+                          icon: Icon(
+                            Icons.clear,
+                            size: 18,
+                            color: Colors.grey.shade500,
+                          ),
                           onPressed: () {
                             setState(() {
                               _searchController.clear();
@@ -125,12 +142,22 @@ class _AttendeeDirectoryScreenState
                           },
                         )
                       : null,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+                  filled: true,
+                  fillColor: const Color(0xFFF7F7F7),
+                  contentPadding: EdgeInsets.zero,
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: BorderSide(
+                      color: Colors.grey.shade300,
+                      width: 1,
+                    ),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(22),
+                    borderSide: const BorderSide(
+                      color: Color(0xFF24158A),
+                      width: 1,
+                    ),
                   ),
                 ),
                 onChanged: (value) {
@@ -147,34 +174,44 @@ class _AttendeeDirectoryScreenState
               data: (currentUser) {
                 if (currentUser == null) {
                   return const Center(
-                      child: Text('Login required',
-                          style: TextStyle(fontSize: 13)));
+                    child: Text(
+                      'Login required',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  );
                 }
 
                 final viewerIsAdmin = currentUser.role == 'admin';
 
                 return attendeesAsync.when(
                   data: (attendees) {
-                    final filtered =
+                    final filteredAttendees =
                         _applySearchAndPrivacyFilter(attendees, currentUser);
 
-                    if (filtered.isEmpty) {
-                      return const Center(
+                    if (filteredAttendees.isEmpty) {
+                      return Center(
                         child: Text(
-                          'No results',
-                          style: TextStyle(fontSize: 13),
+                          _searchQuery.isEmpty
+                              ? 'No attendees to display.'
+                              : 'No attendees match your search.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 13),
                         ),
                       );
                     }
 
                     return ListView.builder(
-                      itemCount: filtered.length,
+                      itemCount: filteredAttendees.length,
                       itemBuilder: (context, index) {
-                        final user = filtered[index];
+                        final user = filteredAttendees[index];
+                        final privacy =
+                            ProfileVisibility.fromString(user.profileVisibility);
                         final isConnected =
                             user.isConnectedWith(currentUser.uid);
                         final displayName = user.getDisplayNameFor(
-                            currentUser.uid, viewerIsAdmin);
+                          currentUser.uid,
+                          viewerIsAdmin,
+                        );
 
                         return UserListTile(
                           user: user,
@@ -184,13 +221,55 @@ class _AttendeeDirectoryScreenState
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (isConnected)
-                                const Text(
-                                  '✓',
-                                  style: TextStyle(
-                                      fontSize: 12, color: Colors.green),
+                              if (isConnected && !viewerIsAdmin)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 7,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.successGreen
+                                        .withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: AppColors.successGreen,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        AppIcons.qrCodeScanner,
+                                        size: 11,
+                                        color: AppColors.successGreen,
+                                      ),
+                                      const SizedBox(width: 3),
+                                      const Text(
+                                        'Connected',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.successGreen,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+
                               const SizedBox(width: 6),
+
+                              if (viewerIsAdmin &&
+                                  privacy == ProfileVisibility.anonymous)
+                                Text(
+                                  AppIcons.privacyAnonymous,
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+
+                              if (viewerIsAdmin &&
+                                  privacy == ProfileVisibility.anonymous)
+                                const SizedBox(width: 6),
+
                               const Icon(Icons.chevron_right, size: 18),
                             ],
                           ),
@@ -199,13 +278,21 @@ class _AttendeeDirectoryScreenState
                     );
                   },
                   loading: () => const LoadingIndicator(),
-                  error: (err, stack) =>
-                      Center(child: Text('Error', style: TextStyle(fontSize: 13))),
+                  error: (err, stack) => const Center(
+                    child: Text(
+                      'Error',
+                      style: TextStyle(fontSize: 13),
+                    ),
+                  ),
                 );
               },
               loading: () => const LoadingIndicator(),
-              error: (err, stack) =>
-                  Center(child: Text('Error', style: TextStyle(fontSize: 13))),
+              error: (err, stack) => const Center(
+                child: Text(
+                  'Error',
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
             ),
           ),
         ],

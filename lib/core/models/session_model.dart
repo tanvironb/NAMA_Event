@@ -11,19 +11,10 @@ class Session {
   final List<String> speakerIds;
   final String liveStreamUrl;
   final String qrCodePayload;
-
-  /// Used for homepage filters:
-  /// Education, Ai, Social, Scholarship, etc.
   final String category;
+  final String imageUrl;
 
-  /// Priority rating for live stream sessions (1-5 scale)
-  /// 1 = Low priority (optional breakout sessions)
-  /// 2 = Below normal (specialized workshops)
-  /// 3 = Normal priority (regular talks)
-  /// 4 = High priority (featured speakers, important announcements)
-  /// 5 = Maximum priority (keynotes, urgent updates, main event streams)
   final int priority;
-
   final String partnerId;
   final bool isChatEnabled;
   final String closedBy;
@@ -32,7 +23,6 @@ class Session {
   final List<String> uniqueParticipants;
   final List<String> mutedUsers;
 
-  // Enhanced Analytics Fields
   final DateTime? firstMessageAt;
   final DateTime? lastMessageAt;
   final int deletedMessagesCount;
@@ -40,7 +30,6 @@ class Session {
   final List<String> muteHistory;
   final int totalMuteActions;
 
-  // Feedback Analytics Fields
   final int totalFeedbacks;
   final int totalRating;
   final double averageRating;
@@ -57,6 +46,7 @@ class Session {
     this.liveStreamUrl = '',
     this.qrCodePayload = '',
     this.category = '',
+    this.imageUrl = '',
     this.priority = 3,
     this.partnerId = '',
     this.isChatEnabled = true,
@@ -95,6 +85,7 @@ class Session {
       liveStreamUrl: data['liveStreamUrl'] as String? ?? '',
       qrCodePayload: data['qrCodePayload'] as String? ?? '',
       category: data['category'] as String? ?? '',
+      imageUrl: data['imageUrl'] as String? ?? '',
       priority: data['priority'] as int? ?? 3,
       partnerId: data['partnerId'] as String? ?? '',
       isChatEnabled: data['isChatEnabled'] as bool? ?? true,
@@ -122,47 +113,37 @@ class Session {
     );
   }
 
-  /// Check if the session has ended (based on end time)
   bool get hasEnded => DateTime.now().isAfter(endTime);
 
-  /// Check if we're within 35 minutes after session ended (grace period for speakers)
   bool get isWithinGracePeriod {
     if (!hasEnded) return false;
     final gracePeriodEnd = endTime.add(const Duration(minutes: 35));
     return DateTime.now().isBefore(gracePeriodEnd);
   }
 
-  /// Check if the session is currently active (between start and end time)
   bool get isActive =>
       DateTime.now().isAfter(startTime) && DateTime.now().isBefore(endTime);
 
-  /// Check if chat is available (enabled and session hasn't ended)
   bool get isChatAvailable => isChatEnabled && !hasEnded;
 
-  /// Check if chat was closed by admin (admin lock takes precedence)
   bool get isAdminLocked => !isChatEnabled && closedBy == 'admin';
 
-  /// Check if user is muted in this session
   bool isUserMuted(String userId) => mutedUsers.contains(userId);
 
-  /// Check if a speaker can still send messages (within grace period)
   bool canSpeakerSendAfterEnd(String userId) {
     return speakerIds.contains(userId) && isWithinGracePeriod;
   }
 
-  /// Calculate average messages per participant
   double get averageMessagesPerParticipant {
     if (uniqueParticipants.isEmpty) return 0.0;
     return totalMessages / uniqueParticipants.length;
   }
 
-  /// Calculate chat duration in minutes
   int get chatDurationMinutes {
     if (firstMessageAt == null || lastMessageAt == null) return 0;
     return lastMessageAt!.difference(firstMessageAt!).inMinutes;
   }
 
-  /// Get engagement rate (unique participants / checked in attendees)
   double get engagementRate {
     if (checkedInAttendees.isEmpty) return 0.0;
     return (uniqueParticipants.length / checkedInAttendees.length) * 100;

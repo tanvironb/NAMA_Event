@@ -1,4 +1,5 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
@@ -8,7 +9,6 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/common_widgets/session_list_tile.dart';
-
 
 class AgendaScreen extends ConsumerWidget {
   const AgendaScreen({super.key});
@@ -22,7 +22,9 @@ class AgendaScreen extends ConsumerWidget {
       body: sessionsAsyncValue.when(
         data: (sessions) {
           if (sessions.isEmpty) {
-            return const Center(child: Text('No sessions scheduled yet.'));
+            return const Center(
+              child: Text('No sessions scheduled yet.'),
+            );
           }
 
           final sortedSessions = List<Session>.from(sessions)
@@ -35,34 +37,32 @@ class AgendaScreen extends ConsumerWidget {
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
-              /// 🔥 Floating Title (THIS IS THE FIX)
               SliverAppBar(
-  floating: true,
-  snap: true,
-  backgroundColor: Colors.white.withOpacity(0.92),
-  elevation: 0,
-  automaticallyImplyLeading: false,
-  titleSpacing: 26,
-  toolbarHeight: 70,
-  flexibleSpace: ClipRect(
-    child: BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-      child: Container(
-        color: Colors.white.withOpacity(0.72),
-      ),
-    ),
-  ),
-  title: const Text(
-    'Event Agenda',
-    style: TextStyle(
-      color: Color(0xFF0B0B83),
-      fontSize: 22,
-      fontWeight: FontWeight.w800,
-    ),
-  ),
-),
+                floating: true,
+                snap: true,
+                backgroundColor: Colors.white.withOpacity(0.92),
+                elevation: 0,
+                automaticallyImplyLeading: false,
+                titleSpacing: 26,
+                toolbarHeight: 70,
+                flexibleSpace: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    child: Container(
+                      color: Colors.white.withOpacity(0.72),
+                    ),
+                  ),
+                ),
+                title: const Text(
+                  'Event Agenda',
+                  style: TextStyle(
+                    color: Color(0xFF0B0B83),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
 
-              /// Content
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(26, 10, 26, 110),
                 sliver: SliverList(
@@ -130,7 +130,11 @@ class _DaySection extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.calendar_today_outlined, size: 21),
+              const Icon(
+                Icons.calendar_today_outlined,
+                size: 21,
+                color: Colors.black87,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -141,6 +145,7 @@ class _DaySection extends StatelessWidget {
                       style: const TextStyle(
                         fontSize: 13.5,
                         fontWeight: FontWeight.w800,
+                        color: Colors.black,
                       ),
                     ),
                     const SizedBox(height: 5),
@@ -148,6 +153,7 @@ class _DaySection extends StatelessWidget {
                       DateFormat('EEEE').format(date),
                       style: const TextStyle(
                         fontSize: 10.5,
+                        color: Colors.black87,
                       ),
                     ),
                   ],
@@ -155,7 +161,10 @@ class _DaySection extends StatelessWidget {
               ),
               Text(
                 '${sessions.length} Session${sessions.length == 1 ? '' : 's'}',
-                style: const TextStyle(fontSize: 10),
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Colors.black87,
+                ),
               ),
             ],
           ),
@@ -173,4 +182,3 @@ class _DaySection extends StatelessWidget {
     );
   }
 }
-//taahmmed123@gmail.com

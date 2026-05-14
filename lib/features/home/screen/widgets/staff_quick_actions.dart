@@ -1,19 +1,43 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
 import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
 import 'package:events_app_trueattempt/features/calendar/screens/my_calendar_screen.dart';
 
-/// Staff-specific Quick Actions Grid with rectangular buttons (2 per row)
 class StaffQuickActions extends ConsumerWidget {
-  const StaffQuickActions({super.key});
+  final ValueChanged<int>? onTabSelected;
+
+  const StaffQuickActions({
+    super.key,
+    this.onTabSelected,
+  });
+
+  static const List<Color> _cardColors = [
+    Color(0xFFEFF4FF),
+    Color(0xFFF3F0FF),
+    Color(0xFFEFFFF7),
+    Color(0xFFFFF6E8),
+    Color(0xFFFFEFF3),
+    Color(0xFFEFFFFF),
+    Color(0xFFF6F4FF),
+    Color(0xFFF1F5F9),
+  ];
+
+  static const List<Color> _iconColors = [
+    Color(0xFF1D4ED8),
+    Color(0xFF5B21B6),
+    Color(0xFF047857),
+    Color(0xFFB45309),
+    Color(0xFFBE123C),
+    Color(0xFF0E7490),
+    Color(0xFF1B0F72),
+    Color(0xFF334155),
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Define staff quick action buttons
     final List<Map<String, dynamic>> staffActions = [
       {
         'icon': Icons.settings_outlined,
@@ -63,75 +87,69 @@ class StaffQuickActions extends ConsumerWidget {
       {
         'icon': Icons.hub_outlined,
         'label': 'Networking',
-        'onTap': () {
-          // Smoothly switch to Networking tab (index 2)
-          _switchToTab(context, 2);
-        },
+        'onTap': () => onTabSelected?.call(2),
       },
       {
         'icon': Icons.calendar_month_outlined,
         'label': 'Agenda',
-        'onTap': () {
-          // Smoothly switch to Agenda tab (index 1)
-          _switchToTab(context, 1);
-        },
+        'onTap': () => onTabSelected?.call(1),
       },
       {
         'icon': Icons.qr_code_scanner_outlined,
         'label': 'QR Scanner',
-        'onTap': () {
-          // Smoothly switch to QR Scanner tab (index 3)
-          _switchToTab(context, 3);
-        },
+        'onTap': () => onTabSelected?.call(3),
       },
     ];
 
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, // 2 buttons per row
-        crossAxisSpacing: 12.0,
-        mainAxisSpacing: 12.0,
-        childAspectRatio: 3.0, // Rectangular shape
+        crossAxisCount: 2,
+        crossAxisSpacing: 11,
+        mainAxisSpacing: 11,
+        childAspectRatio: 3.15,
       ),
       itemCount: staffActions.length,
       itemBuilder: (context, index) {
         final action = staffActions[index];
+        final bgColor = _cardColors[index % _cardColors.length];
+        final iconColor = _iconColors[index % _iconColors.length];
+
         return Material(
-          color: AppColors.namaDeepNavy, // Dark-ish blue background
-          elevation: 3,
-          borderRadius: BorderRadius.circular(12),
+          color: bgColor,
+          elevation: 0,
+          borderRadius: BorderRadius.circular(20),
           child: InkWell(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(20),
             onTap: action['onTap'],
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
               child: Row(
                 children: [
                   Icon(
                     action['icon'],
-                    size: 24,
-                    color: Colors.white, // White icon
+                    size: 20,
+                    color: iconColor,
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 9),
                   Expanded(
                     child: Text(
                       action['label'],
                       style: const TextStyle(
-                        color: Colors.white, // White text
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                        fontSize: 12.3,
+                        fontWeight: FontWeight.w700,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: Colors.white54,
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 12,
+                    color: iconColor.withOpacity(0.55),
                   ),
                 ],
               ),
@@ -140,47 +158,5 @@ class StaffQuickActions extends ConsumerWidget {
         );
       },
     );
-  }
-
-  // Helper method to smoothly switch tabs using DefaultTabController
-  void _switchToTab(BuildContext context, int tabIndex) {
-    // Find the staff shell's scaffold and trigger tab change
-    // This will work if the staff shell uses a state key or provider
-    // For now, we'll just show a message to navigate using bottom nav
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    
-    String tabName;
-    switch (tabIndex) {
-      case 1:
-        tabName = 'Agenda';
-        break;
-      case 2:
-        tabName = 'Networking';
-        break;
-      case 3:
-        tabName = 'QR Scanner';
-        break;
-      default:
-        tabName = 'the desired tab';
-    }
-    
-    scaffoldMessenger.showSnackBar(
-      SnackBar(
-        content: Text('Opening $tabName...'),
-        duration: const Duration(milliseconds: 800),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-    
-    // Navigate by popping to root and then switching tab
-    // This assumes the staff shell is the root
-    Navigator.of(context).popUntil((route) => route.isFirst);
-    
-    // Use a post-frame callback to switch tab after navigation completes
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Try to find the staff shell and switch its tab
-      // This would require the staff shell to expose a method or use a provider
-      // For now, the navigation to root will at least show the home with the correct tab accessible
-    });
   }
 }

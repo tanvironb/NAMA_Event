@@ -1,22 +1,31 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/session_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
+import 'package:events_app_trueattempt/core/models/session_model.dart';
+
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
 import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
-import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
+
 import 'package:events_app_trueattempt/features/home/screen/widgets/speaker_carousel.dart';
-import 'package:events_app_trueattempt/features/home/screen/widgets/partner_carousel.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/venue_maps_carousel.dart';
+
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 
 class HomeDashboardScreen extends ConsumerStatefulWidget {
-  const HomeDashboardScreen({super.key});
+  final VoidCallback? onSeeAllUpcomingSessions;
+
+  const HomeDashboardScreen({
+    super.key,
+    this.onSeeAllUpcomingSessions,
+  });
 
   @override
   ConsumerState<HomeDashboardScreen> createState() =>
@@ -28,7 +37,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   final PageController _eventPageController = PageController();
   Timer? _eventSliderTimer;
+
   int _currentEventPage = 0;
+  String _lastSignature = '';
 
   static const Color primaryBlue = Color(0xFF0D1496);
   static const Color cardGrey = Color(0xFFEFEFEF);
@@ -40,19 +51,24 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     super.dispose();
   }
 
-  void _startEventAutoSlide(int itemCount) {
+  void _setupAutoSlide(int count, String signature) {
+    if (count <= 1) {
+      _eventSliderTimer?.cancel();
+      _eventSliderTimer = null;
+      _lastSignature = signature;
+      return;
+    }
+
+    if (_eventSliderTimer != null && _lastSignature == signature) return;
+
     _eventSliderTimer?.cancel();
+    _lastSignature = signature;
+    _currentEventPage = 0;
 
-    if (itemCount <= 1) return;
-
-    _eventSliderTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _eventSliderTimer = Timer.periodic(const Duration(seconds: 6), (_) {
       if (!_eventPageController.hasClients) return;
 
-      _currentEventPage++;
-
-      if (_currentEventPage >= itemCount) {
-        _currentEventPage = 0;
-      }
+      _currentEventPage = (_currentEventPage + 1) % count;
 
       _eventPageController.animateToPage(
         _currentEventPage,
@@ -62,40 +78,102 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     });
   }
 
+  Future<String> _getCurrentUserName(String uid, String? displayName) async {
+    if (displayName != null && displayName.trim().isNotEmpty) {
+      return displayName.trim().split(' ').first;
+    }
+
+    try {
+      final doc =
+          await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        final name = (data['name'] ??
+                data['fullName'] ??
+                data['displayName'] ??
+                data['firstName'] ??
+                '')
+            .toString()
+            .trim();
+
+        if (name.isNotEmpty) {
+          return name.split(' ').first;
+        }
+      }
+    } catch (_) {}
+
+    return 'User';
+  }
+
+  Future<String> _getSpeakerName(Session session) async {
+    if (session.speakerIds.isEmpty) return 'Host';
+
+    final firestore = FirebaseFirestore.instance;
+    final names = <String>[];
+
+    for (final id in session.speakerIds) {
+      var doc = await firestore.collection('speakers').doc(id).get();
+
+      if (!doc.exists) {
+        doc = await firestore.collection('users').doc(id).get();
+      }
+
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data()!;
+        final name = (data['name'] ??
+                data['fullName'] ??
+                data['displayName'] ??
+                data['username'] ??
+                '')
+            .toString()
+            .trim();
+
+        if (name.isNotEmpty) names.add(name);
+      }
+    }
+
+    if (names.isEmpty) return 'Host';
+
+    if (names.length == 1) return names.first;
+
+    return names.map((e) => e.split(' ').first).join(', ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final sessionsAsync = ref.watch(sessionsStreamProvider);
-    final activeLiveSessionAsync = ref.watch(activeLiveSessionProvider);
     final user = ref.watch(firebaseAuthProvider).currentUser;
-
-    final name = user?.displayName?.trim().isNotEmpty == true
-        ? user!.displayName!.split(' ').first
-        : 'Tanvir';
 
     return SafeArea(
       child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.only(bottom: 110),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _topHeader(context),
+            _header(context),
             const SizedBox(height: 22),
-
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                'Hi, $name!',
-                style: const TextStyle(
-                  color: primaryBlue,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w500,
-                ),
+              child: FutureBuilder<String>(
+                future: user == null
+                    ? Future.value('User')
+                    : _getCurrentUserName(user.uid, user.displayName),
+                builder: (context, snapshot) {
+                  final name = snapshot.data ?? 'User';
+
+                  return Text(
+                    'Hi, $name!',
+                    style: const TextStyle(
+                      fontSize: 28,
+                      color: primaryBlue,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  );
+                },
               ),
             ),
-
             const SizedBox(height: 2),
-
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 32),
               child: Text(
@@ -107,54 +185,33 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 18),
-
             sessionsAsync.when(
-              data: (sessions) => _categoryChips(sessions),
-              loading: () => _categoryChips([]),
-              error: (_, __) => _categoryChips([]),
+              data: (s) => _filters(s),
+              loading: () => _filters([]),
+              error: (_, __) => _filters([]),
             ),
-
             const SizedBox(height: 34),
-
             _sectionTitle(
               context,
-              title: 'Upcoming Sessions',
+              'Upcoming Sessions',
               showSeeAll: true,
-              onSeeAll: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const AgendaScreen()),
-                );
-              },
+              onSeeAll: widget.onSeeAllUpcomingSessions,
             ),
-
             const SizedBox(height: 14),
-
-            _upcomingEventsSlider(
-              context,
-              sessionsAsync,
-              activeLiveSessionAsync,
-            ),
-
+            _slider(sessionsAsync),
             const SizedBox(height: 34),
-
-            _sectionTitle(context, title: 'Speakers'),
+            _sectionTitle(context, 'Speakers'),
             const SizedBox(height: 12),
             const SpeakerCarousel(),
-
             const SizedBox(height: 30),
-
-            _sectionTitle(context, title: 'Venues'),
+            _sectionTitle(context, 'Venues'),
             const SizedBox(height: 12),
             const VenueMapsCarousel(),
-
             const SizedBox(height: 30),
-
-            _sectionTitle(context, title: 'Partners'),
-            const SizedBox(height: 12),
-            const PartnerCarousel(),
-
+            _sectionTitle(context, 'Partners'),
+            const SizedBox(height: 14),
+            _partnersSection(),
             const SizedBox(height: 30),
           ],
         ),
@@ -162,7 +219,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  Widget _topHeader(BuildContext context) {
+  Widget _header(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 22, 32, 0),
       child: Row(
@@ -177,38 +234,31 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
             },
           ),
           const Spacer(),
-          _roundIconButton(
-            child: const MessageIconWithBadge(),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ConversationsScreen()),
-              );
-            },
-          ),
+          _icon(const MessageIconWithBadge(), () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ConversationsScreen()),
+            );
+          }),
           const SizedBox(width: 14),
-          _roundIconButton(
-            child: const NotificationIconWithBadge(),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-              );
-            },
-          ),
+          _icon(const NotificationIconWithBadge(), () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+            );
+          }),
         ],
       ),
     );
   }
 
-  Widget _roundIconButton({
-    required Widget child,
-    required VoidCallback onTap,
-  }) {
+  Widget _icon(Widget child, VoidCallback onTap) {
     return Container(
       height: 42,
       width: 42,
       decoration: BoxDecoration(
-        color: Colors.white,
         shape: BoxShape.circle,
+        color: Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.14),
@@ -219,13 +269,13 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       ),
       child: IconButton(
         padding: EdgeInsets.zero,
-        icon: child,
         onPressed: onTap,
+        icon: child,
       ),
     );
   }
 
-  Widget _categoryChips(List<dynamic> sessions) {
+  Widget _filters(List sessions) {
     final filters = _getFiltersFromSessions(sessions);
 
     if (!filters.contains(selectedFilter)) {
@@ -235,18 +285,19 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     return SizedBox(
       height: 30,
       child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 30),
         scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 30),
         itemCount: filters.length,
         separatorBuilder: (_, __) => const SizedBox(width: 18),
         itemBuilder: (context, index) {
-          final item = filters[index];
-          final isSelected = selectedFilter == item;
+          final f = filters[index];
+          final selected = selectedFilter == f;
 
           return GestureDetector(
             onTap: () {
               setState(() {
-                selectedFilter = item;
+                selectedFilter = f;
+                _lastSignature = '';
                 _currentEventPage = 0;
               });
 
@@ -258,17 +309,15 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               duration: const Duration(milliseconds: 200),
               height: 24,
               padding: const EdgeInsets.symmetric(horizontal: 15),
-              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isSelected
-                    ? primaryBlue
-                    : primaryBlue.withOpacity(0.15),
+                color: selected ? primaryBlue : primaryBlue.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
+              alignment: Alignment.center,
               child: Text(
-                item,
+                f,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : primaryBlue,
+                  color: selected ? Colors.white : primaryBlue,
                   fontSize: 9,
                   fontWeight: FontWeight.w700,
                 ),
@@ -280,14 +329,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  List<String> _getFiltersFromSessions(List<dynamic> sessions) {
-    final Set<String> filters = {'All'};
+  List<String> _getFiltersFromSessions(List sessions) {
+    final filters = <String>{'All'};
 
     for (final session in sessions) {
-      final category = _getSessionCategory(session);
+      final category = (session.category ?? '').toString().trim();
 
-      if (category.trim().isNotEmpty) {
-        filters.add(category.trim());
+      if (category.isNotEmpty) {
+        filters.add(category);
       }
     }
 
@@ -298,21 +347,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     return filters.toList();
   }
 
-  String _getSessionCategory(dynamic session) {
-    try {
-      final value = session.category;
-
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString().trim();
-      }
-    } catch (_) {}
-
-    return '';
-  }
-
   Widget _sectionTitle(
-    BuildContext context, {
-    required String title,
+    BuildContext context,
+    String title, {
     bool showSeeAll = false,
     VoidCallback? onSeeAll,
   }) {
@@ -323,8 +360,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           Text(
             title,
             style: const TextStyle(
-              color: primaryBlue,
               fontSize: 20,
+              color: primaryBlue,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -335,8 +372,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               child: const Text(
                 'See All',
                 style: TextStyle(
-                  color: primaryBlue,
                   fontSize: 9,
+                  color: primaryBlue,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -346,43 +383,38 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  Widget _upcomingEventsSlider(
-    BuildContext context,
-    AsyncValue<dynamic> sessionsAsync,
-    AsyncValue<dynamic> activeLiveSessionAsync,
-  ) {
+  Widget _slider(AsyncValue<List<Session>> sessionsAsync) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: SizedBox(
-        height: 215,
+        height: 255,
         child: sessionsAsync.when(
           data: (sessions) {
             final now = DateTime.now();
 
-            final sortedSessions = List<dynamic>.from(sessions)
-              ..sort((a, b) => a.startTime.compareTo(b.startTime));
+            final list = sessions.where((s) {
+              final upcoming =
+                  s.startTime.isAfter(now) || s.endTime.isAfter(now);
 
-            final filteredSessions = sortedSessions.where((session) {
-              final startTime = session.startTime as DateTime;
-              final endTime = session.endTime as DateTime;
-
-              final isUpcoming = startTime.isAfter(now) || endTime.isAfter(now);
-
-              if (!isUpcoming) return false;
+              if (!upcoming) return false;
 
               if (selectedFilter == 'All') return true;
 
-              final category = _getSessionCategory(session).toLowerCase();
+              final category = s.category.trim().toLowerCase();
               final selected = selectedFilter.trim().toLowerCase();
 
               return category == selected;
-            }).toList();
+            }).toList()
+              ..sort((a, b) => a.startTime.compareTo(b.startTime));
+
+            final signature =
+                '$selectedFilter-${list.map((e) => e.id).join('|')}';
 
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              _startEventAutoSlide(filteredSessions.length);
+              _setupAutoSlide(list.length, signature);
             });
 
-            if (filteredSessions.isEmpty) {
+            if (list.isEmpty) {
               return Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
@@ -392,8 +424,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 child: Center(
                   child: Text(
                     selectedFilter == 'All'
-                        ? 'No upcoming events available.'
-                        : 'No upcoming event for $selectedFilter.',
+                        ? 'No upcoming sessions available.'
+                        : 'No upcoming session for $selectedFilter.',
                     style: const TextStyle(
                       color: Colors.black54,
                       fontSize: 13,
@@ -406,51 +438,39 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
             return PageView.builder(
               controller: _eventPageController,
-              itemCount: filteredSessions.length,
+              itemCount: list.length,
               onPageChanged: (index) {
                 _currentEventPage = index;
               },
-              itemBuilder: (context, index) {
-                final session = filteredSessions[index];
+              itemBuilder: (_, i) {
+                final s = list[i];
 
-                return _upcomingEventCard(
-                  context,
-                  session,
-                  activeLiveSessionAsync,
+                return FutureBuilder<String>(
+                  future: _getSpeakerName(s),
+                  builder: (_, snap) {
+                    final speaker = snap.data ?? 'Loading speaker...';
+                    return _card(s, speaker);
+                  },
                 );
               },
             );
           },
           loading: () => const Center(child: LoadingIndicator()),
-          error: (err, stack) {
-            return Center(
-              child: Text(
-                'Failed to load sessions.',
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
-            );
-          },
+          error: (_, __) => const Center(child: Text('Error')),
         ),
       ),
     );
   }
 
-  Widget _upcomingEventCard(
-    BuildContext context,
-    dynamic session,
-    AsyncValue<dynamic> activeLiveSessionAsync,
-  ) {
-    final startDate = session.startTime as DateTime;
-
-    final day = DateFormat('dd').format(startDate);
-    final month = DateFormat('MMM').format(startDate);
-    final time = DateFormat('h:mm a').format(startDate);
+  Widget _card(Session s, String speaker) {
+    final date = s.startTime;
 
     return GestureDetector(
       onTap: () {
-        Navigator.of(context).push(
+        Navigator.push(
+          context,
           MaterialPageRoute(
-            builder: (_) => SessionDetailScreen(session: session),
+            builder: (_) => SessionDetailScreen(session: s),
           ),
         );
       },
@@ -461,28 +481,42 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
         decoration: BoxDecoration(
           color: cardGrey,
           borderRadius: BorderRadius.circular(20),
-          // boxShadow: [
-          //   BoxShadow(
-          //     color: Colors.black.withOpacity(0.88),
-          //     blurRadius: 16,
-          //     spreadRadius: 4,
-          //     offset: const Offset(0, 6),
-          //   ),
-          // ],
         ),
         child: Column(
           children: [
-            Container(
-              height: 88,
-              width: double.infinity,
-              decoration: BoxDecoration(
+            ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: Container(
+                height: 125,
+                width: double.infinity,
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                child: s.imageUrl.isNotEmpty
+                    ? Image.network(
+                        s.imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+
+                          return const Center(
+                            child: SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: primaryBlue,
+                            size: 32,
+                          );
+                        },
+                      )
+                    : const SizedBox.shrink(),
               ),
             ),
-
-            const SizedBox(height: 10),
-
+            const SizedBox(height: 13),
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -494,25 +528,23 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            session.title,
+                            s.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Colors.black,
-                              fontSize: 13,
-                              height: 1.05,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              height: 1.08,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-
                           const Spacer(),
-
                           Text(
-                            'By: ${_getSessionHost(session)}',
+                            'By: $speaker',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
-                              color: Colors.black.withOpacity(0.75),
+                              color: Colors.black.withOpacity(0.65),
                               fontSize: 11,
                               fontWeight: FontWeight.w400,
                             ),
@@ -521,9 +553,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                       ),
                     ),
                   ),
-
                   const SizedBox(width: 10),
-
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
@@ -531,17 +561,17 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            day,
+                            DateFormat('dd').format(date),
                             style: const TextStyle(
                               color: Colors.black,
-                              fontSize: 28,
+                              fontSize: 31,
                               height: 0.9,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                           const SizedBox(width: 2),
                           Text(
-                            month,
+                            DateFormat('MMM').format(date),
                             style: const TextStyle(
                               color: Colors.black,
                               fontSize: 11,
@@ -550,32 +580,17 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                           ),
                         ],
                       ),
-
-                      const SizedBox(height: 3),
-
+                      const SizedBox(height: 5),
                       Text(
-                        time,
+                        DateFormat('h:mm a').format(date),
                         style: const TextStyle(
                           color: Colors.black,
                           fontSize: 11,
                           fontWeight: FontWeight.w400,
                         ),
                       ),
-
                       const Spacer(),
-
-                      activeLiveSessionAsync.when(
-                        data: (liveSession) {
-                          final isThisSessionLive =
-                              liveSession != null && liveSession.id == session.id;
-
-                          return _statusBadge(
-                            isThisSessionLive ? 'Live' : 'Online',
-                          );
-                        },
-                        loading: () => const SizedBox.shrink(),
-                        error: (_, __) => _statusBadge('Online'),
-                      ),
+                      _badge(s.location),
                     ],
                   ),
                 ],
@@ -587,155 +602,214 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  String _getSessionHost(dynamic session) {
-    try {
-      final value = session.hostName;
+  Widget _badge(String text) {
+    final safeText = text.trim().isNotEmpty ? text.trim() : 'Location';
 
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
-      }
-    } catch (_) {}
-
-    try {
-      final value = session.speakerName;
-
-      if (value != null && value.toString().trim().isNotEmpty) {
-        return value.toString();
-      }
-    } catch (_) {}
-
-    try {
-      final value = session.speakerIds;
-
-      if (value is List && value.isNotEmpty) {
-        return value.first.toString();
-      }
-    } catch (_) {}
-
-    return 'Host not available';
-  }
-
-  Widget _statusBadge(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: primaryBlue,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 105),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: primaryBlue,
+          borderRadius: BorderRadius.circular(13),
+        ),
+        child: Text(
+          safeText,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
     );
   }
+
+  Widget _partnersSection() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('events')
+            .where('isActive', isEqualTo: true)
+            .limit(1)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const SizedBox(
+              height: 120,
+              child: Center(child: LoadingIndicator()),
+            );
+          }
+
+          if (snapshot.hasError) {
+            return const SizedBox(
+              height: 80,
+              child: Center(
+                child: Text(
+                  'Failed to load partners',
+                  style: TextStyle(
+                    color: Colors.black54,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return _emptyPartners();
+          }
+
+          final eventData = snapshot.data!.docs.first.data();
+          final partnersRaw = eventData['partners'];
+
+          final partners = partnersRaw is List
+              ? partnersRaw
+                  .whereType<Map>()
+                  .map((item) => Map<String, dynamic>.from(item))
+                  .where((item) {
+                    final name = (item['name'] ?? '').toString().trim();
+                    final logoUrl = (item['logoUrl'] ?? '').toString().trim();
+                    return name.isNotEmpty || logoUrl.isNotEmpty;
+                  }).toList()
+              : <Map<String, dynamic>>[];
+
+          if (partners.isEmpty) {
+            return _emptyPartners();
+          }
+
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              const double spacing = 10;
+              const double runSpacing = 14;
+              final double itemWidth =
+                  (constraints.maxWidth - (spacing * 2)) / 3;
+
+              return Wrap(
+                alignment: WrapAlignment.center,
+                runAlignment: WrapAlignment.center,
+                spacing: spacing,
+                runSpacing: runSpacing,
+                children: partners.map((partner) {
+                  final name = (partner['name'] ?? '').toString().trim();
+                  final logoUrl = (partner['logoUrl'] ?? '').toString().trim();
+
+                  return SizedBox(
+                    width: itemWidth,
+                    child: _partnerItem(
+                      name: name,
+                      logoUrl: logoUrl,
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _emptyPartners() {
+    return const SizedBox(
+      height: 70,
+      child: Center(
+        child: Text(
+          'No partners yet',
+          style: TextStyle(
+            color: Colors.black54,
+            fontSize: 13,
+            fontWeight: FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _partnerItem({
+    required String name,
+    required String logoUrl,
+  }) {
+    final cleanLogoUrl = logoUrl.trim();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          height: 72,
+          width: 72,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: cleanLogoUrl.isEmpty
+                ? const Center(
+                    child: Icon(
+                      Icons.handshake_outlined,
+                      color: primaryBlue,
+                      size: 30,
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Image.network(
+                      cleanLogoUrl,
+                      fit: BoxFit.contain,
+                      gaplessPlayback: true,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+
+                        return const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        debugPrint('Attendee partner logo failed to load.');
+                        debugPrint('Partner name: $name');
+                        debugPrint('Partner logoUrl: $cleanLogoUrl');
+                        debugPrint('Partner logo error: $error');
+
+                        return const Center(
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: primaryBlue,
+                            size: 28,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          name.isEmpty ? 'Partner' : name,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: primaryBlue,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            height: 1.2,
+          ),
+        ),
+      ],
+    );
+  }
 }
-
-// class _SessionDetailsPreviewPage extends StatelessWidget {
-//   final dynamic session;
-
-//   const _SessionDetailsPreviewPage({
-//     required this.session,
-//   });
-
-//   static const Color primaryBlue = Color(0xFF0D1496);
-
-//   @override
-//   Widget build(BuildContext context) {
-//     final startDate = session.startTime as DateTime;
-//     final endDate = session.endTime as DateTime;
-
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('Session Details'),
-//       ),
-//       body: SingleChildScrollView(
-//         padding: const EdgeInsets.all(24),
-//         child: Column(
-//           crossAxisAlignment: CrossAxisAlignment.start,
-//           children: [
-//             Container(
-//               height: 180,
-//               width: double.infinity,
-//               decoration: BoxDecoration(
-//                 color: const Color(0xFFEFEFEF),
-//                 borderRadius: BorderRadius.circular(20),
-//               ),
-//               child: const Icon(
-//                 Icons.event,
-//                 color: primaryBlue,
-//                 size: 60,
-//               ),
-//             ),
-
-//             const SizedBox(height: 24),
-
-//             Text(
-//               session.title,
-//               style: const TextStyle(
-//                 color: primaryBlue,
-//                 fontSize: 24,
-//                 fontWeight: FontWeight.bold,
-//               ),
-//             ),
-
-//             const SizedBox(height: 12),
-
-//             Text(
-//               session.description.toString().isNotEmpty
-//                   ? session.description
-//                   : 'No description available.',
-//               style: const TextStyle(
-//                 fontSize: 14,
-//                 height: 1.5,
-//                 color: Colors.black87,
-//               ),
-//             ),
-
-//             const SizedBox(height: 24),
-
-//             _infoRow(
-//               Icons.calendar_today,
-//               DateFormat('dd MMM yyyy').format(startDate),
-//             ),
-//             _infoRow(
-//               Icons.access_time,
-//               '${DateFormat('h:mm a').format(startDate)} - ${DateFormat('h:mm a').format(endDate)}',
-//             ),
-//             _infoRow(
-//               Icons.location_on_outlined,
-//               session.location.toString(),
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-
-//   Widget _infoRow(IconData icon, String text) {
-//     return Padding(
-//       padding: const EdgeInsets.only(bottom: 14),
-//       child: Row(
-//         children: [
-//           Icon(icon, color: primaryBlue, size: 20),
-//           const SizedBox(width: 12),
-//           Expanded(
-//             child: Text(
-//               text,
-//               style: const TextStyle(
-//                 fontSize: 14,
-//                 color: Colors.black87,
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
-
-//taahmmed123@gmail.com

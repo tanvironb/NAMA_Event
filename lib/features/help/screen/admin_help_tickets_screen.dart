@@ -7,102 +7,202 @@ import 'package:events_app_trueattempt/features/messaging/screen/new_conversatio
 import 'package:timeago/timeago.dart' as timeago;
 
 class AdminHelpTicketsScreen extends ConsumerStatefulWidget {
-  const AdminHelpTicketsScreen({super.key});
+  final String? eventId;
+  final String? eventName;
+
+  const AdminHelpTicketsScreen({
+    super.key,
+    this.eventId,
+    this.eventName,
+  });
+
+  bool get isEventSpecific => eventId != null && eventId!.isNotEmpty;
 
   @override
-  ConsumerState<AdminHelpTicketsScreen> createState() => _AdminHelpTicketsScreenState();
+  ConsumerState<AdminHelpTicketsScreen> createState() =>
+      _AdminHelpTicketsScreenState();
 }
 
-class _AdminHelpTicketsScreenState extends ConsumerState<AdminHelpTicketsScreen> {
+class _AdminHelpTicketsScreenState
+    extends ConsumerState<AdminHelpTicketsScreen> {
   String _selectedFilter = 'all';
 
   @override
   Widget build(BuildContext context) {
-    final ticketsStream = ref.watch(helpRepositoryProvider).getAllTicketsStream();
+    final ticketsStream = widget.isEventSpecific
+        ? ref
+            .watch(helpRepositoryProvider)
+            .getTicketsByEventStream(widget.eventId!)
+        : ref.watch(helpRepositoryProvider).getAllTicketsStream();
 
     return Scaffold(
       backgroundColor: AppColors.namaWhite,
-      appBar: AppBar(
-        title: const Text('Help Tickets'),
-        backgroundColor: AppColors.namaNavyBlue,
-        foregroundColor: Colors.white,
-      ),
-      body: Column(
-        children: [
-          // Filter chips
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildFilterChip('all', 'All'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(TicketStatus.pending, 'Pending'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(TicketStatus.critical, 'Critical'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(TicketStatus.processing, 'Processing'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(TicketStatus.processed, 'Processed'),
-                  const SizedBox(width: 8),
-                  _buildFilterChip(TicketStatus.spam, 'Spam'),
-                ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildHeader(context),
+            _buildFilters(),
+            Expanded(
+              child: StreamBuilder<List<HelpTicket>>(
+                stream: ticketsStream,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        color: AppColors.namaNavyBlue,
+                      ),
+                    );
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Text(
+                          'Error: ${snapshot.error}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                    );
+                  }
+
+                  final tickets = snapshot.data ?? [];
+
+                  final filteredTickets = _selectedFilter == 'all'
+                      ? tickets
+                      : tickets
+                          .where((ticket) => ticket.status == _selectedFilter)
+                          .toList();
+
+                  if (filteredTickets.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.inbox_outlined,
+                            size: 48,
+                            color: AppColors.namaMediumGray,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            widget.isEventSpecific
+                                ? 'No tickets found for this event'
+                                : 'No tickets found',
+                            style: TextStyle(
+                              color: AppColors.namaMediumGray,
+                              fontSize: 13,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                    itemCount: filteredTickets.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final ticket = filteredTickets[index];
+                      return _buildTicketCard(ticket);
+                    },
+                  );
+                },
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 16, 8),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back),
+            color: AppColors.namaNavyBlue,
+            iconSize: 22,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(
+              minWidth: 36,
+              minHeight: 36,
+            ),
           ),
-
-          // Tickets list
+          const SizedBox(width: 4),
           Expanded(
-            child: StreamBuilder<List<HelpTicket>>(
-              stream: ticketsStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-
-                final tickets = snapshot.data ?? [];
-                final filteredTickets = _selectedFilter == 'all'
-                    ? tickets
-                    : tickets.where((t) => t.status == _selectedFilter).toList();
-
-                if (filteredTickets.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 64,
-                          color: AppColors.namaMediumGray,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No tickets found',
-                          style: TextStyle(
-                            color: AppColors.namaMediumGray,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Help Tickets',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.namaNavyBlue,
+                    height: 1.1,
+                  ),
+                ),
+                if (widget.isEventSpecific)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      widget.eventName ?? '',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.namaMediumGray,
+                        fontWeight: FontWeight.w400,
+                      ),
                     ),
-                  );
-                }
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                return ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: filteredTickets.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final ticket = filteredTickets[index];
-                    return _buildTicketCard(ticket);
-                  },
-                );
-              },
+  Widget _buildFilters() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 0, 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Filters',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.namaNavyBlue,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.only(right: 16),
+            child: Row(
+              children: [
+                _buildFilterChip('all', 'All'),
+                const SizedBox(width: 8),
+                _buildFilterChip(TicketStatus.pending, 'Pending'),
+                const SizedBox(width: 8),
+                _buildFilterChip(TicketStatus.critical, 'Critical'),
+                const SizedBox(width: 8),
+                _buildFilterChip(TicketStatus.processing, 'Processing'),
+                const SizedBox(width: 8),
+                _buildFilterChip(TicketStatus.processed, 'Processed'),
+                const SizedBox(width: 8),
+                _buildFilterChip(TicketStatus.spam, 'Spam'),
+              ],
             ),
           ),
         ],
@@ -112,41 +212,56 @@ class _AdminHelpTicketsScreenState extends ConsumerState<AdminHelpTicketsScreen>
 
   Widget _buildFilterChip(String value, String label) {
     final isSelected = _selectedFilter == value;
+
     return FilterChip(
       label: Text(label),
       selected: isSelected,
-      onSelected: (selected) {
+      onSelected: (_) {
         setState(() => _selectedFilter = value);
       },
-      backgroundColor: Colors.grey.shade100,
-      selectedColor: AppColors.namaNavyBlue.withOpacity(0.2),
+      showCheckmark: true,
+      checkmarkColor: AppColors.namaNavyBlue,
+      backgroundColor: Colors.white,
+      selectedColor: AppColors.namaNavyBlue.withOpacity(0.12),
+      side: BorderSide(
+        color: isSelected
+            ? AppColors.namaNavyBlue.withOpacity(0.25)
+            : Colors.grey.shade300,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
       labelStyle: TextStyle(
         color: isSelected ? AppColors.namaNavyBlue : Colors.grey.shade700,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+        fontSize: 12,
       ),
-      checkmarkColor: AppColors.namaNavyBlue,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
     );
   }
 
   Widget _buildTicketCard(HelpTicket ticket) {
     return Card(
-      elevation: 2,
+      elevation: 1.5,
+      color: Colors.white,
+      margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         side: BorderSide(
-          color: _getStatusColor(ticket.status).withOpacity(0.3),
-          width: 2,
+          color: _getStatusColor(ticket.status).withOpacity(0.25),
+          width: 1.2,
         ),
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         onTap: () => _showTicketDetails(ticket),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
               Row(
                 children: [
                   Expanded(
@@ -156,8 +271,8 @@ class _AdminHelpTicketsScreenState extends ConsumerState<AdminHelpTicketsScreen>
                         Text(
                           ticket.subject,
                           style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -167,39 +282,41 @@ class _AdminHelpTicketsScreenState extends ConsumerState<AdminHelpTicketsScreen>
                           'From: ${ticket.userName}',
                           style: TextStyle(
                             color: AppColors.namaMediumGray,
-                            fontSize: 12,
+                            fontSize: 11,
                           ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(width: 8),
                   _buildStatusChip(ticket.status),
                 ],
               ),
-              const SizedBox(height: 12),
-
-              // Message preview
+              const SizedBox(height: 10),
               Text(
                 ticket.message,
                 style: TextStyle(
                   color: Colors.grey.shade700,
-                  fontSize: 14,
+                  fontSize: 12,
+                  height: 1.35,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 12),
-
-              // Footer
+              const SizedBox(height: 10),
               Row(
                 children: [
-                  Icon(Icons.access_time, size: 14, color: AppColors.namaMediumGray),
+                  Icon(
+                    Icons.access_time,
+                    size: 13,
+                    color: AppColors.namaMediumGray,
+                  ),
                   const SizedBox(width: 4),
                   Text(
                     timeago.format(ticket.createdAt),
                     style: TextStyle(
                       color: AppColors.namaMediumGray,
-                      fontSize: 12,
+                      fontSize: 11,
                     ),
                   ),
                   const Spacer(),
@@ -207,7 +324,7 @@ class _AdminHelpTicketsScreenState extends ConsumerState<AdminHelpTicketsScreen>
                     'Tap to view details',
                     style: TextStyle(
                       color: AppColors.namaNavyBlue,
-                      fontSize: 12,
+                      fontSize: 11,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -224,15 +341,15 @@ class _AdminHelpTicketsScreenState extends ConsumerState<AdminHelpTicketsScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: _getStatusColor(status).withOpacity(0.2),
-        borderRadius: BorderRadius.circular(8),
+        color: _getStatusColor(status).withOpacity(0.14),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         TicketStatus.getDisplayName(status),
         style: TextStyle(
           color: _getStatusColor(status),
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
@@ -268,7 +385,9 @@ class _AdminHelpTicketsScreenState extends ConsumerState<AdminHelpTicketsScreen>
 class _TicketDetailsSheet extends ConsumerWidget {
   final HelpTicket ticket;
 
-  const _TicketDetailsSheet({required this.ticket});
+  const _TicketDetailsSheet({
+    required this.ticket,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -276,52 +395,50 @@ class _TicketDetailsSheet extends ConsumerWidget {
       height: MediaQuery.of(context).size.height * 0.85,
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(20),
+        ),
       ),
       child: Column(
         children: [
-          // Handle bar
           Container(
             margin: const EdgeInsets.only(top: 12, bottom: 8),
             width: 40,
             height: 4,
             decoration: BoxDecoration(
               color: Colors.grey.shade300,
-              borderRadius: BorderRadius.circular(2),
+              borderRadius: BorderRadius.circular(20),
             ),
           ),
-
-          // Header
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 10, 12),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
                     'Ticket Details',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: TextStyle(
+                      fontSize: 17,
+                      color: AppColors.namaNavyBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
+                  iconSize: 22,
                   onPressed: () => Navigator.pop(context),
                 ),
               ],
             ),
           ),
-
           const Divider(height: 1),
-
-          // Content
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // User info
                   _buildInfoCard(
                     icon: Icons.person_outline,
                     title: 'User',
@@ -333,45 +450,46 @@ class _TicketDetailsSheet extends ConsumerWidget {
                     title: 'Email',
                     value: ticket.userEmail,
                   ),
-                  const SizedBox(height: 16),
-
-                  // Subject
+                  const SizedBox(height: 14),
                   Text(
                     'Subject',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.namaNavyBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     ticket.subject,
-                    style: const TextStyle(fontSize: 16),
+                    style: const TextStyle(fontSize: 13),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Message
+                  const SizedBox(height: 14),
                   Text(
                     'Message',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.namaNavyBlue,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.grey.shade200),
                     ),
                     child: Text(
                       ticket.message,
-                      style: const TextStyle(fontSize: 14, height: 1.5),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.45,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Timestamps
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
@@ -397,28 +515,43 @@ class _TicketDetailsSheet extends ConsumerWidget {
               ),
             ),
           ),
-
-          // Actions
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
-              border: Border(top: BorderSide(color: Colors.grey.shade200)),
+              border: Border(
+                top: BorderSide(color: Colors.grey.shade200),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Change status
                 DropdownButtonFormField<String>(
                   value: ticket.status,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.black87,
+                  ),
                   decoration: InputDecoration(
                     labelText: 'Change Status',
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.namaMediumGray,
+                    ),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide(color: Colors.grey.shade300),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      borderSide: BorderSide(color: AppColors.namaNavyBlue),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                      horizontal: 14,
+                      vertical: 10,
                     ),
                   ),
                   items: [
@@ -430,7 +563,10 @@ class _TicketDetailsSheet extends ConsumerWidget {
                   ].map((status) {
                     return DropdownMenuItem(
                       value: status,
-                      child: Text(TicketStatus.getDisplayName(status)),
+                      child: Text(
+                        TicketStatus.getDisplayName(status),
+                        style: const TextStyle(fontSize: 12),
+                      ),
                     );
                   }).toList(),
                   onChanged: (newStatus) async {
@@ -439,6 +575,7 @@ class _TicketDetailsSheet extends ConsumerWidget {
                             ticket.id,
                             newStatus,
                           );
+
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -451,8 +588,6 @@ class _TicketDetailsSheet extends ConsumerWidget {
                   },
                 ),
                 const SizedBox(height: 12),
-
-                // Action buttons
                 Row(
                   children: [
                     Expanded(
@@ -466,14 +601,17 @@ class _TicketDetailsSheet extends ConsumerWidget {
                             ),
                           );
                         },
-                        icon: const Icon(Icons.chat_outlined),
-                        label: const Text('Chat'),
+                        icon: const Icon(Icons.chat_outlined, size: 17),
+                        label: const Text(
+                          'Chat',
+                          style: TextStyle(fontSize: 12),
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.namaNavyBlue,
                           side: BorderSide(color: AppColors.namaNavyBlue),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                         ),
                       ),
@@ -484,29 +622,46 @@ class _TicketDetailsSheet extends ConsumerWidget {
                         onPressed: () async {
                           final shouldDelete = await showDialog<bool>(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text('Delete Ticket'),
-                              content: const Text(
-                                'Are you sure you want to delete this ticket? This action cannot be undone.',
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, false),
-                                  child: const Text('Cancel'),
+                            builder: (context) {
+                              return AlertDialog(
+                                title: const Text(
+                                  'Delete Ticket',
+                                  style: TextStyle(fontSize: 16),
                                 ),
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context, true),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.red,
+                                content: const Text(
+                                  'Are you sure you want to delete this ticket? This action cannot be undone.',
+                                  style: TextStyle(fontSize: 13),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text(
+                                      'Cancel',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
                                   ),
-                                  child: const Text('Delete'),
-                                ),
-                              ],
-                            ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.red,
+                                    ),
+                                    child: const Text(
+                                      'Delete',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           );
 
                           if (shouldDelete == true) {
-                            await ref.read(helpRepositoryProvider).deleteTicket(ticket.id);
+                            await ref
+                                .read(helpRepositoryProvider)
+                                .deleteTicket(ticket.id);
+
                             if (context.mounted) {
                               Navigator.pop(context);
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -518,14 +673,17 @@ class _TicketDetailsSheet extends ConsumerWidget {
                             }
                           }
                         },
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('Delete'),
+                        icon: const Icon(Icons.delete_outline, size: 17),
+                        label: const Text(
+                          'Delete',
+                          style: TextStyle(fontSize: 12),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 11),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                         ),
                       ),
@@ -546,34 +704,42 @@ class _TicketDetailsSheet extends ConsumerWidget {
     required String value,
   }) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
         color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: AppColors.namaMediumGray),
+          Icon(
+            icon,
+            size: 18,
+            color: AppColors.namaMediumGray,
+          ),
           const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: AppColors.namaMediumGray,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: AppColors.namaMediumGray,
+                  ),
                 ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ],
       ),

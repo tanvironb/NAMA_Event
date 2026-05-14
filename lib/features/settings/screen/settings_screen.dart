@@ -1,12 +1,11 @@
+// lib/features/settings/screen/settings_screen.dart
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
 import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
-//import 'package:events_app_trueattempt/features/networking/screen/connections_screen.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -23,6 +22,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     _scale.dispose();
     super.dispose();
+  }
+
+  Future<void> _logout() async {
+    final confirmed = await _showLogoutDialog(context);
+
+    if (confirmed != true) return;
+
+    await ref.read(authViewModelProvider.notifier).signOut();
+
+    if (!mounted) return;
+
+    Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
   }
 
   @override
@@ -58,9 +69,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 24),
-
               _buildItem(
                 icon: Icons.event,
                 title: 'My Meeting',
@@ -73,7 +82,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
-
               _buildItem(
                 icon: Icons.people_outline,
                 title: 'Connections',
@@ -86,7 +94,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
-
               _buildItem(
                 icon: Icons.lock_outline,
                 title: 'Privacy',
@@ -99,7 +106,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
-
               _buildItem(
                 icon: Icons.help_outline,
                 title: 'Help Centre',
@@ -112,9 +118,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
-
               const SizedBox(height: 90),
-
               Center(
                 child: SizedBox(
                   width: buttonWidth.clamp(170.0, 240.0),
@@ -200,15 +204,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: Material(
                 color: Colors.transparent,
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(8),
-                  onTap: () async {
-                    final confirmed = await _showLogoutDialog(context);
-                    if (confirmed == true) {
-                      await ref
-                          .read(authViewModelProvider.notifier)
-                          .signOut();
-                    }
-                  },
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: _logout,
                   child: const Center(
                     child: Text(
                       'Log Out',

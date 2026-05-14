@@ -1,30 +1,95 @@
 // lib/features/admin/screen/send_notification_screen.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import 'package:events_app_trueattempt/core/enums/notification_type.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class SendNotificationScreen extends ConsumerStatefulWidget {
-  const SendNotificationScreen({super.key});
+  final String? eventId;
+  final String? eventName;
+
+  const SendNotificationScreen({
+    super.key,
+    this.eventId,
+    this.eventName,
+  });
+
+  bool get isEventSpecific => eventId != null && eventId!.isNotEmpty;
 
   @override
-  ConsumerState<SendNotificationScreen> createState() => _SendNotificationScreenState();
+  ConsumerState<SendNotificationScreen> createState() =>
+      _SendNotificationScreenState();
 }
 
-class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen> {
+class _SendNotificationScreenState
+    extends ConsumerState<SendNotificationScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _titleController = TextEditingController();
   final _subtitleController = TextEditingController();
   final _bodyController = TextEditingController();
-  
-  AppNotificationType _selectedType = AppNotificationType.announcement;
+
+  late AppNotificationType _selectedType;
+
   String _selectedAudience = 'all';
+
   bool _isSending = false;
   bool _hasTimestamp = false;
+  bool _includeDate = true;
   DateTime? _selectedDateTime;
-  bool _includeDate = true; // Toggle for date+time vs time-only
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _textMuted = Color(0xFF6B7280);
+  static const Color _borderColor = Color(0xFFE1DDF0);
+  static const Color _softPurple = Color(0xFFF6F4FD);
+
+  List<AppNotificationType> get _availableTypes {
+    final sendable = AppNotificationType.values
+        .where((type) => type.isAdminSendable)
+        .toList();
+
+    if (sendable.isEmpty) {
+      return [AppNotificationType.generic];
+    }
+
+    return sendable;
+  }
+
+  final List<_AudienceOption> _audiences = const [
+    _AudienceOption(
+      value: 'all',
+      label: 'All Event Users',
+      icon: Icons.groups_rounded,
+    ),
+    _AudienceOption(
+      value: 'attendee',
+      label: 'Attendees',
+      icon: Icons.person_outline_rounded,
+    ),
+    _AudienceOption(
+      value: 'speaker',
+      label: 'Speakers',
+      icon: Icons.record_voice_over_outlined,
+    ),
+    _AudienceOption(
+      value: 'staff',
+      label: 'Staff',
+      icon: Icons.badge_outlined,
+    ),
+    _AudienceOption(
+      value: 'admin',
+      label: 'Admins',
+      icon: Icons.admin_panel_settings_outlined,
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedType = _availableTypes.first;
+  }
 
   @override
   void dispose() {
@@ -34,10 +99,122 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
     super.dispose();
   }
 
+  Stream<QuerySnapshot<Map<String, dynamic>>> _eventSessionsStream() {
+    if (!widget.isEventSpecific) {
+      return const Stream.empty();
+    }
+
+    return FirebaseFirestore.instance
+        .collection('sessions')
+        .where('eventId', isEqualTo: widget.eventId)
+        .snapshots();
+  }
+
+  Set<String> _extractUserIdsFromEventSessions(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> sessionDocs,
+  ) {
+    final Set<String> userIds = {};
+
+    for (final doc in sessionDocs) {
+      final data = doc.data();
+
+      void addListField(String fieldName) {
+        final value = data[fieldName];
+
+        if (value is List) {
+          for (final item in value) {
+            final id = item.toString().trim();
+            if (id.isNotEmpty) userIds.add(id);
+          }
+        }
+      }
+
+      addListField('speakerIds');
+      addListField('moderatorIds');
+      addListField('checkedInAttendees');
+      addListField('uniqueParticipants');
+      addListField('bookmarkedBy');
+      addListField('registeredUsers');
+      addListField('attendeeIds');
+      addListField('staffIds');
+      addListField('adminIds');
+    }
+
+    return userIds;
+  }
+
+  bool _userBelongsToEvent({
+    required String userId,
+    required Map<String, dynamic> userData,
+    required Set<String> eventUserIds,
+  }) {
+    if (!widget.isEventSpecific) return true;
+
+    final eventId = widget.eventId!;
+    final role = (userData['role'] ?? '').toString().toLowerCase();
+
+    if (role == 'admin') return true;
+    if (eventUserIds.contains(userId)) return true;
+
+    final directEventId = userData['eventId']?.toString();
+    final currentEventId = userData['currentEventId']?.toString();
+    final activeEventId = userData['activeEventId']?.toString();
+
+    if (directEventId == eventId ||
+        currentEventId == eventId ||
+        activeEventId == eventId) {
+      return true;
+    }
+
+    bool arrayContainsEvent(String fieldName) {
+      final value = userData[fieldName];
+
+      if (value is List) {
+        return value.map((e) => e.toString()).contains(eventId);
+      }
+
+      return false;
+    }
+
+    return arrayContainsEvent('eventIds') ||
+        arrayContainsEvent('registeredEventIds') ||
+        arrayContainsEvent('registeredEvents') ||
+        arrayContainsEvent('joinedEvents') ||
+        arrayContainsEvent('assignedEventIds');
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      _getTargetUsers() async {
+    Query<Map<String, dynamic>> usersQuery = FirebaseFirestore.instance
+        .collection('users')
+        .where('status', isEqualTo: 'approved');
+
+    if (_selectedAudience != 'all') {
+      usersQuery = usersQuery.where('role', isEqualTo: _selectedAudience);
+    }
+
+    final usersSnapshot = await usersQuery.get();
+    final allUsers = usersSnapshot.docs;
+
+    if (!widget.isEventSpecific) return allUsers;
+
+    final sessionSnapshot = await _eventSessionsStream().first;
+    final eventUserIds = _extractUserIdsFromEventSessions(sessionSnapshot.docs);
+
+    return allUsers.where((userDoc) {
+      return _userBelongsToEvent(
+        userId: userDoc.id,
+        userData: userDoc.data(),
+        eventUserIds: eventUserIds,
+      );
+    }).toList();
+  }
+
   Future<void> _sendNotification() async {
+    FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate()) return;
 
-    // If alert type, show special confirmation
     if (_selectedType == AppNotificationType.alert) {
       final confirmed = await _showAlertConfirmation();
       if (!confirmed) return;
@@ -47,62 +224,53 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
 
     int successCount = 0;
     int failureCount = 0;
-    final failedUsers = <String>[];
 
     try {
-      // Get all users based on audience
-      final usersQuery = _selectedAudience == 'all'
-          ? FirebaseFirestore.instance.collection('users').where('status', isEqualTo: 'approved')
-          : FirebaseFirestore.instance.collection('users')
-              .where('status', isEqualTo: 'approved')
-              .where('role', isEqualTo: _selectedAudience);
+      final users = await _getTargetUsers();
 
-      final usersSnapshot = await usersQuery.get();
-      
-      if (usersSnapshot.docs.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('No users found for the selected audience'),
-              backgroundColor: AppColors.warningAmber,
+      if (users.isEmpty) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isEventSpecific
+                  ? 'No users found for this event and selected audience.'
+                  : 'No users found for the selected audience.',
             ),
-          );
-        }
+            backgroundColor: AppColors.warningAmber,
+          ),
+        );
         return;
       }
 
       final timestamp = Timestamp.now();
-      // Generate a single shared notification ID for all users
-      final sharedNotificationId = FirebaseFirestore.instance.collection('temp').doc().id;
+      final sharedNotificationId =
+          FirebaseFirestore.instance.collection('adminNotifications').doc().id;
 
-      // First, save to central adminNotifications collection
-      final adminNotificationData = {
+      final adminNotificationData = <String, dynamic>{
         'title': _titleController.text.trim(),
+        'subtitle': _subtitleController.text.trim(),
         'body': _bodyController.text.trim(),
         'timestamp': timestamp,
         'type': _selectedType.toString().split('.').last,
         'targetRole': _selectedAudience,
+        'eventId': widget.eventId ?? '',
+        'eventName': widget.eventName ?? '',
       };
 
-      // Add optional fields
-      if (_subtitleController.text.trim().isNotEmpty) {
-        adminNotificationData['subtitle'] = _subtitleController.text.trim();
-      }
       if (_hasTimestamp && _selectedDateTime != null) {
-        // Store the timestamp
-        adminNotificationData['eventTimestamp'] = Timestamp.fromDate(_selectedDateTime!);
-        // Store whether it includes date or is time-only
+        adminNotificationData['eventTimestamp'] =
+            Timestamp.fromDate(_selectedDateTime!);
         adminNotificationData['includeDate'] = _includeDate;
       }
 
-      final adminNotifRef = FirebaseFirestore.instance
+      await FirebaseFirestore.instance
           .collection('adminNotifications')
-          .doc(sharedNotificationId);
-      
-      await adminNotifRef.set(adminNotificationData);
+          .doc(sharedNotificationId)
+          .set(adminNotificationData);
 
-      // Send to users individually with error tracking
-      for (final userDoc in usersSnapshot.docs) {
+      for (final userDoc in users) {
         try {
           final notificationRef = FirebaseFirestore.instance
               .collection('users')
@@ -110,25 +278,27 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
               .collection('notifications')
               .doc();
 
-          final notificationData = {
+          final notificationData = <String, dynamic>{
             'title': _titleController.text.trim(),
+            'subtitle': _subtitleController.text.trim(),
             'body': _bodyController.text.trim(),
             'timestamp': timestamp,
             'isRead': false,
             'type': _selectedType.toString().split('.').last,
             'targetRole': _selectedAudience,
+            'eventId': widget.eventId ?? '',
+            'eventName': widget.eventName ?? '',
             'data': {
               'notificationId': sharedNotificationId,
               'type': 'admin_notification',
+              'eventId': widget.eventId ?? '',
+              'eventName': widget.eventName ?? '',
             },
           };
 
-          // Add optional fields
-          if (_subtitleController.text.trim().isNotEmpty) {
-            notificationData['subtitle'] = _subtitleController.text.trim();
-          }
           if (_hasTimestamp && _selectedDateTime != null) {
-            notificationData['eventTimestamp'] = Timestamp.fromDate(_selectedDateTime!);
+            notificationData['eventTimestamp'] =
+                Timestamp.fromDate(_selectedDateTime!);
             notificationData['includeDate'] = _includeDate;
           }
 
@@ -136,88 +306,37 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
           successCount++;
         } catch (e) {
           failureCount++;
-          failedUsers.add(userDoc.id);
-          debugPrint('Failed to send notification to user ${userDoc.id}: $e');
+          debugPrint('Failed to send notification to ${userDoc.id}: $e');
         }
       }
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        
-        // Show detailed result
-        if (failureCount == 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('✅ Notification sent to all $successCount user(s)'),
-              backgroundColor: AppColors.successGreen,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-        } else if (successCount > 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('⚠️ Sent to $successCount users, failed for $failureCount users'),
-              backgroundColor: AppColors.warningAmber,
-              duration: const Duration(seconds: 5),
-              action: SnackBarAction(
-                label: 'Details',
-                textColor: Colors.white,
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Send Results'),
-                      content: SingleChildScrollView(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('✅ Success: $successCount users'),
-                            Text('❌ Failed: $failureCount users'),
-                            if (failedUsers.isNotEmpty) ...[
-                              const SizedBox(height: 12),
-                              const Text('Failed User IDs:', style: TextStyle(fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              ...failedUsers.take(10).map((id) => Text('• ${id.substring(0, 8)}...')),
-                              if (failedUsers.length > 10)
-                                Text('...and ${failedUsers.length - 10} more'),
-                            ],
-                          ],
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Close'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('❌ Failed to send notification to all $failureCount user(s)'),
-              backgroundColor: AppColors.errorRed,
-              duration: const Duration(seconds: 5),
-            ),
-          );
-        }
-      }
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            failureCount == 0
+                ? 'Notification sent to $successCount user(s).'
+                : 'Sent to $successCount user(s), failed for $failureCount.',
+          ),
+          backgroundColor: failureCount == 0
+              ? AppColors.successGreen
+              : AppColors.warningAmber,
+        ),
+      );
     } catch (e) {
       debugPrint('Error sending notification: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send notification: $e'),
-            backgroundColor: AppColors.errorRed,
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send notification: $e'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isSending = false);
@@ -227,449 +346,663 @@ class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen>
 
   Future<bool> _showAlertConfirmation() async {
     bool confirmed = false;
+
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _AlertConfirmationDialog(
-        targetAudience: _selectedAudience,
-        onConfirm: () {
-          confirmed = true;
-          Navigator.of(context).pop();
-        },
-        onCancel: () {
-          confirmed = false;
-          Navigator.of(context).pop();
-        },
-      ),
+      builder: (context) {
+        return _AlertConfirmationDialog(
+          targetAudience: _selectedAudience,
+          onConfirm: () {
+            confirmed = true;
+            Navigator.of(context).pop();
+          },
+          onCancel: () {
+            confirmed = false;
+            Navigator.of(context).pop();
+          },
+        );
+      },
     );
+
     return confirmed;
   }
 
   Future<bool> _showAlertTypeConfirmation() async {
     bool confirmed = false;
+
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => _AlertTypeSelectionDialog(
-        onConfirm: () {
-          confirmed = true;
-          Navigator.of(context).pop();
-        },
-        onCancel: () {
-          confirmed = false;
-          Navigator.of(context).pop();
-        },
+      builder: (context) {
+        return _AlertTypeSelectionDialog(
+          onConfirm: () {
+            confirmed = true;
+            Navigator.of(context).pop();
+          },
+          onCancel: () {
+            confirmed = false;
+            Navigator.of(context).pop();
+          },
+        );
+      },
+    );
+
+    return confirmed;
+  }
+
+  Future<void> _pickNotificationDateTime() async {
+    if (_includeDate) {
+      final date = await showDatePicker(
+        context: context,
+        initialDate: _selectedDateTime ?? DateTime.now(),
+        firstDate: DateTime.now().subtract(const Duration(days: 1)),
+        lastDate: DateTime.now().add(const Duration(days: 365)),
+      );
+
+      if (date == null || !mounted) return;
+
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(
+          _selectedDateTime ?? DateTime.now(),
+        ),
+      );
+
+      if (time == null) return;
+
+      setState(() {
+        _selectedDateTime = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          time.hour,
+          time.minute,
+        );
+      });
+
+      return;
+    }
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(
+        _selectedDateTime ?? DateTime.now(),
       ),
     );
-    return confirmed;
+
+    if (time == null) return;
+
+    final now = DateTime.now();
+
+    setState(() {
+      _selectedDateTime = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        time.hour,
+        time.minute,
+      );
+    });
+  }
+
+  Future<void> _selectNotificationType(AppNotificationType type) async {
+    if (type == AppNotificationType.alert) {
+      final confirmed = await _showAlertTypeConfirmation();
+      if (!confirmed) return;
+    }
+
+    setState(() => _selectedType = type);
   }
 
   @override
   Widget build(BuildContext context) {
+    final availableTypes = _availableTypes;
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Send Push Notification'),
-        backgroundColor: AppColors.namaNavyBlue,
-        foregroundColor: Colors.white,
-      ),
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: _isSending
-            ? const Center(child: CircularProgressIndicator())
-            : SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                    // Notification Type Dropdown
-                    Text(
-                      'Notification Type',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<AppNotificationType>(
-                      value: _selectedType,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                      ),
-                      items: AppNotificationType.values
-                          .where((type) => type.isAdminSendable)
-                          .map((type) {
-                        return DropdownMenuItem(
-                          value: type,
-                          child: Row(
-                            children: [
-                              Icon(type.icon, color: type.color, size: 20),
-                              const SizedBox(width: 12),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(type.displayName),
-                                  Text(
-                                    '${type.priority.toUpperCase()} priority',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      color: type.color.withOpacity(0.7),
-                                    ),
-                                  ),
-                                ], //THERE IS AN OVERFLOW ISSUE HERE. I KNOW. I COULDNT FIX IT. SO WE JUST IGNORE IT LAH.
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) async {
-                        if (value == null) return;
-                        
-                        // Show confirmation if selecting Alert type
-                        if (value == AppNotificationType.alert) {
-                          final confirmed = await _showAlertTypeConfirmation();
-                          if (confirmed) {
-                            setState(() => _selectedType = value);
-                          } else {
-                            // User canceled - default back to information
-                            setState(() => _selectedType = AppNotificationType.information);
-                          }
-                        } else {
-                          setState(() => _selectedType = value);
-                        }
-                      },
-                    ),
-                    
-                    const SizedBox(height: 24),
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.namaNavyBlue,
+                ),
+              )
+            : Column(
+                children: [
+                  Padding(
+  padding: const EdgeInsets.fromLTRB(16, 16, 18, 14),
+  child: Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => Navigator.of(context).pop(),
+        child: const Padding(
+          padding: EdgeInsets.only(top: 3, right: 10),
+          child: Icon(
+            Icons.arrow_back,
+            color: AppColors.namaNavyBlue,
+            size: 20,
+          ),
+        ),
+      ),
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Send Notifications',
+              style: TextStyle(
+                fontSize: 22,
+                height: 1.1,
+                fontWeight: FontWeight.w900,
+                color: AppColors.namaNavyBlue,
+                letterSpacing: 0.2,
+              ),
+            ),
+            if (widget.isEventSpecific) ...[
+              const SizedBox(height: 4),
+              Text(
+                widget.eventName ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 11,
+                  height: 1.1,
+                  color: _textMuted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ],
+  ),
+),
 
-                    // Target Audience Dropdown
-                    Text(
-                      'Target Audience',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      value: _selectedAudience,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'all', child: Text('All Users')),
-                        DropdownMenuItem(value: 'attendee', child: Text('Attendees Only')),
-                        DropdownMenuItem(value: 'speaker', child: Text('Speakers Only')),
-                        DropdownMenuItem(value: 'staff', child: Text('Staff Only')),
-                        DropdownMenuItem(value: 'admin', child: Text('Admins Only')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          setState(() => _selectedAudience = value);
-                        }
-                      },
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Title Field
-                    Text(
-                      'Notification Title',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _titleController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Enter notification title',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a title';
-                        }
-                        return null;
-                      },
-                      maxLength: 100,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Subtitle Field (optional)
-                    Text(
-                      'Subtitle / Side Note (Optional)',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _subtitleController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Enter subtitle or side note (shown below title)',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                      ),
-                      maxLength: 50,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Body Field
-                    Text(
-                      'Notification Message',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _bodyController,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
-                        hintText: 'Enter notification message',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a message';
-                        }
-                        return null;
-                      },
-                      maxLines: 5,
-                      maxLength: 500,
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Event Timestamp Toggle
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _hasTimestamp,
-                          onChanged: (value) {
-                            setState(() {
-                              _hasTimestamp = value ?? false;
-                              if (!_hasTimestamp) {
-                                _selectedDateTime = null;
-                              }
-                            });
-                          },
-                        ),
-                        Expanded(
-                          child: Text(
-                            'Add Event Timestamp (optional)',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    if (_hasTimestamp) ...[
-                      const SizedBox(height: 16),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.fromLTRB(18, 8, 18, 24),
+                      child: Form(
+                        key: _formKey,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Date/Time toggle
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: RadioListTile<bool>(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    title: const Text('Date + Time'),
-                                    value: true,
-                                    groupValue: _includeDate,
-                                    onChanged: (value) {
-                                      setState(() => _includeDate = value ?? true);
-                                    },
-                                  ),
-                                ),
-                                Expanded(
-                                  child: RadioListTile<bool>(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    title: const Text('Time Only'),
-                                    value: false,
-                                    groupValue: _includeDate,
-                                    onChanged: (value) {
-                                      setState(() => _includeDate = value ?? true);
-                                    },
-                                  ),
-                                ),
-                              ],
+                            _sectionLabel('Notification Type'),
+                            const SizedBox(height: 9),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: availableTypes.map((type) {
+                                final isSelected = _selectedType == type;
+
+                                return _SelectableBox(
+                                  label: type.displayName,
+                                  icon: type.icon,
+                                  color: type.color,
+                                  selected: isSelected,
+                                  onTap: () => _selectNotificationType(type),
+                                );
+                              }).toList(),
                             ),
-                            
-                            const SizedBox(height: 12),
-                            
-                            // Date + Time picker
-                            if (_includeDate) ...[
-                              OutlinedButton.icon(
-                                onPressed: () async {
-                                  final date = await showDatePicker(
-                                    context: context,
-                                    initialDate: _selectedDateTime ?? DateTime.now(),
-                                    firstDate: DateTime.now().subtract(const Duration(days: 1)),
-                                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                                  );
-                                  if (date != null && mounted) {
-                                    final time = await showTimePicker(
-                                      context: context,
-                                      initialTime: TimeOfDay.fromDateTime(_selectedDateTime ?? DateTime.now()),
-                                      builder: (context, child) {
-                                        return MediaQuery(
-                                          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
-                                          child: child!,
-                                        );
-                                      },
-                                    );
-                                    if (time != null) {
-                                      setState(() {
-                                        _selectedDateTime = DateTime(
-                                          date.year,
-                                          date.month,
-                                          date.day,
-                                          time.hour,
-                                          time.minute,
-                                        );
-                                      });
-                                    }
-                                  }
-                                },
-                                icon: const Icon(Icons.calendar_today),
-                                label: Text(
-                                  _selectedDateTime == null
-                                      ? 'Select Date & Time'
-                                      : DateFormat('M/d/yyyy h:mm a').format(_selectedDateTime!),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(double.infinity, 48),
-                                ),
-                              ),
-                            ] else ...[
-                              // Time Only picker
-                              OutlinedButton.icon(
-                                onPressed: () async {
-                                  final time = await showTimePicker(
-                                    context: context,
-                                    initialTime: TimeOfDay.fromDateTime(_selectedDateTime ?? DateTime.now()),
-                                    builder: (context, child) {
-                                      return MediaQuery(
-                                        data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: false),
-                                        child: child!,
-                                      );
-                                    },
-                                  );
-                                  if (time != null) {
+                            const SizedBox(height: 21),
+
+                            _sectionLabel('Target Audience'),
+                            const SizedBox(height: 9),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _audiences.map((audience) {
+                                final isSelected =
+                                    _selectedAudience == audience.value;
+
+                                return _SelectableBox(
+                                  label: audience.label,
+                                  icon: audience.icon,
+                                  color: _primaryColor,
+                                  selected: isSelected,
+                                  onTap: () {
                                     setState(() {
-                                      // Use today's date but only show time to users
-                                      final now = DateTime.now();
-                                      _selectedDateTime = DateTime(
-                                        now.year,
-                                        now.month,
-                                        now.day,
-                                        time.hour,
-                                        time.minute,
-                                      );
+                                      _selectedAudience = audience.value;
                                     });
-                                  }
-                                },
-                                icon: const Icon(Icons.access_time),
-                                label: Text(
-                                  _selectedDateTime == null
-                                      ? 'Select Time'
-                                      : DateFormat('h:mm a').format(_selectedDateTime!),
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 21),
+
+                            _sectionLabel('Notification Title'),
+                            const SizedBox(height: 7),
+                            TextFormField(
+                              controller: _titleController,
+                              style: const TextStyle(fontSize: 12.5),
+                              decoration: _inputDecoration(
+                                hintText: 'Enter notification title',
+                              ),
+                              maxLength: 100,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Please enter a title';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+
+                            _sectionLabel('Subtitle / Side Note (Optional)'),
+                            const SizedBox(height: 7),
+                            TextFormField(
+                              controller: _subtitleController,
+                              style: const TextStyle(fontSize: 12.5),
+                              decoration: _inputDecoration(
+                                hintText: 'Enter subtitle or side note',
+                              ),
+                              maxLength: 50,
+                            ),
+                            const SizedBox(height: 12),
+
+                            _sectionLabel('Notification Message'),
+                            const SizedBox(height: 7),
+                            TextFormField(
+                              controller: _bodyController,
+                              style: const TextStyle(fontSize: 12.5),
+                              decoration: _inputDecoration(
+                                hintText: 'Enter notification message',
+                              ),
+                              maxLines: 5,
+                              maxLength: 500,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Please enter a message';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 8),
+
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _softPurple,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: _borderColor),
+                              ),
+                              child: Row(
+                                children: [
+                                  Transform.scale(
+                                    scale: 0.9,
+                                    child: Checkbox(
+                                      value: _hasTimestamp,
+                                      activeColor: AppColors.namaNavyBlue,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _hasTimestamp = value ?? false;
+                                          if (!_hasTimestamp) {
+                                            _selectedDateTime = null;
+                                          }
+                                        });
+                                      },
+                                    ),
+                                  ),
+                                  const Expanded(
+                                    child: Text(
+                                      'Add Event Timestamp (optional)',
+                                      style: TextStyle(
+                                        color: _primaryColor,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            if (_hasTimestamp) ...[
+                              const SizedBox(height: 11),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF7F7FA),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: _borderColor,
+                                  ),
                                 ),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(double.infinity, 48),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _sectionLabel('Timestamp Display'),
+                                    const SizedBox(height: 9),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: _SmallToggleButton(
+                                            title: 'Date + Time',
+                                            selected: _includeDate,
+                                            onTap: () {
+                                              setState(() {
+                                                _includeDate = true;
+                                                _selectedDateTime = null;
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: _SmallToggleButton(
+                                            title: 'Time Only',
+                                            selected: !_includeDate,
+                                            onTap: () {
+                                              setState(() {
+                                                _includeDate = false;
+                                                _selectedDateTime = null;
+                                              });
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 11),
+                                    OutlinedButton.icon(
+                                      onPressed: _pickNotificationDateTime,
+                                      icon: Icon(
+                                        _includeDate
+                                            ? Icons.calendar_today
+                                            : Icons.access_time,
+                                        size: 17,
+                                      ),
+                                      label: Text(
+                                        _selectedDateTime == null
+                                            ? (_includeDate
+                                                ? 'Select Date & Time'
+                                                : 'Select Time')
+                                            : (_includeDate
+                                                ? DateFormat('M/d/yyyy h:mm a')
+                                                    .format(_selectedDateTime!)
+                                                : DateFormat('h:mm a')
+                                                    .format(_selectedDateTime!)),
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize:
+                                            const Size(double.infinity, 42),
+                                        foregroundColor: AppColors.namaNavyBlue,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
-                            
-                            const SizedBox(height: 8),
-                            Text(
-                              _includeDate
-                                  ? 'Users will see the full date and time'
-                                  : 'Users will see only the time (e.g., "3:30 PM")',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
-                                fontStyle: FontStyle.italic,
+
+                            const SizedBox(height: 22),
+
+                            if (_selectedType == AppNotificationType.alert) ...[
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppColors.errorRed.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.errorRed,
+                                    width: 1.4,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.warning,
+                                      color: AppColors.errorRed,
+                                      size: 24,
+                                    ),
+                                    const SizedBox(width: 9),
+                                    Expanded(
+                                      child: Text(
+                                        'Alert notifications will appear as popup warnings on user screens.',
+                                        style: TextStyle(
+                                          color: AppColors.errorRed,
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                              const SizedBox(height: 20),
+                            ],
 
-                    const SizedBox(height: 24),
-
-                    // Warning notice for alert type
-                    if (_selectedType == AppNotificationType.alert) ...[
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.errorRed.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: AppColors.errorRed, width: 2),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.warning, color: AppColors.errorRed, size: 32),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'WARNING notifications will appear as a popup on all users\' screens with a 3-second delay before they can dismiss it.',
-                                style: TextStyle(
-                                  color: AppColors.errorRed,
-                                  fontWeight: FontWeight.bold,
+                            Center(
+                              child: SizedBox(
+                                width: MediaQuery.of(context).size.width * 0.62,
+                                height: 44,
+                                child: ElevatedButton.icon(
+                                  onPressed: _sendNotification,
+                                  icon: const Icon(
+                                    Icons.send,
+                                    size: 17,
+                                  ),
+                                  label: Text(
+                                    widget.isEventSpecific
+                                        ? 'Send to Event Users'
+                                        : 'Send Notification',
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _selectedType ==
+                                            AppNotificationType.alert
+                                        ? AppColors.errorRed
+                                        : AppColors.namaNavyBlue,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 24),
-                    ],
-
-                    // Send Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _sendNotification,
-                        icon: const Icon(Icons.send),
-                        label: const Text('Send Notification'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _selectedType == AppNotificationType.alert
-                              ? AppColors.errorRed
-                              : AppColors.namaNavyBlue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                      ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: _primaryColor,
+        fontWeight: FontWeight.w800,
+        fontSize: 12.5,
+      ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    String? hintText,
+  }) {
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(
+        color: _textMuted,
+        fontSize: 12,
+      ),
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 12,
+      ),
+      counterStyle: const TextStyle(
+        fontSize: 11,
+        color: _textMuted,
+      ),
+      errorStyle: const TextStyle(
+        fontSize: 11,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: _borderColor,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: AppColors.namaNavyBlue,
+          width: 1.2,
+        ),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: AppColors.errorRed,
+        ),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(
+          color: AppColors.errorRed,
+        ),
       ),
     );
   }
 }
 
-// Alert type selection confirmation dialog with 3-second timer
+class _AudienceOption {
+  final String value;
+  final String label;
+  final IconData icon;
+
+  const _AudienceOption({
+    required this.value,
+    required this.label,
+    required this.icon,
+  });
+}
+
+class _SelectableBox extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SelectableBox({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _borderColor = Color(0xFFE1DDF0);
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 8,
+          ),
+          decoration: BoxDecoration(
+            color: selected ? color.withOpacity(0.1) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? color : _borderColor,
+              width: selected ? 1.3 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: selected ? color : _primaryColor,
+                size: 16,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? color : _primaryColor,
+                  fontSize: 11.3,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SmallToggleButton extends StatelessWidget {
+  final String title;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _SmallToggleButton({
+    required this.title,
+    required this.selected,
+    required this.onTap,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(11),
+      onTap: onTap,
+      child: Container(
+        height: 38,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? _primaryColor : Colors.white,
+          borderRadius: BorderRadius.circular(11),
+          border: Border.all(
+            color: selected ? _primaryColor : const Color(0xFFE1DDF0),
+          ),
+        ),
+        child: Text(
+          title,
+          style: TextStyle(
+            color: selected ? Colors.white : _primaryColor,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AlertTypeSelectionDialog extends StatefulWidget {
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
@@ -680,10 +1013,12 @@ class _AlertTypeSelectionDialog extends StatefulWidget {
   });
 
   @override
-  State<_AlertTypeSelectionDialog> createState() => _AlertTypeSelectionDialogState();
+  State<_AlertTypeSelectionDialog> createState() =>
+      _AlertTypeSelectionDialogState();
 }
 
-class _AlertTypeSelectionDialogState extends State<_AlertTypeSelectionDialog> {
+class _AlertTypeSelectionDialogState
+    extends State<_AlertTypeSelectionDialog> {
   int _secondsLeft = 3;
   bool _canConfirm = false;
 
@@ -695,78 +1030,52 @@ class _AlertTypeSelectionDialogState extends State<_AlertTypeSelectionDialog> {
 
   void _startCountdown() {
     Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _secondsLeft--;
-          if (_secondsLeft <= 0) {
-            _canConfirm = true;
-          } else {
-            _startCountdown();
-          }
-        });
-      }
+      if (!mounted) return;
+
+      setState(() {
+        _secondsLeft--;
+
+        if (_secondsLeft <= 0) {
+          _canConfirm = true;
+        } else {
+          _startCountdown();
+        }
+      });
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Row(
-        children: [
-          Icon(Icons.warning, color: AppColors.errorRed, size: 28),
-          const SizedBox(width: 12),
-          const Expanded(child: Text('Select Alert Type?')),
-        ],
+      title: const Text(
+        'Select Alert Type?',
+        style: TextStyle(fontSize: 16),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.errorRed.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.errorRed, width: 2),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'ALERT notifications are HIGH PRIORITY and will:',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.errorRed,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '• Show as POPUP on all users\' screens\n'
-                  '• Appear even if app was closed\n'
-                  '• Force 3-second wait before dismissal\n'
-                  '• Display with RED OUTLINE\n'
-                  '• Should be used ONLY for emergencies',
-                  style: TextStyle(fontSize: 13),
-                ),
-              ],
-            ),
+          const Icon(
+            Icons.warning,
+            color: AppColors.errorRed,
+            size: 36,
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Alert notifications are high priority and should only be used for important warnings.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13),
           ),
           if (!_canConfirm) ...[
             const SizedBox(height: 16),
             LinearProgressIndicator(
               value: (3 - _secondsLeft) / 3,
-              backgroundColor: AppColors.namaLightGray,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.errorRed),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(AppColors.errorRed),
             ),
             const SizedBox(height: 8),
-            Center(
-              child: Text(
-                'Please wait $_secondsLeft second${_secondsLeft != 1 ? 's' : ''}...',
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
-              ),
+            Text(
+              'Please wait $_secondsLeft second(s)...',
+              style: const TextStyle(fontSize: 12),
             ),
           ],
         ],
@@ -774,22 +1083,27 @@ class _AlertTypeSelectionDialogState extends State<_AlertTypeSelectionDialog> {
       actions: [
         TextButton(
           onPressed: widget.onCancel,
-          child: const Text('Cancel'),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontSize: 12),
+          ),
         ),
         ElevatedButton(
           onPressed: _canConfirm ? widget.onConfirm : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: _canConfirm ? AppColors.errorRed : Colors.grey,
+            backgroundColor: AppColors.errorRed,
             foregroundColor: Colors.white,
           ),
-          child: Text(_canConfirm ? 'Yes, Use Alert' : 'Wait...'),
+          child: const Text(
+            'Use Alert',
+            style: TextStyle(fontSize: 12),
+          ),
         ),
       ],
     );
   }
 }
 
-// Alert send confirmation dialog with 3-second timer
 class _AlertConfirmationDialog extends StatefulWidget {
   final String targetAudience;
   final VoidCallback onConfirm;
@@ -802,10 +1116,12 @@ class _AlertConfirmationDialog extends StatefulWidget {
   });
 
   @override
-  State<_AlertConfirmationDialog> createState() => _AlertConfirmationDialogState();
+  State<_AlertConfirmationDialog> createState() =>
+      _AlertConfirmationDialogState();
 }
 
-class _AlertConfirmationDialogState extends State<_AlertConfirmationDialog> {
+class _AlertConfirmationDialogState
+    extends State<_AlertConfirmationDialog> {
   int _secondsLeft = 3;
   bool _canConfirm = false;
 
@@ -817,107 +1133,56 @@ class _AlertConfirmationDialogState extends State<_AlertConfirmationDialog> {
 
   void _startCountdown() {
     Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        setState(() {
-          _secondsLeft--;
-          if (_secondsLeft <= 0) {
-            _canConfirm = true;
-          } else {
-            _startCountdown();
-          }
-        });
-      }
+      if (!mounted) return;
+
+      setState(() {
+        _secondsLeft--;
+
+        if (_secondsLeft <= 0) {
+          _canConfirm = true;
+        } else {
+          _startCountdown();
+        }
+      });
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Format target audience for display
-    String audienceText;
-    switch (widget.targetAudience) {
-      case 'all':
-        audienceText = 'ALL users';
-        break;
-      case 'attendee':
-        audienceText = 'all ATTENDEES';
-        break;
-      case 'speaker':
-        audienceText = 'all SPEAKERS';
-        break;
-      case 'staff':
-        audienceText = 'all STAFF members';
-        break;
-      case 'admin':
-        audienceText = 'all ADMINS';
-        break;
-      default:
-        audienceText = 'selected users';
-    }
-    
+    final audienceText = widget.targetAudience == 'all'
+        ? 'all selected event users'
+        : widget.targetAudience;
+
     return AlertDialog(
-      title: Row(
-        children: [
-          Icon(Icons.warning, color: AppColors.errorRed, size: 32),
-          const SizedBox(width: 12),
-          const Expanded(child: Text('Confirm Warning Notification')),
-        ],
+      title: const Text(
+        'Confirm Alert Notification',
+        style: TextStyle(fontSize: 16),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.errorRed.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: AppColors.errorRed, width: 2),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.info_outline, color: AppColors.errorRed, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'This will send a POPUP to $audienceText\' screens!',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.errorRed,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '• The popup will appear immediately\n'
-                  '• Users must wait 3 seconds before closing it\n'
-                  '• It has a RED OUTLINE (emergency alert)\n'
-                  '• Use only for critical situations',
-                  style: TextStyle(fontSize: 13),
-                ),
-              ],
-            ),
+          const Icon(
+            Icons.warning,
+            color: AppColors.errorRed,
+            size: 38,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'This will send an alert popup to $audienceText.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13),
           ),
           if (!_canConfirm) ...[
             const SizedBox(height: 16),
             LinearProgressIndicator(
               value: (3 - _secondsLeft) / 3,
-              backgroundColor: AppColors.namaLightGray,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.errorRed),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(AppColors.errorRed),
             ),
             const SizedBox(height: 8),
-            Center(
-              child: Text(
-                'Please wait $_secondsLeft second${_secondsLeft != 1 ? 's' : ''}...',
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
-              ),
+            Text(
+              'Please wait $_secondsLeft second(s)...',
+              style: const TextStyle(fontSize: 12),
             ),
           ],
         ],
@@ -925,15 +1190,21 @@ class _AlertConfirmationDialogState extends State<_AlertConfirmationDialog> {
       actions: [
         TextButton(
           onPressed: widget.onCancel,
-          child: const Text('Cancel'),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(fontSize: 12),
+          ),
         ),
         ElevatedButton(
           onPressed: _canConfirm ? widget.onConfirm : null,
           style: ElevatedButton.styleFrom(
-            backgroundColor: _canConfirm ? AppColors.errorRed : Colors.grey,
+            backgroundColor: AppColors.errorRed,
             foregroundColor: Colors.white,
           ),
-          child: Text(_canConfirm ? 'Yes, Send Warning' : 'Wait...'),
+          child: const Text(
+            'Send Alert',
+            style: TextStyle(fontSize: 12),
+          ),
         ),
       ],
     );

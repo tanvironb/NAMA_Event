@@ -1,141 +1,203 @@
+// lib/features/messaging/screen/widgets/direct_message_composer.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
+
 import 'package:events_app_trueattempt/core/models/app_user.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
 
 class DirectMessageComposer extends ConsumerStatefulWidget {
-  final String? conversationId; // Made optional
-  final String otherUserId; // Need this to create conversation
+  final String? conversationId;
+  final String otherUserId;
   final AppUser currentUser;
-  final Function(String)? onConversationCreated; // Callback when conversation is created
+  final void Function(String newConversationId) onConversationCreated;
 
   const DirectMessageComposer({
     super.key,
-    this.conversationId,
+    required this.conversationId,
     required this.otherUserId,
     required this.currentUser,
-    this.onConversationCreated,
+    required this.onConversationCreated,
   });
 
   @override
-  ConsumerState<DirectMessageComposer> createState() => _DirectMessageComposerState();
+  ConsumerState<DirectMessageComposer> createState() =>
+      _DirectMessageComposerState();
 }
 
 class _DirectMessageComposerState extends ConsumerState<DirectMessageComposer> {
-  final _controller = TextEditingController();
+  final TextEditingController _messageController = TextEditingController();
+
   bool _isSending = false;
+
+  static const Color _primaryColor = Color(0xFF0D1496);
+  static const Color _sendButtonColor = Color(0xFFF4BE32);
 
   @override
   void dispose() {
-    _controller.dispose();
+    _messageController.dispose();
     super.dispose();
   }
 
-  void _sendMessage() async {
-    if (_controller.text.trim().isEmpty) return;
-    
-    setState(() => _isSending = true);
+  Future<String?> _getOrCreateConversationId() async {
+    if (widget.conversationId != null && widget.conversationId!.isNotEmpty) {
+      return widget.conversationId;
+    }
 
-    final messagingRepo = ref.read(messagingRepositoryProvider);
+    final activeEvent = await ref.read(activeEventFutureProvider.future);
+
+    final conversationId =
+        await ref.read(messagingRepositoryProvider).createOrGetConversation(
+              currentUserId: widget.currentUser.uid,
+              otherUserId: widget.otherUserId,
+              eventId: activeEvent.id,
+            );
+
+    widget.onConversationCreated(conversationId);
+
+    return conversationId;
+  }
+
+  Future<void> _sendMessage() async {
+    final text = _messageController.text.trim();
+
+    if (text.isEmpty || _isSending) return;
+
+    setState(() {
+      _isSending = true;
+    });
+
     try {
-      // Create conversation if it doesn't exist yet
-      String conversationId = widget.conversationId ?? '';
-      if (conversationId.isEmpty) {
-        conversationId = await messagingRepo.createOrGetConversation(
-          widget.currentUser.uid,
-          widget.otherUserId,
-        );
-        // Notify parent that conversation was created
-        widget.onConversationCreated?.call(conversationId);
+      final conversationId = await _getOrCreateConversationId();
+
+      if (conversationId == null || conversationId.isEmpty) {
+        throw Exception('Could not create conversation.');
       }
-      
-      await messagingRepo.sendDirectMessage(
-        conversationId: conversationId,
-        text: _controller.text.trim(),
-        senderId: widget.currentUser.uid,
-        senderName: widget.currentUser.name,
-        senderImageUrl: widget.currentUser.profileImageUrl,
-      );
-      _controller.clear();
+
+      await ref.read(messagingRepositoryProvider).sendDirectMessage(
+            conversationId: conversationId,
+            text: text,
+            senderId: widget.currentUser.uid,
+            senderName: widget.currentUser.name,
+            senderImageUrl: widget.currentUser.profileImageUrl,
+          );
+
+      _messageController.clear();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send message: $e'),
-            backgroundColor: Theme.of(context).colorScheme.error,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to send message: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
-      if (mounted) setState(() => _isSending = false);
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(8.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-          ),
-        ),
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                  ),
-                ),
+    final activeEventAsync = ref.watch(activeEventFutureProvider);
+
+    return activeEventAsync.when(
+      data: (_) {
+        return Container(
+          color: const Color(0xFFF7F7F7),
+          child: Row(
+            children: [
+              Expanded(
                 child: TextField(
-                  controller: _controller,
+                  controller: _messageController,
+                  enabled: !_isSending,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black87,
+                  ),
                   decoration: const InputDecoration(
                     hintText: 'Type a message...',
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      color: Colors.grey,
+                    ),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
-                  textCapitalization: TextCapitalization.sentences,
-                  maxLines: null,
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: _isSending
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            Theme.of(context).colorScheme.onPrimary,
+              const SizedBox(width: 6),
+              Padding(
+                padding: const EdgeInsets.only(right: 5),
+                child: InkWell(
+                  onTap: _isSending ? null : _sendMessage,
+                  borderRadius: BorderRadius.circular(22),
+                  child: Container(
+                    height: 38,
+                    width: 38,
+                    decoration: BoxDecoration(
+                      color: _isSending
+                          ? Colors.grey.shade300
+                          : _sendButtonColor,
+                      shape: BoxShape.circle,
+                    ),
+                    child: _isSending
+                        ? const Padding(
+                            padding: EdgeInsets.all(10),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: _primaryColor,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.send_rounded,
+                            color: _primaryColor,
+                            size: 19,
                           ),
-                        ),
-                      )
-                    : Icon(
-                        Icons.send,
-                        color: Theme.of(context).colorScheme.onPrimary,
-                      ),
-                onPressed: _isSending ? null : _sendMessage,
+                  ),
+                ),
               ),
+            ],
+          ),
+        );
+      },
+      loading: () {
+        return Container(
+          height: 50,
+          alignment: Alignment.center,
+          child: const SizedBox(
+            height: 18,
+            width: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
+      error: (err, stack) {
+        return Container(
+          height: 50,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: const Text(
+            'Unable to load active event. Message disabled.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.red,
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

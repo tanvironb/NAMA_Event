@@ -5,7 +5,6 @@ import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/widgets/notification_list_tile.dart';
 import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -16,36 +15,177 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
-  String? _selectedPriority;
-  AppNotificationType? _selectedType;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
-  int _getNotificationPriority(AppNotificationType type) {
-    return type.priorityValue;
+  static const Color titleColor = Color(0xFF0D1496);
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   List<AppNotification> _applyFilters(List<AppNotification> notifications) {
-    notifications =
-        notifications.where((n) => n.type != AppNotificationType.chat).toList();
+    final query = _searchQuery.trim().toLowerCase();
 
-    return notifications.where((notification) {
-      if (_selectedPriority != null &&
-          notification.priority != _selectedPriority) {
-        return false;
-      }
+    var filtered = notifications
+        .where((notification) => notification.type != AppNotificationType.chat)
+        .toList();
 
-      if (_selectedType != null && notification.type != _selectedType) {
-        return false;
-      }
+    if (query.isNotEmpty) {
+      filtered = filtered.where((notification) {
+        final title = notification.title.toLowerCase();
+        final subtitle = (notification.subtitle ?? '').toLowerCase();
+        final body = notification.body.toLowerCase();
 
-      return true;
-    }).toList();
+        return title.contains(query) ||
+            subtitle.contains(query) ||
+            body.contains(query);
+      }).toList();
+    }
+
+    filtered.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+    return filtered;
   }
 
-  void _clearFilters() {
-    setState(() {
-      _selectedPriority = null;
-      _selectedType = null;
-    });
+  Widget _buildHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+      child: Row(
+        children: [
+          InkWell(
+            onTap: () => Navigator.pop(context),
+            borderRadius: BorderRadius.circular(20),
+            child: const Padding(
+              padding: EdgeInsets.all(4),
+              child: Icon(
+                Icons.arrow_back,
+                size: 22,
+                color: Colors.black,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            'Notifications',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: titleColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: SizedBox(
+        height: 40,
+        child: TextField(
+          controller: _searchController,
+          style: const TextStyle(fontSize: 12.5),
+          decoration: InputDecoration(
+            hintText: 'Search notifications...',
+            hintStyle: const TextStyle(
+              fontSize: 12.5,
+              color: Colors.grey,
+            ),
+            prefixIcon: const Icon(
+              Icons.search,
+              size: 18,
+              color: Colors.grey,
+            ),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(
+                      Icons.clear,
+                      size: 16,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _searchController.clear();
+                        _searchQuery = '';
+                      });
+                    },
+                  )
+                : null,
+            filled: true,
+            fillColor: const Color(0xFFF7F7F7),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 6,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: const BorderSide(
+                color: Color(0xFFD9D9D9),
+                width: 0.8,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(20),
+              borderSide: const BorderSide(
+                color: titleColor,
+                width: 1,
+              ),
+            ),
+          ),
+          onChanged: (value) {
+            setState(() {
+              _searchQuery = value;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String message) {
+    return Expanded(
+      child: Center(
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 12.5,
+            color: Colors.grey,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationList(List<AppNotification> notifications) {
+    final filteredNotifications = _applyFilters(notifications);
+
+    if (notifications.isEmpty) {
+      return _buildEmptyState('No notifications');
+    }
+
+    if (filteredNotifications.isEmpty) {
+      return _buildEmptyState('No notifications match your search.');
+    }
+
+    return Expanded(
+      child: ListView.builder(
+        padding: const EdgeInsets.only(top: 10, bottom: 20),
+        itemCount: filteredNotifications.length,
+        itemBuilder: (context, index) {
+          final notification = filteredNotifications[index];
+
+          return NotificationListTile(
+            notification: notification,
+            key: ValueKey(notification.id),
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -53,250 +193,37 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final notificationsAsync = ref.watch(notificationsStreamProvider);
 
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: notificationsAsync.when(
-          data: (notifications) => _buildBody(context, notifications),
-          loading: () => const LoadingIndicator(),
-          error: (err, _) => Center(child: Text('Error: $err')),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBody(BuildContext context, List<AppNotification> notifications) {
-    if (notifications.isEmpty) {
-      return const Center(
-        child: Text(
-          'No notifications',
-          style: TextStyle(fontSize: 12),
-        ),
-      );
-    }
-
-    final filtered = _applyFilters(notifications);
-
-    final unread = filtered.where((n) => !n.isRead).toList();
-    final read = filtered.where((n) => n.isRead).toList();
-
-    unread.sort((a, b) {
-      final aPriority = _getNotificationPriority(a.type);
-      final bPriority = _getNotificationPriority(b.type);
-      if (aPriority != bPriority) return aPriority.compareTo(bPriority);
-      return b.timestamp.compareTo(a.timestamp);
-    });
-
-    read.sort((a, b) {
-      final aPriority = _getNotificationPriority(a.type);
-      final bPriority = _getNotificationPriority(b.type);
-      if (aPriority != bPriority) return aPriority.compareTo(bPriority);
-      return b.timestamp.compareTo(a.timestamp);
-    });
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 12, 16, 8),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(
-                  Icons.arrow_back,
-                  color: Color(0xFF20135C),
-                  size: 22,
-                ),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              const SizedBox(width: 4),
-              const Text(
-                "Notifications",
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF20135C),
+        child: Column(
+          children: [
+            _buildHeader(context),
+            _buildSearchBar(),
+            notificationsAsync.when(
+              data: (notifications) => _buildNotificationList(notifications),
+              loading: () => const Expanded(
+                child: Center(
+                  child: LoadingIndicator(),
                 ),
               ),
-            ],
-          ),
-        ),
-
-        _buildFilterChips(),
-
-        if (filtered.isEmpty)
-          const Expanded(
-            child: Center(
-              child: Text(
-                'No notifications match the selected filters.',
-                style: TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ),
-          )
-        else
-          Expanded(
-            child: ListView(
-              children: [
-                if (unread.isNotEmpty) ...[
-                  _buildSectionHeader("UNREAD NOTIFICATIONS", unread.length),
-                  ...unread.map(
-                    (n) => NotificationListTile(
-                      notification: n,
-                      key: ValueKey(n.id),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                if (read.isNotEmpty) ...[
-                  _buildSectionHeader("READ NOTIFICATIONS", read.length),
-                  ...read.map(
-                    (n) => NotificationListTile(
-                      notification: n,
-                      key: ValueKey(n.id),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildFilterChips() {
-    final hasFilter = _selectedPriority != null || _selectedType != null;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: _buildFilterDropdown<String?>(
-              value: _selectedPriority,
-              hint: 'All',
-              items: const [
-                DropdownMenuItem(value: null, child: Text('All')),
-                DropdownMenuItem(value: 'high', child: Text('High')),
-                DropdownMenuItem(value: 'medium', child: Text('Medium')),
-                DropdownMenuItem(value: 'low', child: Text('Low')),
-              ],
-              onChanged: (v) => setState(() => _selectedPriority = v),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: _buildFilterDropdown<AppNotificationType?>(
-              value: _selectedType,
-              hint: 'All Types',
-              items: [
-                const DropdownMenuItem(
-                  value: null,
-                  child: Text('All Types'),
-                ),
-                ...AppNotificationType.values
-                    .where((type) =>
-                        type != AppNotificationType.chat &&
-                        type != AppNotificationType.warning &&
-                        type != AppNotificationType.important &&
-                        type != AppNotificationType.reminder)
-                    .map(
-                      (type) => DropdownMenuItem(
-                        value: type,
-                        child: Row(
-                          children: [
-                            Icon(type.icon, size: 14),
-                            const SizedBox(width: 7),
-                            Expanded(
-                              child: Text(
-                                type.displayName,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                            ),
-                          ],
-                        ),
+              error: (err, _) => Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      'Error: $err',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.red,
                       ),
                     ),
-              ],
-              onChanged: (v) => setState(() => _selectedType = v),
-            ),
-          ),
-          if (hasFilter) ...[
-            const SizedBox(width: 4),
-            IconButton(
-              icon: const Icon(Icons.filter_alt_off, size: 19),
-              onPressed: _clearFilters,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterDropdown<T>({
-    required T value,
-    required String hint,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
-  }) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          hint: Text(
-            hint,
-            style: const TextStyle(fontSize: 11),
-          ),
-          isExpanded: true,
-          items: items,
-          onChanged: onChanged,
-          style: const TextStyle(
-            fontSize: 11,
-            color: Colors.black87,
-          ),
-          iconSize: 18,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, int count) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 5),
-      color: AppColors.namaDeepNavy.withOpacity(0.04),
-      child: Row(
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: AppColors.namaDeepNavy,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(width: 7),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-            decoration: BoxDecoration(
-              color: AppColors.namaDeepNavy.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              "$count",
-              style: const TextStyle(
-                fontSize: 9,
-                fontWeight: FontWeight.bold,
-                color: AppColors.namaDeepNavy,
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

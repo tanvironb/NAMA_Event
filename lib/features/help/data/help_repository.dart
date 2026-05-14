@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/models/help_ticket_model.dart';
 
-// Provider for HelpRepository
 final helpRepositoryProvider = Provider<HelpRepository>((ref) {
   return HelpRepository(FirebaseFirestore.instance);
 });
@@ -12,13 +11,14 @@ class HelpRepository {
 
   HelpRepository(this._firestore);
 
-  /// Submit a new help ticket
   Future<void> submitTicket({
     required String userId,
     required String userName,
     required String userEmail,
     required String subject,
     required String message,
+    String? eventId,
+    String? eventName,
   }) async {
     await _firestore.collection('help_tickets').add({
       'userId': userId,
@@ -27,15 +27,16 @@ class HelpRepository {
       'subject': subject,
       'message': message,
       'status': TicketStatus.pending,
+      'eventId': eventId ?? '',
+      'eventName': eventName ?? '',
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': null,
     });
   }
 
-  /// Check if user can submit a ticket (rate limit check)
   Future<bool> canSubmitTicket(String userId) async {
     final tenMinutesAgo = DateTime.now().subtract(const Duration(minutes: 10));
-    
+
     final recentTickets = await _firestore
         .collection('help_tickets')
         .where('userId', isEqualTo: userId)
@@ -46,27 +47,46 @@ class HelpRepository {
     return recentTickets.docs.isEmpty;
   }
 
-  /// Get all tickets (admin only)
   Stream<List<HelpTicket>> getAllTicketsStream() {
-    return _firestore
-        .collection('help_tickets')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => HelpTicket.fromFirestore(doc))
-            .toList());
+    return _firestore.collection('help_tickets').snapshots().map((snapshot) {
+      final tickets = snapshot.docs
+          .map((doc) => HelpTicket.fromFirestore(doc))
+          .toList();
+
+      tickets.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      return tickets;
+    });
   }
 
-  /// Get pending tickets count (admin only)
-  Stream<int> getPendingTicketsCountStream() {
+  Stream<List<HelpTicket>> getTicketsByEventStream(String eventId) {
     return _firestore
         .collection('help_tickets')
-        .where('status', isEqualTo: TicketStatus.pending)
+        .where('eventId', isEqualTo: eventId)
         .snapshots()
-        .map((snapshot) => snapshot.docs.length);
+        .map((snapshot) {
+      final tickets = snapshot.docs
+          .map((doc) => HelpTicket.fromFirestore(doc))
+          .toList();
+
+      tickets.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+      return tickets;
+    });
   }
 
-  /// Update ticket status (admin only)
+  Stream<int> getPendingTicketsCountStream({String? eventId}) {
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('help_tickets')
+        .where('status', isEqualTo: TicketStatus.pending);
+
+    if (eventId != null && eventId.isNotEmpty) {
+      query = query.where('eventId', isEqualTo: eventId);
+    }
+
+    return query.snapshots().map((snapshot) => snapshot.docs.length);
+  }
+
   Future<void> updateTicketStatus(String ticketId, String status) async {
     await _firestore.collection('help_tickets').doc(ticketId).update({
       'status': status,
@@ -74,7 +94,6 @@ class HelpRepository {
     });
   }
 
-  /// Delete ticket (admin only)
   Future<void> deleteTicket(String ticketId) async {
     await _firestore.collection('help_tickets').doc(ticketId).delete();
   }

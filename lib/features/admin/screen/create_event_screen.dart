@@ -1,0 +1,1761 @@
+// lib/features/admin/screen/create_event_screen.dart
+import 'dart:typed_data';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/features/admin/screen/create_session_screen.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+
+class CreateEventScreen extends StatefulWidget {
+  final String? eventId;
+  final Map<String, dynamic>? existingEventData;
+
+  const CreateEventScreen({
+    super.key,
+    this.eventId,
+    this.existingEventData,
+  });
+
+  bool get isEditMode => eventId != null && existingEventData != null;
+
+  @override
+  State<CreateEventScreen> createState() => _CreateEventScreenState();
+}
+
+class _CreateEventScreenState extends State<CreateEventScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _eventNameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _registrationLimitController = TextEditingController();
+  final _organizerContactController = TextEditingController();
+
+  final ImagePicker _imagePicker = ImagePicker();
+
+  DateTime? _selectedDate;
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
+
+  String? _selectedCategory;
+  String _eventFormat = 'In-person';
+  String _visibility = 'Public';
+
+  bool _isSaving = false;
+
+  final List<_PartnerInput> _partners = [];
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  final List<String> _categories = const [
+    'Conference',
+    'Summit',
+    'Workshop',
+    'Seminar',
+    'Forum',
+    'Networking',
+    'Training',
+    'Other',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fillFieldsForEdit();
+
+    if (_partners.isEmpty) {
+      _partners.add(_PartnerInput());
+    }
+  }
+
+  void _fillFieldsForEdit() {
+    if (!widget.isEditMode) return;
+
+    final data = widget.existingEventData!;
+
+    _eventNameController.text = (data['name'] ?? '').toString();
+    _descriptionController.text = (data['description'] ?? '').toString();
+    _locationController.text = (data['location'] ?? '').toString();
+    _organizerContactController.text =
+        (data['organizerContact'] ?? '').toString();
+
+    final registrationLimit = data['registrationLimit'];
+    if (registrationLimit != null) {
+      _registrationLimitController.text = registrationLimit.toString();
+    }
+
+    final category = (data['category'] ?? '').toString();
+    if (category.isNotEmpty && _categories.contains(category)) {
+      _selectedCategory = category;
+    }
+
+    final format = (data['eventFormat'] ?? '').toString();
+    if (format.isNotEmpty) {
+      _eventFormat = format;
+    }
+
+    final visibility = (data['visibility'] ?? '').toString();
+    if (visibility.isNotEmpty) {
+      _visibility = visibility;
+    }
+
+    final startTimestamp = data['startDate'];
+    final endTimestamp = data['endDate'];
+
+    if (startTimestamp is Timestamp) {
+      final startDate = startTimestamp.toDate();
+      _selectedDate = DateTime(
+        startDate.year,
+        startDate.month,
+        startDate.day,
+      );
+      _startTime = TimeOfDay(
+        hour: startDate.hour,
+        minute: startDate.minute,
+      );
+    }
+
+    if (endTimestamp is Timestamp) {
+      final endDate = endTimestamp.toDate();
+      _endTime = TimeOfDay(
+        hour: endDate.hour,
+        minute: endDate.minute,
+      );
+    }
+
+    final partnersData = data['partners'];
+    if (partnersData is List) {
+      for (final partner in partnersData) {
+        if (partner is Map) {
+          final name = (partner['name'] ?? '').toString();
+          final logoUrl = (partner['logoUrl'] ?? '').toString();
+
+          if (name.isNotEmpty || logoUrl.isNotEmpty) {
+            _partners.add(
+              _PartnerInput(
+                name: name,
+                existingLogoUrl: logoUrl,
+              ),
+            );
+          }
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _eventNameController.dispose();
+    _descriptionController.dispose();
+    _locationController.dispose();
+    _registrationLimitController.dispose();
+    _organizerContactController.dispose();
+
+    for (final partner in _partners) {
+      partner.dispose();
+    }
+
+    super.dispose();
+  }
+
+  String _makeSlug(String value) {
+    final slug = value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+
+    if (slug.isEmpty) {
+      return 'event_${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    return slug;
+  }
+
+  DateTime _combineDateAndTime(DateTime date, TimeOfDay time) {
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 10),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: _primaryColor,
+                ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _pickStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime ?? TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: _primaryColor,
+                ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() => _startTime = picked);
+    }
+  }
+
+  Future<void> _pickEndTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _endTime ?? _startTime ?? TimeOfDay.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: _primaryColor,
+                ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() => _endTime = picked);
+    }
+  }
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'Select date';
+
+    final day = date.day.toString().padLeft(2, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final year = date.year.toString();
+
+    return '$day/$month/$year';
+  }
+
+  String _formatTime(TimeOfDay? time) {
+    if (time == null) return '';
+
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+
+    return '$hour:$minute $period';
+  }
+
+  void _addPartner() {
+    setState(() {
+      _partners.add(_PartnerInput());
+    });
+  }
+
+  void _removePartner(int index) {
+    if (_partners.length == 1) {
+      setState(() {
+        _partners[index].clear();
+      });
+      return;
+    }
+
+    setState(() {
+      final removedPartner = _partners.removeAt(index);
+      removedPartner.dispose();
+    });
+  }
+
+  Future<void> _pickPartnerLogo(int index) async {
+    try {
+      final pickedImage = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 75,
+      );
+
+      if (pickedImage == null) return;
+
+      final imageBytes = await pickedImage.readAsBytes();
+
+      setState(() {
+        _partners[index].pickedLogoBytes = imageBytes;
+      });
+    } catch (e) {
+      _showMessage('Failed to pick logo: $e');
+    }
+  }
+
+  bool _validatePartners() {
+    for (int i = 0; i < _partners.length; i++) {
+      final partner = _partners[i];
+      final name = partner.nameController.text.trim();
+      final hasLogo = partner.pickedLogoBytes != null ||
+          partner.existingLogoUrl.trim().isNotEmpty;
+
+      final isCompletelyEmpty = name.isEmpty && !hasLogo;
+
+      if (isCompletelyEmpty) continue;
+
+      if (name.isEmpty) {
+        _showMessage('Please enter partner name for partner ${i + 1}.');
+        return false;
+      }
+
+      if (!hasLogo) {
+        _showMessage('Please add partner logo for $name.');
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  Future<List<Map<String, dynamic>>> _uploadAndPreparePartners(
+    String eventId,
+  ) async {
+    final List<Map<String, dynamic>> partnersData = [];
+
+    for (int i = 0; i < _partners.length; i++) {
+      final partner = _partners[i];
+      final name = partner.nameController.text.trim();
+
+      final hasExistingLogo = partner.existingLogoUrl.trim().isNotEmpty;
+      final hasPickedLogo = partner.pickedLogoBytes != null;
+
+      if (name.isEmpty && !hasExistingLogo && !hasPickedLogo) {
+        continue;
+      }
+
+      String logoUrl = partner.existingLogoUrl.trim();
+
+      if (hasPickedLogo) {
+        final fileName =
+            '${DateTime.now().millisecondsSinceEpoch}_partner_${i + 1}.jpg';
+
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('events')
+            .child(eventId)
+            .child('partners')
+            .child(fileName);
+
+        final uploadTask = await ref.putData(
+          partner.pickedLogoBytes!,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+
+        logoUrl = await uploadTask.ref.getDownloadURL();
+      }
+
+      partnersData.add({
+        'name': name,
+        'logoUrl': logoUrl,
+      });
+    }
+
+    return partnersData;
+  }
+
+  Future<String?> _saveEventToFirebase({
+    required bool asDraft,
+  }) async {
+    FocusScope.of(context).unfocus();
+
+    if (!_formKey.currentState!.validate()) return null;
+
+    if (_selectedDate == null) {
+      _showMessage('Please select event date.');
+      return null;
+    }
+
+    if (_startTime == null) {
+      _showMessage('Please select start time.');
+      return null;
+    }
+
+    if (_endTime == null) {
+      _showMessage('Please select end time.');
+      return null;
+    }
+
+    if (!_validatePartners()) {
+      return null;
+    }
+
+    final startDate = _combineDateAndTime(_selectedDate!, _startTime!);
+    final endDate = _combineDateAndTime(_selectedDate!, _endTime!);
+
+    if (!endDate.isAfter(startDate)) {
+      _showMessage('End time must be after start time.');
+      return null;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final name = _eventNameController.text.trim();
+
+      final docId = widget.isEditMode ? widget.eventId! : _makeSlug(name);
+      final docRef = FirebaseFirestore.instance.collection('events').doc(docId);
+
+      if (!widget.isEditMode) {
+        final existingDoc = await docRef.get();
+
+        if (existingDoc.exists) {
+          _showMessage('An event with this name already exists.');
+          return null;
+        }
+      }
+
+      final partnersData = await _uploadAndPreparePartners(docId);
+
+      final eventData = {
+        'name': name,
+        'description': _descriptionController.text.trim(),
+        'startDate': Timestamp.fromDate(startDate),
+        'endDate': Timestamp.fromDate(endDate),
+        'location': _locationController.text.trim(),
+        'isActive': widget.existingEventData?['isActive'] ?? false,
+        'venueMapUrl': widget.existingEventData?['venueMapUrl'] ?? '',
+        'website': widget.existingEventData?['website'] ?? '',
+        'category': _selectedCategory ?? '',
+        'registrationLimit':
+            int.tryParse(_registrationLimitController.text.trim()),
+        'organizerContact': _organizerContactController.text.trim(),
+        'eventFormat': _eventFormat,
+        'visibility': _visibility,
+        'partners': partnersData,
+        'status': asDraft ? 'draft' : 'pending_sessions',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (widget.isEditMode) {
+        await docRef.update(eventData);
+      } else {
+        await docRef.set({
+          ...eventData,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      return docId;
+    } catch (e) {
+      _showMessage('Failed to save event: $e');
+      return null;
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Future<void> _saveDraft() async {
+    final eventId = await _saveEventToFirebase(asDraft: true);
+
+    if (eventId == null || !mounted) return;
+
+    _showMessage(
+      widget.isEditMode
+          ? 'Event draft updated successfully.'
+          : 'Event draft saved successfully.',
+    );
+
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _goNextToSessionCreation() async {
+    final eventId = await _saveEventToFirebase(asDraft: false);
+
+    if (eventId == null || !mounted) return;
+
+    final eventName = _eventNameController.text.trim();
+
+    _showMessage(
+      widget.isEditMode
+          ? 'Event updated. Now create sessions.'
+          : 'Event saved. Now create sessions.',
+    );
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CreateSessionScreen(
+          eventId: eventId,
+          eventName: eventName,
+        ),
+      ),
+    );
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Widget _buildTopHeader() {
+    return Row(
+      children: [
+        InkWell(
+          onTap: () => Navigator.of(context).pop(),
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            height: 38,
+            width: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF6F4FD),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFFE8E4F8),
+              ),
+            ),
+            child: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: _primaryColor,
+              size: 17,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Image.asset(
+          'assets/images/logo.png',
+          height: 43,
+          fit: BoxFit.contain,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPartnersSection() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE8E4F8),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.018),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Partners',
+                      style: TextStyle(
+                        color: _primaryColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Add event partners and upload their logos.',
+                      style: TextStyle(
+                        color: _textMuted,
+                        fontSize: 11.8,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              InkWell(
+                onTap: _addPartner,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4F1FF),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _primaryColor,
+                    ),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.add_rounded,
+                        color: _primaryColor,
+                        size: 17,
+                      ),
+                      SizedBox(width: 5),
+                      Text(
+                        'Add',
+                        style: TextStyle(
+                          color: _primaryColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 15),
+          ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _partners.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 13),
+            itemBuilder: (context, index) {
+              final partner = _partners[index];
+
+              return _PartnerCard(
+                index: index,
+                partner: partner,
+                onPickLogo: () => _pickPartnerLogo(index),
+                onRemove: () => _removePartner(index),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final descriptionLength = _descriptionController.text.length;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTopHeader(),
+              const SizedBox(height: 30),
+              Text(
+                widget.isEditMode ? 'Edit Event' : 'Create Event',
+                style: const TextStyle(
+                  color: _primaryColor,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                widget.isEditMode
+                    ? 'Update event details and continue to sessions.'
+                    : 'Set up a new event for attendees.',
+                style: const TextStyle(
+                  color: _textMuted,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Form(
+                key: _formKey,
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFE8E4F8),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.018),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      _InputField(
+                        label: 'Event Name',
+                        controller: _eventNameController,
+                        hint: 'Enter event name',
+                        icon: Icons.confirmation_number_outlined,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Event name is required';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      _InputField(
+                        label: 'Short Description',
+                        controller: _descriptionController,
+                        hint: 'Briefly describe your event',
+                        icon: Icons.chat_bubble_outline_rounded,
+                        maxLength: 200,
+                        suffixText: '$descriptionLength/200',
+                        onChanged: (_) => setState(() {}),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Description is required';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _PickerField(
+                              label: 'Event Date',
+                              value: _formatDate(_selectedDate),
+                              icon: Icons.calendar_today_outlined,
+                              onTap: _pickDate,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _PickerField(
+                              label: 'Start Time',
+                              value: _startTime == null
+                                  ? 'Start time'
+                                  : _formatTime(_startTime),
+                              icon: Icons.access_time_rounded,
+                              onTap: _pickStartTime,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _PickerField(
+                              label: 'End Time',
+                              value: _endTime == null
+                                  ? 'End time'
+                                  : _formatTime(_endTime),
+                              icon: Icons.access_time_rounded,
+                              onTap: _pickEndTime,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      _InputField(
+                        label: 'Venue / Location',
+                        controller: _locationController,
+                        hint: 'Enter venue or location',
+                        icon: Icons.location_on_outlined,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Location is required';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _DropdownField(
+                              label: 'Category',
+                              value: _selectedCategory,
+                              hint: 'Select category',
+                              icon: Icons.sell_outlined,
+                              items: _categories,
+                              onChanged: (value) {
+                                setState(() => _selectedCategory = value);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _InputField(
+                              label: 'Registration Limit',
+                              controller: _registrationLimitController,
+                              hint: 'Enter limit (optional)',
+                              icon: Icons.people_outline_rounded,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 15),
+                      _InputField(
+                        label: 'Organizer Contact',
+                        controller: _organizerContactController,
+                        hint: 'Email or phone number',
+                        icon: Icons.mail_outline_rounded,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Organizer contact is required';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              _buildPartnersSection(),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: const Color(0xFFE8E4F8),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.018),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Quick Setup',
+                      style: TextStyle(
+                        color: _primaryColor,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Choose the basic event settings.',
+                      style: TextStyle(
+                        color: _textMuted,
+                        fontSize: 11.8,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: _ChipGroup(
+                            title: 'Event Format',
+                            selectedValue: _eventFormat,
+                            options: const [
+                              _SetupOption(
+                                label: 'In-person',
+                                icon: Icons.person_outline_rounded,
+                              ),
+                              _SetupOption(
+                                label: 'Online',
+                                icon: Icons.language_rounded,
+                              ),
+                              _SetupOption(
+                                label: 'Hybrid',
+                                icon: Icons.groups_2_outlined,
+                              ),
+                            ],
+                            onSelected: (value) {
+                              setState(() => _eventFormat = value);
+                            },
+                          ),
+                        ),
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 10),
+                          width: 1,
+                          height: 66,
+                          color: const Color(0xFFE4E1EF),
+                        ),
+                        Expanded(
+                          child: _ChipGroup(
+                            title: 'Visibility',
+                            selectedValue: _visibility,
+                            options: const [
+                              _SetupOption(
+                                label: 'Public',
+                                icon: Icons.language_rounded,
+                              ),
+                              _SetupOption(
+                                label: 'Private',
+                                icon: Icons.lock_outline_rounded,
+                              ),
+                            ],
+                            onSelected: (value) {
+                              setState(() => _visibility = value);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ActionButton(
+                      label: 'Save Draft',
+                      icon: Icons.save_outlined,
+                      isPrimary: false,
+                      isLoading: _isSaving,
+                      onTap: _saveDraft,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _ActionButton(
+                      label: 'Next',
+                      icon: Icons.arrow_forward_rounded,
+                      isPrimary: true,
+                      isLoading: _isSaving,
+                      onTap: _goNextToSessionCreation,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+              const _FooterCredit(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PartnerInput {
+  final TextEditingController nameController;
+  String existingLogoUrl;
+  Uint8List? pickedLogoBytes;
+
+  _PartnerInput({
+    String name = '',
+    this.existingLogoUrl = '',
+    this.pickedLogoBytes,
+  }) : nameController = TextEditingController(text: name);
+
+  void clear() {
+    nameController.clear();
+    existingLogoUrl = '';
+    pickedLogoBytes = null;
+  }
+
+  void dispose() {
+    nameController.dispose();
+  }
+}
+
+class _PartnerCard extends StatelessWidget {
+  final int index;
+  final _PartnerInput partner;
+  final VoidCallback onPickLogo;
+  final VoidCallback onRemove;
+
+  const _PartnerCard({
+    required this.index,
+    required this.partner,
+    required this.onPickLogo,
+    required this.onRemove,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    Widget logoChild;
+
+    if (partner.pickedLogoBytes != null) {
+      logoChild = ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Image.memory(
+          partner.pickedLogoBytes!,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+        ),
+      );
+    } else if (partner.existingLogoUrl.trim().isNotEmpty) {
+      logoChild = ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Image.network(
+          partner.existingLogoUrl,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, __, ___) {
+            return const Icon(
+              Icons.broken_image_outlined,
+              color: _primaryColor,
+              size: 24,
+            );
+          },
+        ),
+      );
+    } else {
+      logoChild = const Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.image_outlined,
+            color: _primaryColor,
+            size: 23,
+          ),
+          SizedBox(height: 5),
+          Text(
+            'Logo',
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFBFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _fieldBorder,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Partner ${index + 1}',
+                style: const TextStyle(
+                  color: _primaryColor,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: onRemove,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  height: 30,
+                  width: 30,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFE8E4F8),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.redAccent,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: _PartnerNameField(
+                  controller: partner.nameController,
+                ),
+              ),
+              const SizedBox(width: 12),
+              InkWell(
+                onTap: onPickLogo,
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  height: 82,
+                  width: 82,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: _fieldBorder,
+                    ),
+                  ),
+                  child: logoChild,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          InkWell(
+            onTap: onPickLogo,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              height: 38,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _fieldBorder,
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.upload_rounded,
+                    color: _primaryColor,
+                    size: 17,
+                  ),
+                  SizedBox(width: 6),
+                  Text(
+                    'Upload Partner Logo',
+                    style: TextStyle(
+                      color: _primaryColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PartnerNameField extends StatelessWidget {
+  final TextEditingController controller;
+
+  const _PartnerNameField({
+    required this.controller,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _FieldLabel('Partner Name'),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 48,
+          child: TextFormField(
+            controller: controller,
+            cursorColor: _primaryColor,
+            style: const TextStyle(
+              color: Color(0xFF1F2937),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              hintText: 'Enter partner name',
+              hintStyle: const TextStyle(
+                color: _textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+              ),
+              prefixIcon: const Icon(
+                Icons.handshake_outlined,
+                color: _primaryColor,
+                size: 19,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: _fieldBorder,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: _primaryColor,
+                  width: 1.1,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InputField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final String? suffixText;
+  final int? maxLength;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+  final ValueChanged<String>? onChanged;
+  final String? Function(String?)? validator;
+
+  const _InputField({
+    required this.label,
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.suffixText,
+    this.maxLength,
+    this.keyboardType,
+    this.inputFormatters,
+    this.onChanged,
+    this.validator,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 48,
+          child: TextFormField(
+            controller: controller,
+            maxLength: maxLength,
+            keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
+            onChanged: onChanged,
+            validator: validator,
+            cursorColor: _primaryColor,
+            style: const TextStyle(
+              color: Color(0xFF1F2937),
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              counterText: '',
+              hintText: hint,
+              hintStyle: const TextStyle(
+                color: _textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+              ),
+              prefixIcon: Icon(
+                icon,
+                color: _primaryColor,
+                size: 19,
+              ),
+              suffixText: suffixText,
+              suffixStyle: const TextStyle(
+                color: _textMuted,
+                fontSize: 11,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 12,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: _fieldBorder,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: _primaryColor,
+                  width: 1.1,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: Colors.redAccent,
+                ),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: Colors.redAccent,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PickerField extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _PickerField({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    final isPlaceholder =
+        value == 'Select date' || value == 'Start time' || value == 'End time';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(13),
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(
+                color: _fieldBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: _primaryColor,
+                  size: 18,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isPlaceholder
+                          ? _textMuted
+                          : const Color(0xFF1F2937),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF454062),
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DropdownField extends StatelessWidget {
+  final String label;
+  final String? value;
+  final String hint;
+  final IconData icon;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+
+  const _DropdownField({
+    required this.label,
+    required this.value,
+    required this.hint,
+    required this.icon,
+    required this.items,
+    required this.onChanged,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 48,
+          child: DropdownButtonFormField<String>(
+            value: value,
+            onChanged: onChanged,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) {
+                return 'Required';
+              }
+              return null;
+            },
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF454062),
+              size: 18,
+            ),
+            style: const TextStyle(
+              color: Color(0xFF1F2937),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(
+                color: _textMuted,
+                fontSize: 12,
+              ),
+              prefixIcon: Icon(
+                icon,
+                color: _primaryColor,
+                size: 19,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 11,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: _fieldBorder,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: _primaryColor,
+                  width: 1.1,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: Colors.redAccent,
+                ),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: Colors.redAccent,
+                ),
+              ),
+            ),
+            items: items
+                .map(
+                  (item) => DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(
+                      item,
+                      style: const TextStyle(
+                        color: Color(0xFF1F2937),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  final String label;
+
+  const _FieldLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: Color(0xFF1B0F72),
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _SetupOption {
+  final String label;
+  final IconData icon;
+
+  const _SetupOption({
+    required this.label,
+    required this.icon,
+  });
+}
+
+class _ChipGroup extends StatelessWidget {
+  final String title;
+  final String selectedValue;
+  final List<_SetupOption> options;
+  final ValueChanged<String> onSelected;
+
+  const _ChipGroup({
+    required this.title,
+    required this.selectedValue,
+    required this.options,
+    required this.onSelected,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: _primaryColor,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 9),
+        Wrap(
+          spacing: 7,
+          runSpacing: 8,
+          children: options.map((option) {
+            final isSelected = option.label == selectedValue;
+
+            return InkWell(
+              onTap: () => onSelected(option.label),
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFFF4F1FF) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected ? _primaryColor : _fieldBorder,
+                    width: isSelected ? 1.1 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      option.icon,
+                      size: 15,
+                      color: _primaryColor,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      option.label,
+                      style: const TextStyle(
+                        color: _primaryColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isPrimary;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.isPrimary,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ElevatedButton.icon(
+        onPressed: isLoading ? null : onTap,
+        icon: isLoading
+            ? SizedBox(
+                height: 15,
+                width: 15,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: isPrimary ? Colors.white : _primaryColor,
+                ),
+              )
+            : Icon(
+                icon,
+                size: 18,
+              ),
+        label: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: isPrimary ? _primaryColor : Colors.white,
+          foregroundColor: isPrimary ? Colors.white : _primaryColor,
+          disabledBackgroundColor:
+              isPrimary ? _primaryColor.withOpacity(0.55) : Colors.white,
+          disabledForegroundColor:
+              isPrimary ? Colors.white70 : _primaryColor.withOpacity(0.5),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(
+              color: isPrimary ? _primaryColor : const Color(0xFFE1DDF0),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FooterCredit extends StatelessWidget {
+  const _FooterCredit();
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Divider(
+                color: Color(0xFFE2DEEF),
+                thickness: 1,
+                indent: 50,
+              ),
+            ),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'By: NAMA Foundation',
+                style: TextStyle(
+                  color: _primaryColor,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Divider(
+                color: Color(0xFFE2DEEF),
+                thickness: 1,
+                endIndent: 50,
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 8),
+        Icon(
+          Icons.circle,
+          color: Color(0xFFF5B51B),
+          size: 7,
+        ),
+      ],
+    );
+  }
+}

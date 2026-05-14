@@ -3,12 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/widgets/session_bookmark_button.dart';
-import 'package:events_app_trueattempt/features/networking/screen/speaker_profile_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 
 class SessionDetailScreen extends StatelessWidget {
   final Session session;
 
-  const SessionDetailScreen({super.key, required this.session});
+  const SessionDetailScreen({
+    super.key,
+    required this.session,
+  });
 
   Future<List<Map<String, dynamic>>> _loadSpeakers() async {
     if (session.speakerIds.isEmpty) return [];
@@ -27,6 +30,7 @@ class SessionDetailScreen extends StatelessWidget {
       if (doc.exists && doc.data() != null) {
         final data = doc.data()!;
         data['id'] = doc.id;
+        data['uid'] = doc.id;
         speakers.add(data);
       }
     }
@@ -47,8 +51,6 @@ class SessionDetailScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-
-              // 🔹 TOP BAR (CENTER TITLE)
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -89,17 +91,31 @@ class SessionDetailScreen extends StatelessWidget {
 
               const SizedBox(height: 25),
 
-              // 🔹 IMAGE + BOOKMARK
               Stack(
                 clipBehavior: Clip.none,
                 children: [
                   Container(
-                    height: 130,
+                    height: 210,
                     width: double.infinity,
                     decoration: BoxDecoration(
                       color: const Color(0xFFEFEFEF),
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(22),
+                      image: session.imageUrl.isNotEmpty
+                          ? DecorationImage(
+                              image: NetworkImage(session.imageUrl),
+                              fit: BoxFit.cover,
+                            )
+                          : null,
                     ),
+                    child: session.imageUrl.isEmpty
+                        ? const Center(
+                            child: Icon(
+                              Icons.image_outlined,
+                              size: 45,
+                              color: Colors.grey,
+                            ),
+                          )
+                        : null,
                   ),
                   Positioned(
                     right: 14,
@@ -131,13 +147,15 @@ class SessionDetailScreen extends StatelessWidget {
                 ],
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 35),
 
-              // 🔹 TIME
               Row(
                 children: [
-                  const Icon(Icons.access_time,
-                      color: Color(0xFFE2BF3C), size: 18),
+                  const Icon(
+                    Icons.access_time,
+                    color: Color(0xFFE2BF3C),
+                    size: 18,
+                  ),
                   const SizedBox(width: 12),
                   Text(time),
                 ],
@@ -145,11 +163,13 @@ class SessionDetailScreen extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // 🔹 LOCATION
               Row(
                 children: [
-                  const Icon(Icons.location_on,
-                      color: Color(0xFFE2BF3C), size: 18),
+                  const Icon(
+                    Icons.location_on,
+                    color: Color(0xFFE2BF3C),
+                    size: 18,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(child: Text(session.location)),
                 ],
@@ -157,7 +177,6 @@ class SessionDetailScreen extends StatelessWidget {
 
               const SizedBox(height: 22),
 
-              // 🔹 ABOUT
               const Text(
                 'About',
                 style: TextStyle(fontWeight: FontWeight.w600),
@@ -165,11 +184,17 @@ class SessionDetailScreen extends StatelessWidget {
 
               const SizedBox(height: 10),
 
-              Text(session.description),
+              Text(
+                session.description,
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.35,
+                  color: Color(0xFF444444),
+                ),
+              ),
 
               const SizedBox(height: 22),
 
-              // 🔹 SPEAKERS TITLE
               const Text(
                 'Speakers',
                 style: TextStyle(
@@ -181,7 +206,6 @@ class SessionDetailScreen extends StatelessWidget {
 
               const SizedBox(height: 14),
 
-              // 🔹 SPEAKERS LIST
               FutureBuilder<List<Map<String, dynamic>>>(
                 future: _loadSpeakers(),
                 builder: (context, snapshot) {
@@ -192,7 +216,10 @@ class SessionDetailScreen extends StatelessWidget {
                   final speakers = snapshot.data ?? [];
 
                   if (speakers.isEmpty) {
-                    return _speakerCard(context: context, speaker: {});
+                    return const Text(
+                      'No speakers listed for this session.',
+                      style: TextStyle(fontSize: 13),
+                    );
                   }
 
                   return Column(
@@ -210,29 +237,6 @@ class SessionDetailScreen extends StatelessWidget {
               ),
 
               const SizedBox(height: 65),
-
-              // 🔹 JOIN BUTTON
-              Center(
-                child: SizedBox(
-                  width: 170,
-                  height: 36,
-                  child: ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3D3D9E),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                    ),
-                    child: const Text(
-                      'JOIN EVENT',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -240,68 +244,64 @@ class SessionDetailScreen extends StatelessWidget {
     );
   }
 
-  // 🔹 SPEAKER CARD WITH ROUTING
   Widget _speakerCard({
-  required BuildContext context,
-  required Map<String, dynamic> speaker,
-}) {
-  final name = speaker['name'] ??
-      speaker['fullName'] ??
-      speaker['displayName'] ??
-      'Speaker';
+    required BuildContext context,
+    required Map<String, dynamic> speaker,
+  }) {
+    final userId = (speaker['uid'] ?? speaker['id'] ?? '').toString();
 
-  final role = speaker['role'] ?? speaker['title'] ?? 'Speaker';
+    final name = speaker['name'] ??
+        speaker['fullName'] ??
+        speaker['displayName'] ??
+        'Speaker';
 
-  final company = speaker['company'] ?? '';
+    final imageUrl = speaker['profileImageUrl'] ?? '';
 
-  final imageUrl = speaker['profileImageUrl'] ?? '';
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: () {
+        if (userId.isEmpty) return;
 
-  final bio = speaker['bio'] ?? '';
-  final email = speaker['email'] ?? '';
-
-  return InkWell(
-    borderRadius: BorderRadius.circular(18),
-    onTap: () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => SpeakerProfileScreen(
-            name: name,
-            role: role,
-            company: company,
-            imageUrl: imageUrl,
-            bio: bio,
-            email: email,
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => UserDetailsScreen(userId: userId),
           ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 10,
+            ),
+          ],
         ),
-      );
-    },
-    child: Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-          ),
-        ],
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundImage:
+                  imageUrl.toString().isNotEmpty ? NetworkImage(imageUrl) : null,
+              child: imageUrl.toString().isEmpty
+                  ? const Icon(Icons.person)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                name.toString(),
+                style: const TextStyle(fontSize: 14),
+              ),
+            ),
+            const Icon(Icons.chevron_right),
+          ],
+        ),
       ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 28,
-            backgroundImage:
-                imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
-            child: imageUrl.isEmpty ? const Icon(Icons.person) : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Text(name)),
-          const Icon(Icons.chevron_right),
-        ],
-      ),
-    ),
-  );
-}
+    );
+  }
 }

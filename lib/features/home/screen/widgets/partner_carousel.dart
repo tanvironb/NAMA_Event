@@ -9,79 +9,117 @@ class PartnerCarousel extends ConsumerWidget {
   const PartnerCarousel({super.key});
 
   static const Color primaryBlue = Color(0xFF0D1496);
+  static const Color lightGrey = Color(0xFFEFEFEF);
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final sponsorsAsync = ref.watch(sponsorsStreamProvider);
+ @override
+Widget build(BuildContext context, WidgetRef ref) {
+  final sponsorsAsync = ref.watch(sponsorsStreamProvider);
 
-    return sponsorsAsync.when(
-      data: (sponsors) {
-        if (sponsors.isEmpty) {
-          return SizedBox(
-            height: 170,
-            child: Center(
-              child: Text(
-                'No partners yet.',
-                style: TextStyle(
-                  color: Colors.black.withOpacity(0.55),
-                  fontSize: 13,
-                ),
-              ),
-            ),
-          );
-        }
+  return sponsorsAsync.when(
+    data: (sponsors) {
+      if (sponsors.isEmpty) {
+        return const SizedBox(
+          height: 120,
+          child: Center(child: Text('No partners yet')),
+        );
+      }
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 30),
-          child: Wrap(
-            spacing: 26,
-            runSpacing: 28,
-            alignment: WrapAlignment.center,
-            children: sponsors.map<Widget>((sponsor) {
-              return _partnerCircle(context, sponsor);
-            }).toList(),
+      // 🔥 Split into rows of 3
+      List<List<dynamic>> rows = [];
+      for (int i = 0; i < sponsors.length; i += 3) {
+        rows.add(
+          sponsors.sublist(
+            i,
+            i + 3 > sponsors.length ? sponsors.length : i + 3,
           ),
         );
-      },
-      loading: () => const SizedBox(
-        height: 170,
-        child: Center(child: LoadingIndicator()),
-      ),
-      error: (err, stack) => SizedBox(
-        height: 170,
-        child: Center(
-          child: Text(
-            'Unable to load partners',
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
-          ),
+      }
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          children: rows.map((row) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 26),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center, // 🔥 CENTER ROW
+                children: row.map((sponsor) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    child: _partnerItem(context, sponsor),
+                  );
+                }).toList(),
+              ),
+            );
+          }).toList(),
+        ),
+      );
+    },
+    loading: () => const SizedBox(
+      height: 120,
+      child: Center(child: LoadingIndicator()),
+    ),
+    error: (err, stack) => SizedBox(
+      height: 120,
+      child: Center(
+        child: Text(
+          'Error loading partners',
+          style: TextStyle(color: Theme.of(context).colorScheme.error),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _partnerCircle(BuildContext context, dynamic sponsor) {
+  Widget _partnerItem(BuildContext context, dynamic sponsor) {
+    final logoUrl = _safeString(sponsor.logoUrl);
+    final name = _safeString(sponsor.name);
+
     return GestureDetector(
       onTap: () => _showPartnerOptions(context, sponsor),
       child: SizedBox(
-        width: 82,
+        width: 95, // 🔥 bigger width (3 per row)
         child: Column(
           children: [
             Container(
-              width: 78,
-              height: 78,
-              decoration: const BoxDecoration(
-                color: Color(0xFFEFEFEF),
+              width: 90,   // 🔥 bigger logo
+              height: 90,  // 🔥 bigger logo
+              decoration: BoxDecoration(
+                color: lightGrey,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               child: ClipOval(
-                child: sponsor.logoUrl.isNotEmpty
-                    ? Image.network(
-                        sponsor.logoUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            _logoFallback(),
+                child: logoUrl.isNotEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.all(12), // 🔥 prevents crop
+                        child: Image.network(
+                          logoUrl,
+                          fit: BoxFit.contain, // 🔥 FIX (no crop)
+                          errorBuilder: (context, error, stackTrace) =>
+                              _fallback(),
+                        ),
                       )
-                    : _logoFallback(),
+                    : _fallback(),
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Text(
+              name.isNotEmpty ? name : 'Partner',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -90,21 +128,24 @@ class PartnerCarousel extends ConsumerWidget {
     );
   }
 
-  Widget _logoFallback() {
-    return const Icon(
-      Icons.business,
-      color: primaryBlue,
-      size: 34,
+  Widget _fallback() {
+    return const Center(
+      child: Icon(Icons.business, color: primaryBlue, size: 34),
     );
   }
 
   void _showPartnerOptions(BuildContext context, dynamic sponsor) {
+    final name = _safeString(sponsor.name);
+    final logoUrl = _safeString(sponsor.logoUrl);
+    final website = _safeString(sponsor.website);
+    final description = _safeString(sponsor.description);
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (context) => Container(
+      builder: (context) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -113,25 +154,20 @@ class PartnerCarousel extends ConsumerWidget {
               children: [
                 ClipOval(
                   child: Container(
-                    width: 46,
-                    height: 46,
-                    color: const Color(0xFFEFEFEF),
-                    child: sponsor.logoUrl.isNotEmpty
-                        ? Image.network(
-                            sponsor.logoUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const Icon(Icons.business, color: primaryBlue),
-                          )
+                    width: 50,
+                    height: 50,
+                    color: lightGrey,
+                    child: logoUrl.isNotEmpty
+                        ? Image.network(logoUrl, fit: BoxFit.cover)
                         : const Icon(Icons.business, color: primaryBlue),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    sponsor.name,
+                    name,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 17,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -139,37 +175,34 @@ class PartnerCarousel extends ConsumerWidget {
               ],
             ),
 
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
 
             ListTile(
               leading: const Icon(Icons.event_note, color: primaryBlue),
               title: const Text('View Sessions'),
-              subtitle: const Text('See all sessions by this partner'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => SponsorDetailScreen(
+                    builder: (_) => SponsorDetailScreen(
                       partnerId: sponsor.id,
-                      partnerName: sponsor.name,
-                      partnerLogo:
-                          sponsor.logoUrl.isNotEmpty ? sponsor.logoUrl : null,
-                      partnerDescription: sponsor.description,
+                      partnerName: name,
+                      partnerLogo: logoUrl.isNotEmpty ? logoUrl : null,
+                      partnerDescription: description,
                     ),
                   ),
                 );
               },
             ),
 
-            if (sponsor.website.isNotEmpty)
+            if (website.isNotEmpty)
               ListTile(
                 leading: const Icon(Icons.open_in_new, color: primaryBlue),
                 title: const Text('Visit Website'),
-                subtitle: Text('Open ${sponsor.name} website'),
                 onTap: () {
                   Navigator.pop(context);
-                  _openPartnerWebsite(context, sponsor);
+                  _openWebsite(context, website);
                 },
               ),
           ],
@@ -178,18 +211,9 @@ class PartnerCarousel extends ConsumerWidget {
     );
   }
 
-  Future<void> _openPartnerWebsite(BuildContext context, dynamic sponsor) async {
-    final website = sponsor.website as String;
-
-    if (website.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${sponsor.name} website not available')),
-      );
-      return;
-    }
-
+  Future<void> _openWebsite(BuildContext context, String website) async {
     String url = website;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    if (!url.startsWith('http')) {
       url = 'https://$url';
     }
 
@@ -198,5 +222,10 @@ class PartnerCarousel extends ConsumerWidget {
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
+  }
+
+  String _safeString(dynamic value) {
+    if (value == null) return '';
+    return value.toString().trim();
   }
 }
