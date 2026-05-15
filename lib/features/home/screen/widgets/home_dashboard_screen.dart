@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/session_detail_screen.dart';
+import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_scanner_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -152,7 +154,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _header(context),
+
             const SizedBox(height: 22),
+
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: FutureBuilder<String>(
@@ -173,7 +177,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 },
               ),
             ),
+
             const SizedBox(height: 2),
+
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 32),
               child: Text(
@@ -185,33 +191,56 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 18),
+
+            _joinSessionsCard(context),
+
+            const SizedBox(height: 18),
+
             sessionsAsync.when(
               data: (s) => _filters(s),
               loading: () => _filters([]),
               error: (_, __) => _filters([]),
             ),
+
             const SizedBox(height: 34),
+
             _sectionTitle(
               context,
               'Upcoming Sessions',
               showSeeAll: true,
               onSeeAll: widget.onSeeAllUpcomingSessions,
             ),
+
             const SizedBox(height: 14),
+
             _slider(sessionsAsync),
+
             const SizedBox(height: 34),
+
             _sectionTitle(context, 'Speakers'),
+
             const SizedBox(height: 12),
+
             const SpeakerCarousel(),
+
             const SizedBox(height: 30),
+
             _sectionTitle(context, 'Venues'),
+
             const SizedBox(height: 12),
+
             const VenueMapsCarousel(),
+
             const SizedBox(height: 30),
+
             _sectionTitle(context, 'Partners'),
+
             const SizedBox(height: 14),
+
             _partnersSection(),
+
             const SizedBox(height: 30),
           ],
         ),
@@ -248,6 +277,84 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
             );
           }),
         ],
+      ),
+    );
+  }
+
+  Widget _joinSessionsCard(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const QRScannerScreen(),
+            ),
+          );
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          decoration: BoxDecoration(
+            color: primaryBlue,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: primaryBlue.withOpacity(0.18),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                height: 42,
+                width: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.qr_code_scanner,
+                  color: Colors.white,
+                  size: 23,
+                ),
+              ),
+              const SizedBox(width: 14),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Join Sessions',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Scan session QR to mark your attendance',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios,
+                color: Colors.white,
+                size: 15,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

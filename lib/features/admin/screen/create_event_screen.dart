@@ -29,6 +29,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   final _eventNameController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _aboutEventController = TextEditingController();
   final _locationController = TextEditingController();
   final _registrationLimitController = TextEditingController();
   final _organizerContactController = TextEditingController();
@@ -78,6 +79,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     _eventNameController.text = (data['name'] ?? '').toString();
     _descriptionController.text = (data['description'] ?? '').toString();
+    _aboutEventController.text = (data['aboutEvent'] ?? '').toString();
     _locationController.text = (data['location'] ?? '').toString();
     _organizerContactController.text =
         (data['organizerContact'] ?? '').toString();
@@ -150,6 +152,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   void dispose() {
     _eventNameController.dispose();
     _descriptionController.dispose();
+    _aboutEventController.dispose();
     _locationController.dispose();
     _registrationLimitController.dispose();
     _organizerContactController.dispose();
@@ -439,6 +442,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       final eventData = {
         'name': name,
         'description': _descriptionController.text.trim(),
+        'aboutEvent': _aboutEventController.text.trim(),
         'startDate': Timestamp.fromDate(startDate),
         'endDate': Timestamp.fromDate(endDate),
         'location': _locationController.text.trim(),
@@ -663,6 +667,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   @override
   Widget build(BuildContext context) {
     final descriptionLength = _descriptionController.text.length;
+    final aboutEventLength = _aboutEventController.text.length;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -739,6 +744,25 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
                             return 'Description is required';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 15),
+                      _InputField(
+                        label: 'About Event',
+                        controller: _aboutEventController,
+                        hint:
+                            'Write full event details, explanation, objectives, agenda overview, or any information attendees should know',
+                        icon: Icons.info_outline_rounded,
+                        maxLength: 2000,
+                        maxLines: 6,
+                        height: 145,
+                        suffixText: '$aboutEventLength/2000',
+                        onChanged: (_) => setState(() {}),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'About event is required';
                           }
                           return null;
                         },
@@ -1248,6 +1272,8 @@ class _InputField extends StatelessWidget {
   final IconData icon;
   final String? suffixText;
   final int? maxLength;
+  final int maxLines;
+  final double height;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
   final ValueChanged<String>? onChanged;
@@ -1260,6 +1286,8 @@ class _InputField extends StatelessWidget {
     required this.icon,
     this.suffixText,
     this.maxLength,
+    this.maxLines = 1,
+    this.height = 48,
     this.keyboardType,
     this.inputFormatters,
     this.onChanged,
@@ -1272,16 +1300,19 @@ class _InputField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMultiLine = maxLines > 1;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _FieldLabel(label),
         const SizedBox(height: 6),
         SizedBox(
-          height: 48,
+          height: height,
           child: TextFormField(
             controller: controller,
             maxLength: maxLength,
+            maxLines: maxLines,
             keyboardType: keyboardType,
             inputFormatters: inputFormatters,
             onChanged: onChanged,
@@ -1300,10 +1331,18 @@ class _InputField extends StatelessWidget {
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
               ),
-              prefixIcon: Icon(
-                icon,
-                color: _primaryColor,
-                size: 19,
+              prefixIcon: Padding(
+                padding: EdgeInsets.only(
+                  top: isMultiLine ? 12 : 0,
+                ),
+                child: Icon(
+                  icon,
+                  color: _primaryColor,
+                  size: 19,
+                ),
+              ),
+              prefixIconConstraints: const BoxConstraints(
+                minWidth: 44,
               ),
               suffixText: suffixText,
               suffixStyle: const TextStyle(
@@ -1312,9 +1351,9 @@ class _InputField extends StatelessWidget {
               ),
               filled: true,
               fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(
+              contentPadding: EdgeInsets.symmetric(
                 horizontal: 12,
-                vertical: 12,
+                vertical: isMultiLine ? 14 : 12,
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),

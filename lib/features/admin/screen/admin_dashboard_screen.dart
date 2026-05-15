@@ -1,4 +1,5 @@
 // lib/features/admin/screen/admin_dashboard_screen.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
@@ -6,6 +7,7 @@ import 'package:events_app_trueattempt/features/admin/screen/create_event_screen
 import 'package:events_app_trueattempt/features/admin/screen/notification_management_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/send_notification_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/user_management_screen.dart';
+import 'package:events_app_trueattempt/features/analytics/screen/admin_analytics_screen.dart';
 import 'package:events_app_trueattempt/features/help/data/help_repository.dart';
 import 'package:events_app_trueattempt/features/help/screen/admin_help_tickets_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
@@ -1252,6 +1254,20 @@ class _AdminEventControlScreenState
               ),
             ),
             const SizedBox(height: 22),
+
+            _AdminActionCard(
+              icon: Icons.analytics_outlined,
+              title: 'Admin Analytics Dashboard',
+              subtitle: 'Monitor users, sessions, attendance, chat, and app usage.',
+              onTap: () {
+                _openScreen(
+                  AdminAnalyticsScreen(
+                    eventId: eventId,
+                  ),
+                );
+              },
+            ),
+
             _AdminActionCard(
               icon: Icons.send,
               title: 'Send Push Notification',

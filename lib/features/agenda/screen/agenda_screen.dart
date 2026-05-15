@@ -1,14 +1,15 @@
 import 'dart:ui';
 
+import 'package:collection/collection.dart';
+import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/core/models/session_model.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/agenda/screen/session_detail_screen.dart';
+import 'package:events_app_trueattempt/features/staff/screen/staff_session_management_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:collection/collection.dart';
 import 'package:intl/intl.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/core/models/session_model.dart';
-import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
-import 'package:events_app_trueattempt/common_widgets/session_list_tile.dart';
 
 class AgendaScreen extends ConsumerWidget {
   const AgendaScreen({super.key});
@@ -16,6 +17,10 @@ class AgendaScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionsAsyncValue = ref.watch(sessionsStreamProvider);
+    final userProfileAsync = ref.watch(userAppProfileStreamProvider);
+
+    final role = userProfileAsync.asData?.value?.role.toLowerCase() ?? '';
+    final isStaff = role == 'staff';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -62,7 +67,6 @@ class AgendaScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-
               SliverPadding(
                 padding: const EdgeInsets.fromLTRB(26, 10, 26, 110),
                 sliver: SliverList(
@@ -82,6 +86,7 @@ class AgendaScreen extends ConsumerWidget {
                               date: dayDate,
                               sessions: daySessions,
                               dayIndex: dayIndex,
+                              isStaff: isStaff,
                             ),
                           ),
                         ),
@@ -107,12 +112,28 @@ class _DaySection extends StatelessWidget {
   final DateTime date;
   final List<Session> sessions;
   final int dayIndex;
+  final bool isStaff;
 
   const _DaySection({
     required this.date,
     required this.sessions,
     required this.dayIndex,
+    required this.isStaff,
   });
+
+  void _openSession(BuildContext context, Session session) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) {
+          if (isStaff) {
+            return StaffSessionManagementScreen(session: session);
+          }
+
+          return SessionDetailScreen(session: session);
+        },
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -169,16 +190,220 @@ class _DaySection extends StatelessWidget {
             ],
           ),
         ),
-
         Column(
           children: sessions.map((session) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 11),
-              child: SessionListTile(session: session),
+              child: _AgendaSessionCard(
+                session: session,
+                isStaff: isStaff,
+                onTap: () => _openSession(context, session),
+              ),
             );
           }).toList(),
         ),
       ],
+    );
+  }
+}
+
+class _AgendaSessionCard extends StatelessWidget {
+  final Session session;
+  final bool isStaff;
+  final VoidCallback onTap;
+
+  const _AgendaSessionCard({
+    required this.session,
+    required this.isStaff,
+    required this.onTap,
+  });
+
+  static const Color _primaryColor = Color(0xFF0B0B83);
+  static const Color _textDark = Color(0xFF111827);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final isActive =
+        now.isAfter(session.startTime) && now.isBefore(session.endTime);
+    final hasEnded = now.isAfter(session.endTime);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: hasEnded ? const Color(0xFFF1F1F1) : const Color(0xFFF7F7FA),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isActive ? Colors.green : Colors.transparent,
+          width: isActive ? 1.5 : 0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _StatusBadge(
+                    isActive: isActive,
+                    hasEnded: hasEnded,
+                  ),
+                  if (isStaff) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _primaryColor.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'Manage',
+                        style: TextStyle(
+                          color: _primaryColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  Icon(
+                    Icons.access_time,
+                    size: 14,
+                    color: hasEnded ? Colors.grey : _textMuted,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    DateFormat('h:mm a').format(session.startTime),
+                    style: TextStyle(
+                      color: hasEnded ? Colors.grey : _textMuted,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 11),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      session.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: hasEnded ? Colors.grey.shade600 : _textDark,
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        height: 1.25,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: hasEnded ? Colors.grey : _primaryColor,
+                    size: 24,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: 14,
+                    color: hasEnded ? Colors.grey : _textMuted,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      session.location,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: hasEnded ? Colors.grey : _textMuted,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Icon(
+                    Icons.people_outline,
+                    size: 14,
+                    color: hasEnded ? Colors.grey : _textMuted,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${session.checkedInAttendees.length} attended',
+                    style: TextStyle(
+                      color: hasEnded ? Colors.grey : _textMuted,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final bool isActive;
+  final bool hasEnded;
+
+  const _StatusBadge({
+    required this.isActive,
+    required this.hasEnded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    late final String text;
+    late final Color color;
+
+    if (isActive) {
+      text = 'Live';
+      color = Colors.green;
+    } else if (hasEnded) {
+      text = 'Ended';
+      color = Colors.grey;
+    } else {
+      text = 'Upcoming';
+      color = const Color(0xFF0B0B83);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

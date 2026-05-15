@@ -1,146 +1,276 @@
-// lib/features/qr_scanner/screen/qr_scanner_screen.dart
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/core/models/session_model.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
-import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
-import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
-import 'package:events_app_trueattempt/core/models/session_model.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class QRScannerScreen extends ConsumerStatefulWidget {
   const QRScannerScreen({super.key});
+
   @override
   ConsumerState<QRScannerScreen> createState() => _QRScannerScreenState();
 }
 
 class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
   final MobileScannerController _scannerController = MobileScannerController();
+
   bool _isProcessing = false;
   String _processingMessage = 'Processing...';
 
   void _handleQRCode(BarcodeCapture barcodes) {
     if (_isProcessing) return;
+
     final barcode = barcodes.barcodes.firstOrNull;
+
     if (barcode?.rawValue == null) return;
 
-    // Provide haptic feedback for successful scan
     HapticFeedback.lightImpact();
-    
+
     setState(() {
       _isProcessing = true;
-      _processingMessage = 'Validating QR code...';
+      _processingMessage = 'Validating session QR...';
     });
-    _scannerController.stop(); // Stop the camera to prevent multiple scans
-    
+
+    _scannerController.stop();
     _processScannedPayload(barcode!.rawValue!);
   }
 
+  Future<void> _openManualQrDialog() async {
+    if (_isProcessing) return;
+
+    final controller = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Enter Session Code',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.namaNavyBlue,
+            ),
+          ),
+          content: TextField(
+            controller: controller,
+            textCapitalization: TextCapitalization.characters,
+            decoration: InputDecoration(
+              hintText: 'Example: SES-123456',
+              filled: true,
+              fillColor: const Color(0xFFF5F5F5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.namaNavyBlue,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                final value = controller.text.trim();
+
+                if (value.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter session code.'),
+                    ),
+                  );
+                  return;
+                }
+
+                Navigator.pop(dialogContext);
+
+                setState(() {
+                  _isProcessing = true;
+                  _processingMessage = 'Joining session...';
+                });
+
+                _scannerController.stop();
+                _processScannedPayload(value);
+              },
+              child: const Text('Submit'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _processScannedPayload(String payload) async {
-    if (!mounted) return; // Check if widget is still mounted
-    
+    if (!mounted) return;
+
     final scannerProfile = ref.read(userAppProfileStreamProvider).asData?.value;
+
     if (scannerProfile == null) {
-      if (!mounted) return;
       _showErrorDialog('Your profile could not be loaded. Please try again.');
       return;
     }
 
     try {
-      // Step 1: Securely validate the QR code via Cloud Function
       final functions = ref.read(firebaseFunctionsProvider);
       final callable = functions.httpsCallable('validateQrCode');
-      
-      // Add timeout to prevent hanging
+
       final result = await callable.call({
-        'payload': payload
+        'payload': payload,
       }).timeout(
         const Duration(seconds: 10),
         onTimeout: () {
-          throw Exception('Request timed out. Please check your internet connection and try again.');
+          throw Exception(
+            'Request timed out. Please check your internet connection and try again.',
+          );
         },
       );
-      
-      if (!mounted) return; // Check again after async operation
-      
-      debugPrint('Cloud function result: ${result.data}');
-      debugPrint('Result data type: ${result.data.runtimeType}');
-      
-      // v3 structure: result.data has 'type' and 'data' fields
-      // Convert from _Map<Object?, Object?> to Map<String, dynamic>
+
+      if (!mounted) return;
+
       final responseData = Map<String, dynamic>.from(result.data as Map);
       final String type = responseData['type'] as String;
-      final Map<String, dynamic> data = Map<String, dynamic>.from(responseData['data'] as Map);
+      final Map<String, dynamic> data =
+          Map<String, dynamic>.from(responseData['data'] as Map);
 
-      debugPrint('QR Code validated successfully: type=$type'); // Debug logging
-
-      // Handle different QR types using v3's approach
       if (type == 'user') {
-        // Stop camera before navigation to prevent further scans
-        _scannerController.stop();
+        await _scannerController.stop();
         await _handleUserScan(scannerProfile, data);
       } else if (type == 'session') {
-        // v3's simplified approach: direct call to _logSessionCheckIn with sessionId from data
-        if (mounted) {
-          setState(() => _processingMessage = 'Checking in to session...');
+        final sessionId = (data['sessionId'] ?? '').toString();
+
+        if (sessionId.isEmpty) {
+          _showErrorDialog('Invalid session QR. Session ID is missing.');
+          return;
         }
-        _logSessionCheckIn(data['sessionId']);
+
+        setState(() {
+          _processingMessage = 'Joining session...';
+        });
+
+        await _logSessionCheckIn(sessionId);
       } else {
-        _showErrorDialog('Unknown QR code type.');
+        _showErrorDialog('This QR is not a session QR.');
       }
     } catch (e, stackTrace) {
-      // Handle both FirebaseFunctionsException and other exceptions
-      debugPrint('QR Validation Error: $e'); // Debug logging
-      debugPrint('Stack trace: $stackTrace'); // Stack trace for debugging
-      if (!mounted) return; // Don't show error if widget disposed
-      
-      String errorMessage = 'Invalid QR Code.';
-      if (e.toString().contains('FirebaseFunctionsException')) {
-        // Extract message from Firebase Functions exception
-        final messageMatch = RegExp(r'message: (.+?)[,\]]').firstMatch(e.toString());
-        if (messageMatch != null) {
-          errorMessage = messageMatch.group(1) ?? errorMessage;
-        }
-      } else if (e.toString().contains('not-found')) {
-        errorMessage = 'QR code not found or expired.';
+      debugPrint('QR Validation Error: $e');
+      debugPrint('Stack trace: $stackTrace');
+
+      if (!mounted) return;
+
+      final handled = await _tryHandleLocalSessionCode(payload);
+      if (handled) return;
+
+      String errorMessage = 'Invalid session QR/code.';
+
+      if (e.toString().contains('not-found')) {
+        errorMessage = 'Session QR/code not found or expired.';
       } else if (e.toString().contains('unauthenticated')) {
         errorMessage = 'Please log in to scan QR codes.';
       } else if (e.toString().contains('failed-precondition')) {
         errorMessage = 'This session is not currently active.';
-      } else if (e.toString().contains('type \'String\' is not a subtype')) {
-        errorMessage = 'Invalid data format received from server.';
-        debugPrint('Detailed error: Response data type mismatch');
-      } else if (e.toString().isNotEmpty) {
-        // Show more details in development
-        errorMessage = 'An unexpected error occurred: ${e.toString()}';
       }
+
       _showErrorDialog(errorMessage);
     }
   }
 
-  Future<void> _handleUserScan(dynamic scannerProfile, Map<String, dynamic> scannedUserData) async {
-    if (!mounted) return; // Check if widget is still mounted
-    
+  Future<bool> _tryHandleLocalSessionCode(String payload) async {
     try {
-      debugPrint('_handleUserScan called with data: $scannedUserData');
-      debugPrint('Scanner profile role: ${scannerProfile.role}');
-      
+      String code = '';
+      String sessionId = '';
+
+      final cleanPayload = payload.trim();
+
+      if (cleanPayload.startsWith('{')) {
+        final decoded = jsonDecode(cleanPayload);
+
+        if (decoded is Map) {
+          final data = Map<String, dynamic>.from(decoded);
+
+          final type = (data['type'] ?? data['qrType'] ?? '').toString();
+
+          if (type == 'session_checkin' ||
+              type == 'session_attendance' ||
+              type == 'session') {
+            code = (data['code'] ?? data['checkInCode'] ?? '').toString();
+            sessionId = (data['sessionId'] ?? '').toString();
+          }
+        }
+      } else {
+        code = cleanPayload;
+      }
+
+      if (sessionId.isNotEmpty) {
+        await _logSessionCheckIn(sessionId);
+        return true;
+      }
+
+      if (code.trim().isEmpty) return false;
+
+      final normalizedCode = code.trim().toUpperCase();
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('sessions')
+          .where('checkInCode', isEqualTo: normalizedCode)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isEmpty) {
+        _showErrorDialog('No session found for this code.');
+        return true;
+      }
+
+      final foundSessionId = snapshot.docs.first.id;
+
+      if (mounted) {
+        setState(() {
+          _processingMessage = 'Joining session...';
+        });
+      }
+
+      await _logSessionCheckIn(foundSessionId);
+
+      return true;
+    } catch (e) {
+      debugPrint('Local session code error: $e');
+      return false;
+    }
+  }
+
+  Future<void> _handleUserScan(
+    dynamic scannerProfile,
+    Map<String, dynamic> scannedUserData,
+  ) async {
+    if (!mounted) return;
+
+    try {
       if (scannerProfile.role == 'admin' || scannerProfile.role == 'staff') {
         _showAdminStaffPopup(scannedUserData);
-      } else { // Attendee is scanning
-        // Call cloud function to establish connection
+      } else {
         try {
           final functions = ref.read(firebaseFunctionsProvider);
           final callable = functions.httpsCallable('addScannedConnection');
+
           final result = await callable.call<Map<String, dynamic>>({
             'scannedUserId': scannedUserData['uid'],
           });
-          
-          debugPrint('Connection result: ${result.data}');
-          
-          // Show appropriate message
+
           if (result.data['message'] == 'User already connected') {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -164,101 +294,118 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
           }
         } catch (connectionError) {
           debugPrint('Connection error: $connectionError');
-          // Continue to profile even if connection fails
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Could not establish connection: ${connectionError.toString()}'),
+                content: Text(
+                  'Could not establish connection: ${connectionError.toString()}',
+                ),
                 backgroundColor: AppColors.errorRed,
                 duration: const Duration(seconds: 3),
               ),
             );
           }
         }
-        
-        // Small delay to ensure state is stable before navigation
+
         await Future.delayed(const Duration(milliseconds: 100));
-        
+
         if (!mounted) return;
-        
+
         final userId = scannedUserData['uid'];
-        debugPrint('Navigating to UserDetailsScreen with userId: $userId');
-        
-        // Navigate to the full profile screen using the secure UID
-        await Navigator.of(context).push(MaterialPageRoute(
-          builder: (context) => UserDetailsScreen(userId: userId),
-        ));
-        
-        // Reset scanner when user returns
+
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => UserDetailsScreen(userId: userId),
+          ),
+        );
+
         if (mounted) {
           _resetScanner();
         }
       }
     } catch (e) {
       debugPrint('Error in _handleUserScan: $e');
+
       if (mounted) {
         _showErrorDialog('Failed to load user profile: ${e.toString()}');
       }
     }
   }
 
-  // v3: Removed _handleSessionScan method - goes directly to _logSessionCheckIn
   Future<void> _logSessionCheckIn(String sessionId) async {
-    if (!mounted) return; // Check if widget is still mounted
-    
+    if (!mounted) return;
+
     try {
       final functions = ref.read(firebaseFunctionsProvider);
       final callable = functions.httpsCallable('logSessionCheckIn');
-      final result = await callable.call<Map<String, dynamic>>({'sessionId': sessionId});
 
-      if (!mounted) return; // Check again after async operation
-      
-      // On success, the function returns the session details
+      final result = await callable.call<Map<String, dynamic>>({
+        'sessionId': sessionId,
+      });
+
+      if (!mounted) return;
+
       final returnedSessionData = result.data['session'];
-      
-      // Fetch the full session object to pass to the chat screen
+
       final allSessions = ref.read(sessionsStreamProvider).asData?.value ?? [];
+
       final session = allSessions.cast<Session>().firstWhere(
-        (s) => s.id == returnedSessionData['id'],
-        orElse: () => Session(
-          id: returnedSessionData['id'] ?? '',
-          eventId: returnedSessionData['eventId'] ?? '',
-          title: returnedSessionData['title'] ?? 'Unknown Session',
-          description: returnedSessionData['description'] ?? '',
-          location: returnedSessionData['location'] ?? '',
-          startTime: DateTime.tryParse(returnedSessionData['startTime'] ?? '') ?? DateTime.now(),
-          endTime: DateTime.tryParse(returnedSessionData['endTime'] ?? '') ?? DateTime.now(),
-          speakerIds: List<String>.from(returnedSessionData['speakerIds'] ?? []),
-          liveStreamUrl: returnedSessionData['liveStreamUrl'] ?? '',
-          qrCodePayload: returnedSessionData['qrCodePayload'] ?? '',
-          priority: returnedSessionData['priority'] ?? 3,
+            (s) => s.id == returnedSessionData['id'],
+            orElse: () => Session(
+              id: returnedSessionData['id'] ?? '',
+              eventId: returnedSessionData['eventId'] ?? '',
+              title: returnedSessionData['title'] ?? 'Unknown Session',
+              description: returnedSessionData['description'] ?? '',
+              location: returnedSessionData['location'] ?? '',
+              startTime: DateTime.tryParse(
+                    returnedSessionData['startTime'] ?? '',
+                  ) ??
+                  DateTime.now(),
+              endTime: DateTime.tryParse(
+                    returnedSessionData['endTime'] ?? '',
+                  ) ??
+                  DateTime.now(),
+              speakerIds: List<String>.from(
+                returnedSessionData['speakerIds'] ?? [],
+              ),
+              liveStreamUrl: returnedSessionData['liveStreamUrl'] ?? '',
+              qrCodePayload: returnedSessionData['qrCodePayload'] ?? '',
+              priority: returnedSessionData['priority'] ?? 3,
+            ),
+          );
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+
+      final remoteConfig = ref.read(remoteConfigServiceProvider);
+
+      if (remoteConfig.isChatEnabled) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => SessionChatScreen(session: session),
+          ),
+        );
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Joined "${session.title}" successfully!'),
+          backgroundColor: AppColors.successGreen,
         ),
       );
-      
-      if (!mounted) return; // Check before navigation
-      
-      // Close scanner and conditionally navigate to chat if enabled
-      Navigator.of(context).pop(); // Pop the scanner screen
-      
-      final remoteConfig = ref.read(remoteConfigServiceProvider);
-      if (remoteConfig.isChatEnabled) {
-        Navigator.of(context).push(MaterialPageRoute(
-          builder: (context) => SessionChatScreen(session: session),
-        ));
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Checked into "${session.title}"!'), backgroundColor: AppColors.successGreen),
-      );
-
     } catch (e) {
-      debugPrint('Session Check-in Error: $e'); // Debug logging
-      if (!mounted) return; // Don't show error if widget disposed
-      
-      String errorMessage = 'Check-in failed.';
+      debugPrint('Session Check-in Error: $e');
+
+      if (!mounted) return;
+
+      String errorMessage = 'Session check-in failed.';
+
       if (e.toString().contains('FirebaseFunctionsException')) {
-        // Extract message from Firebase Functions exception
-        final messageMatch = RegExp(r'message: (.+?)[,\]]').firstMatch(e.toString());
+        final messageMatch =
+            RegExp(r'message: (.+?)[,\]]').firstMatch(e.toString());
+
         if (messageMatch != null) {
           errorMessage = messageMatch.group(1) ?? errorMessage;
         }
@@ -267,6 +414,7 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       } else if (e.toString().contains('not-found')) {
         errorMessage = 'Session not found.';
       }
+
       _showErrorDialog(errorMessage);
     }
   }
@@ -275,15 +423,17 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         title: Row(
           children: [
             CircleAvatar(
-              backgroundImage: (scannedUserData['profileImageUrl'] != null && scannedUserData['profileImageUrl'].isNotEmpty)
+              backgroundImage: scannedUserData['profileImageUrl'] != null &&
+                      scannedUserData['profileImageUrl'].isNotEmpty
                   ? NetworkImage(scannedUserData['profileImageUrl'])
                   : null,
               backgroundColor: AppColors.avatarPlaceholder,
-              child: (scannedUserData['profileImageUrl'] == null || scannedUserData['profileImageUrl'].isEmpty)
+              child: scannedUserData['profileImageUrl'] == null ||
+                      scannedUserData['profileImageUrl'].isEmpty
                   ? Text(
                       scannedUserData['name'][0].toUpperCase(),
                       style: const TextStyle(
@@ -294,14 +444,16 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
                   : null,
             ),
             const SizedBox(width: 16),
-            Expanded(child: Text(scannedUserData['name'])),
+            Expanded(
+              child: Text(scannedUserData['name'] ?? 'User'),
+            ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Role: ${scannedUserData['role'].toUpperCase()}', style: const TextStyle(fontWeight: FontWeight.bold)),
+            Text('Role: ${scannedUserData['role']}'),
             Text('Email: ${scannedUserData['email']}'),
           ],
         ),
@@ -309,42 +461,46 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
           TextButton(
             child: const Text('View Profile'),
             onPressed: () {
-              Navigator.of(context).pop(); // Close dialog
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (context) => UserDetailsScreen(userId: scannedUserData['uid']),
-              ));
+              Navigator.of(context).pop();
+
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => UserDetailsScreen(
+                    userId: scannedUserData['uid'],
+                  ),
+                ),
+              );
             },
           ),
           ElevatedButton(
             child: const Text('Check-in User'),
             onPressed: () async {
-              if (!mounted) return; // Check if widget is still mounted
-              
               try {
                 final functions = ref.read(firebaseFunctionsProvider);
                 final callable = functions.httpsCallable('logEventCheckIn');
-                await callable.call<Map<String, dynamic>>({'scannedUserId': scannedUserData['uid']});
-                
+
+                await callable.call<Map<String, dynamic>>({
+                  'scannedUserId': scannedUserData['uid'],
+                });
+
                 if (!mounted) return;
-                
-                Navigator.of(context).pop(); // Close dialog
+
+                Navigator.of(context).pop();
+
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Checked in ${scannedUserData['name']}!'), backgroundColor: AppColors.successGreen),
+                  SnackBar(
+                    content: Text('Checked in ${scannedUserData['name']}!'),
+                    backgroundColor: AppColors.successGreen,
+                  ),
                 );
               } catch (e) {
-                debugPrint('Event Check-in Error: $e'); // Debug logging
+                debugPrint('Event Check-in Error: $e');
+
                 if (!mounted) return;
-                
+
                 Navigator.of(context).pop();
-                String errorMessage = 'Check-in failed.';
-                if (e.toString().contains('FirebaseFunctionsException')) {
-                  // Extract message from Firebase Functions exception
-                  final messageMatch = RegExp(r'message: (.+?),').firstMatch(e.toString());
-                  if (messageMatch != null) {
-                    errorMessage = messageMatch.group(1) ?? errorMessage;
-                  }
-                }
-                _showErrorDialog(errorMessage);
+
+                _showErrorDialog('Check-in failed.');
               }
             },
           ),
@@ -352,12 +508,13 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       ),
     ).then((_) => _resetScanner());
   }
-  
+
   void _showErrorDialog(String message) {
     if (!mounted) return;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         title: const Text('Scan Error'),
         content: Text(message),
         actions: [
@@ -369,15 +526,14 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       ),
     ).then((_) => _resetScanner());
   }
-  
-  // v3: Removed _showSuccessDialog as noted in the comments
-  
+
   void _resetScanner() {
     if (mounted) {
       setState(() {
         _isProcessing = false;
         _processingMessage = 'Processing...';
       });
+
       _scannerController.start();
     }
   }
@@ -385,7 +541,13 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('QR Scanner')),
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        title: const Text('QR Scanner'),
+        backgroundColor: AppColors.namaNavyBlue,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       body: Stack(
         alignment: Alignment.center,
         children: [
@@ -393,43 +555,88 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
             controller: _scannerController,
             onDetect: _handleQRCode,
           ),
-          // Instructions at the top
           Positioned(
-            top: 40,
+            top: 48,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 12,
+              ),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.7),
+                color: Colors.black.withOpacity(0.65),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Text(
-                'Point camera at QR code',
+                'Point camera at session QR code',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 16,
+                  fontSize: 15,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
           ),
-          // Viewfinder Overlay
           Container(
+            width: 250,
+            height: 250,
             decoration: BoxDecoration(
               border: Border.all(
-                color: Colors.white.withOpacity(0.5),
+                color: Colors.white.withOpacity(0.55),
                 width: 2,
               ),
               borderRadius: BorderRadius.circular(12),
             ),
-            width: 250,
-            height: 250,
+          ),
+          Positioned(
+            bottom: 80,
+            left: 28,
+            right: 28,
+            child: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isProcessing ? null : _openManualQrDialog,
+                    icon: const Icon(Icons.keyboard_alt_outlined, size: 20),
+                    label: const Text(
+                      'Enter Session Code Manually',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.namaNavyBlue,
+                      disabledBackgroundColor: Colors.white70,
+                      disabledForegroundColor: Colors.grey,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Use this for Chrome/Web testing or if camera is not working.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
           ),
           if (_isProcessing)
             Container(
               width: 250,
               height: 250,
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withOpacity(0.58),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Column(

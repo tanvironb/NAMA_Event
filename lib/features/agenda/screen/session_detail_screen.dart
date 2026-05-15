@@ -1,11 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/widgets/session_bookmark_button.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 
-class SessionDetailScreen extends StatelessWidget {
+class SessionDetailScreen extends StatefulWidget {
   final Session session;
 
   const SessionDetailScreen({
@@ -13,13 +15,20 @@ class SessionDetailScreen extends StatelessWidget {
     required this.session,
   });
 
+  @override
+  State<SessionDetailScreen> createState() => _SessionDetailScreenState();
+}
+
+class _SessionDetailScreenState extends State<SessionDetailScreen> {
+  bool _isSubmittingFeedback = false;
+
   Future<List<Map<String, dynamic>>> _loadSpeakers() async {
-    if (session.speakerIds.isEmpty) return [];
+    if (widget.session.speakerIds.isEmpty) return [];
 
     final firestore = FirebaseFirestore.instance;
     final speakers = <Map<String, dynamic>>[];
 
-    for (final speakerId in session.speakerIds) {
+    for (final speakerId in widget.session.speakerIds) {
       DocumentSnapshot<Map<String, dynamic>> doc =
           await firestore.collection('speakers').doc(speakerId).get();
 
@@ -38,10 +47,332 @@ class SessionDetailScreen extends StatelessWidget {
     return speakers;
   }
 
+  Future<void> _openFeedbackDialog() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      _showSnackBar('Please login first to give feedback.');
+      return;
+    }
+
+    final feedbackRef = FirebaseFirestore.instance
+        .collection('sessions')
+        .doc(widget.session.id)
+        .collection('feedback')
+        .doc(user.uid);
+
+    final existingFeedback = await feedbackRef.get();
+
+    if (existingFeedback.exists) {
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: const Text(
+              'Feedback Already Submitted',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            content: const Text(
+              'You have already submitted feedback for this session.',
+              style: TextStyle(fontSize: 14),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    int selectedRating = 5;
+    final commentController = TextEditingController();
+
+    if (!mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: !_isSubmittingFeedback,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+              title: const Text(
+                'Give Feedback',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Color(0xFF24158A),
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.session.title,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    const Text(
+                      'Rating',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(5, (index) {
+                        final ratingValue = index + 1;
+
+                        return IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 38,
+                            minHeight: 38,
+                          ),
+                          icon: Icon(
+                            ratingValue <= selectedRating
+                                ? Icons.star
+                                : Icons.star_border,
+                            color: const Color(0xFFE2BF3C),
+                            size: 30,
+                          ),
+                          onPressed: _isSubmittingFeedback
+                              ? null
+                              : () {
+                                  setDialogState(() {
+                                    selectedRating = ratingValue;
+                                  });
+                                },
+                        );
+                      }),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    const Text(
+                      'Comment',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    TextField(
+                      controller: commentController,
+                      enabled: !_isSubmittingFeedback,
+                      maxLines: 4,
+                      style: const TextStyle(fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Write your feedback here...',
+                        hintStyle: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey.shade500,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF5F5F5),
+                        contentPadding: const EdgeInsets.all(14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+              actions: [
+                TextButton(
+                  onPressed: _isSubmittingFeedback
+                      ? null
+                      : () {
+                          Navigator.pop(dialogContext);
+                        },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3D3D9E),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: _isSubmittingFeedback
+                      ? null
+                      : () async {
+                          setDialogState(() {
+                            _isSubmittingFeedback = true;
+                          });
+
+                          await _submitFeedback(
+                            rating: selectedRating,
+                            comment: commentController.text.trim(),
+                          );
+
+                          if (!mounted) return;
+
+                          setDialogState(() {
+                            _isSubmittingFeedback = false;
+                          });
+
+                          Navigator.pop(dialogContext);
+                        },
+                  child: _isSubmittingFeedback
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Submit',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _submitFeedback({
+    required int rating,
+    required String comment,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      _showSnackBar('Please login first to give feedback.');
+      return;
+    }
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+
+      final userDoc = await firestore.collection('users').doc(user.uid).get();
+      final userData = userDoc.data();
+
+      final userName = (userData?['name'] ??
+              userData?['fullName'] ??
+              userData?['displayName'] ??
+              user.displayName ??
+              'Attendee')
+          .toString();
+
+      final userEmail =
+          (userData?['email'] ?? user.email ?? '').toString();
+
+      final sessionRef =
+          firestore.collection('sessions').doc(widget.session.id);
+
+      final feedbackRef =
+          sessionRef.collection('feedback').doc(user.uid);
+
+      await firestore.runTransaction((transaction) async {
+        final sessionSnapshot = await transaction.get(sessionRef);
+        final feedbackSnapshot = await transaction.get(feedbackRef);
+
+        if (feedbackSnapshot.exists) {
+          throw Exception('Feedback already submitted.');
+        }
+
+        final sessionData =
+            sessionSnapshot.data() as Map<String, dynamic>? ?? {};
+
+        final currentTotalFeedbacks =
+            (sessionData['totalFeedbacks'] as num?)?.toInt() ?? 0;
+        final currentTotalRating =
+            (sessionData['totalRating'] as num?)?.toInt() ?? 0;
+
+        final newTotalFeedbacks = currentTotalFeedbacks + 1;
+        final newTotalRating = currentTotalRating + rating;
+        final newAverageRating = newTotalRating / newTotalFeedbacks;
+
+        transaction.set(feedbackRef, {
+          'eventId': widget.session.eventId,
+          'sessionId': widget.session.id,
+          'sessionTitle': widget.session.title,
+          'userId': user.uid,
+          'userName': userName,
+          'userEmail': userEmail,
+          'rating': rating,
+          'comment': comment,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+        transaction.update(sessionRef, {
+          'totalFeedbacks': newTotalFeedbacks,
+          'totalRating': newTotalRating,
+          'averageRating': newAverageRating,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+
+      if (!mounted) return;
+      _showSnackBar('Feedback submitted successfully.');
+    } catch (e) {
+      if (!mounted) return;
+
+      if (e.toString().contains('Feedback already submitted')) {
+        _showSnackBar('You already submitted feedback for this session.');
+      } else {
+        _showSnackBar('Failed to submit feedback. Please try again.');
+      }
+    }
+  }
+
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final time =
-        '${DateFormat('h:mm a').format(session.startTime)} - ${DateFormat('h:mm a').format(session.endTime)}';
+        '${DateFormat('h:mm a').format(widget.session.startTime)} - ${DateFormat('h:mm a').format(widget.session.endTime)}';
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -80,7 +411,7 @@ class SessionDetailScreen extends StatelessWidget {
 
               Center(
                 child: Text(
-                  session.title,
+                  widget.session.title,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     fontSize: 21,
@@ -100,14 +431,14 @@ class SessionDetailScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: const Color(0xFFEFEFEF),
                       borderRadius: BorderRadius.circular(22),
-                      image: session.imageUrl.isNotEmpty
+                      image: widget.session.imageUrl.isNotEmpty
                           ? DecorationImage(
-                              image: NetworkImage(session.imageUrl),
+                              image: NetworkImage(widget.session.imageUrl),
                               fit: BoxFit.cover,
                             )
                           : null,
                     ),
-                    child: session.imageUrl.isEmpty
+                    child: widget.session.imageUrl.isEmpty
                         ? const Center(
                             child: Icon(
                               Icons.image_outlined,
@@ -135,7 +466,7 @@ class SessionDetailScreen extends StatelessWidget {
                         ],
                       ),
                       child: SessionBookmarkButton(
-                        sessionId: session.id,
+                        sessionId: widget.session.id,
                         iconSize: 30,
                         bookmarkedColor: Colors.white,
                         unbookmarkedColor: Colors.white,
@@ -171,7 +502,7 @@ class SessionDetailScreen extends StatelessWidget {
                     size: 18,
                   ),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(session.location)),
+                  Expanded(child: Text(widget.session.location)),
                 ],
               ),
 
@@ -185,7 +516,7 @@ class SessionDetailScreen extends StatelessWidget {
               const SizedBox(height: 10),
 
               Text(
-                session.description,
+                widget.session.description,
                 style: const TextStyle(
                   fontSize: 14,
                   height: 1.35,
@@ -194,6 +525,32 @@ class SessionDetailScreen extends StatelessWidget {
               ),
 
               const SizedBox(height: 22),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _openFeedbackDialog,
+                  icon: const Icon(Icons.rate_review_outlined, size: 18),
+                  label: const Text(
+                    'Give Feedback',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF3D3D9E),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
 
               const Text(
                 'Speakers',

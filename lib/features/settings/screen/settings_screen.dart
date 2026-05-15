@@ -1,5 +1,6 @@
 // lib/features/settings/screen/settings_screen.dart
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
+import 'package:events_app_trueattempt/features/settings/screen/about_event_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -90,6 +91,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => const ConnectionsScreen(),
+                    ),
+                  );
+                },
+              ),
+              _buildItem(
+                icon: Icons.info_outline_rounded,
+                title: 'About Event',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AboutEventScreen(),
                     ),
                   );
                 },

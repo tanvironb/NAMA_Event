@@ -1,9 +1,11 @@
 // lib/features/main_hub/screen/main_hub_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/core/services/app_usage_tracking_service.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/features/home/screen/attendee_shell.dart';
 import 'package:events_app_trueattempt/features/home/screen/staff_shell.dart';
@@ -21,9 +23,108 @@ class MainHubScreen extends ConsumerStatefulWidget {
   ConsumerState<MainHubScreen> createState() => _MainHubScreenState();
 }
 
-class _MainHubScreenState extends ConsumerState<MainHubScreen> {
+class _MainHubScreenState extends ConsumerState<MainHubScreen>
+    with WidgetsBindingObserver {
+  final AppUsageTrackingService _usageTrackingService =
+      AppUsageTrackingService();
+
   bool _privacyDialogShown = false;
+  bool _usageTrackingStarted = false;
+
   String? _lastDialogCheckedUid;
+  String? _trackedEventId;
+
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addObserver(this);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startUsageTrackingForActiveEvent();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+
+    if (_trackedEventId != null && _trackedEventId!.isNotEmpty) {
+      _usageTrackingService.stopScreenTimerAndSave(
+        eventId: _trackedEventId!,
+      );
+    }
+
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      if (_trackedEventId != null && _trackedEventId!.isNotEmpty) {
+        _usageTrackingService.stopScreenTimerAndSave(
+          eventId: _trackedEventId!,
+        );
+      }
+
+      _usageTrackingStarted = false;
+    }
+
+    if (state == AppLifecycleState.resumed) {
+      _startUsageTrackingForActiveEvent();
+    }
+  }
+
+  Future<void> _startUsageTrackingForActiveEvent() async {
+    if (!mounted) return;
+
+    final user = ref.read(firebaseAuthProvider).currentUser;
+    if (user == null) return;
+
+    try {
+      final activeEventSnapshot = await FirebaseFirestore.instance
+          .collection('events')
+          .where('isActive', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      if (activeEventSnapshot.docs.isEmpty) {
+        debugPrint('MainHubScreen: No active event found for usage tracking.');
+        return;
+      }
+
+      final eventId = activeEventSnapshot.docs.first.id;
+
+      if (_usageTrackingStarted && _trackedEventId == eventId) {
+        return;
+      }
+
+      if (_trackedEventId != null &&
+          _trackedEventId!.isNotEmpty &&
+          _trackedEventId != eventId) {
+        await _usageTrackingService.stopScreenTimerAndSave(
+          eventId: _trackedEventId!,
+        );
+      }
+
+      _trackedEventId = eventId;
+      _usageTrackingStarted = true;
+
+      await _usageTrackingService.trackAppDownloadOrOpen(
+        eventId: eventId,
+      );
+
+      _usageTrackingService.startScreenTimer();
+
+      debugPrint('MainHubScreen: Usage tracking started for event $eventId');
+    } catch (e) {
+      debugPrint('MainHubScreen: Failed to start usage tracking: $e');
+    }
+  }
 
   Future<void> _checkAndShowPrivacySelectionDialog({
     required String uid,
@@ -199,6 +300,8 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen> {
             uid: firebaseUser.uid,
             userData: userData,
           );
+
+          _startUsageTrackingForActiveEvent();
         });
 
         final shell = _getShellByRole(role);

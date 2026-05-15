@@ -9,7 +9,10 @@ import 'package:intl/intl.dart';
 class SessionQRViewerScreen extends StatelessWidget {
   final Session session;
 
-  const SessionQRViewerScreen({super.key, required this.session});
+  const SessionQRViewerScreen({
+    super.key,
+    required this.session,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -17,33 +20,48 @@ class SessionQRViewerScreen extends StatelessWidget {
 
     if (qrData.isEmpty) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Session QR Code'),
-          backgroundColor: AppColors.namaNavyBlue,
-        ),
-        body: Center(
+        backgroundColor: const Color(0xFFF8F8F8),
+        body: SafeArea(
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.qr_code_2_outlined,
-                size: 80,
-                color: AppColors.namaMediumGray,
+              _Header(
+                title: 'Session QR Code',
+                onBack: () => Navigator.of(context).pop(),
               ),
-              const SizedBox(height: 24),
-              Text(
-                'QR Code Not Generated',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: AppColors.namaDarkGray,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  'Please generate the QR code first',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.namaMediumGray),
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.qr_code_2_outlined,
+                          size: 58,
+                          color: AppColors.namaMediumGray,
+                        ),
+                        const SizedBox(height: 18),
+                        Text(
+                          'QR Code Not Generated',
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: AppColors.namaDarkGray,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Please generate the QR code first',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppColors.namaMediumGray,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -53,161 +71,171 @@ class SessionQRViewerScreen extends StatelessWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Session QR Code'),
-        backgroundColor: AppColors.namaNavyBlue,
-      ),
-      body: SingleChildScrollView(
+      backgroundColor: const Color(0xFFF8F8F8),
+      body: SafeArea(
         child: Column(
           children: [
-            // Colored Header Section
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    AppColors.namaNavyBlue,
-                    AppColors.namaNavyBlue.withOpacity(0.8),
+            _Header(
+              title: 'Session QR Code',
+              onBack: () => Navigator.of(context).pop(),
+            ),
+
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                child: Column(
+                  children: [
+                    // Session title card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 18,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.namaNavyBlue,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            session.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontSize: 19,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            DateFormat('EEEE, MMM d, y')
+                                .format(session.startTime),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 22),
+
+                    // QR Code Display Section
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                AppColors.namaGoldenYellow.withOpacity(0.20),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: AppColors.namaGoldenYellow,
+                          width: 2,
+                        ),
+                      ),
+                      child: QrImageView(
+                        data: qrData,
+                        version: QrVersions.auto,
+                        size: 220,
+                        eyeStyle: const QrEyeStyle(
+                          eyeShape: QrEyeShape.square,
+                          color: AppColors.namaNavyBlue,
+                        ),
+                        dataModuleStyle: const QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: AppColors.navyBlue,
+                        ),
+                        embeddedImageStyle: const QrEmbeddedImageStyle(
+                          size: Size(32, 32),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 22),
+
+                    // Session Info Section
+                    _buildInfoCard(
+                      icon: Icons.schedule_outlined,
+                      label: 'Time',
+                      value:
+                          '${DateFormat.jm().format(session.startTime)} - ${DateFormat.jm().format(session.endTime)}',
+                      context: context,
+                    ),
+                    const SizedBox(height: 10),
+                    _buildInfoCard(
+                      icon: Icons.location_on_outlined,
+                      label: 'Location',
+                      value: session.location,
+                      context: context,
+                    ),
+                    const SizedBox(height: 10),
+                    _buildInfoCard(
+                      icon: Icons.people_outline,
+                      label: 'Attendees',
+                      value: '${session.checkedInAttendees.length} checked in',
+                      context: context,
+                    ),
+
+                    const SizedBox(height: 22),
+
+                    // Download Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton.icon(
+                        onPressed: () => _downloadQR(context),
+                        icon: const Icon(
+                          Icons.download_outlined,
+                          size: 18,
+                        ),
+                        label: const Text(
+                          'Download QR Code',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.namaGoldenYellow,
+                          foregroundColor: AppColors.navyBlue,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    Text(
+                      'Attendees can scan this QR code to check in to your session',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.namaMediumGray,
+                            fontSize: 12.5,
+                            height: 1.4,
+                          ),
+                    ),
                   ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  Text(
-                    session.title,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    DateFormat('EEEE, MMM d, y').format(session.startTime),
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // QR Code Display Section
-            Container(
-              margin: const EdgeInsets.all(24),
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.namaGoldenYellow.withOpacity(0.3),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-                border: Border.all(
-                  color: AppColors.namaGoldenYellow,
-                  width: 3,
-                ),
-              ),
-              child: QrImageView(
-                data: qrData,
-                version: QrVersions.auto,
-                size: 280,
-                eyeStyle: const QrEyeStyle(
-                  eyeShape: QrEyeShape.square,
-                  color: AppColors.namaNavyBlue,
-                ),
-                dataModuleStyle: const QrDataModuleStyle(
-                  dataModuleShape: QrDataModuleShape.square,
-                  color: AppColors.navyBlue,
-                ),
-                embeddedImageStyle: const QrEmbeddedImageStyle(
-                  size: Size(40, 40),
                 ),
               ),
             ),
-
-            // Session Info Section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                children: [
-                  _buildInfoCard(
-                    icon: Icons.schedule_outlined,
-                    label: 'Time',
-                    value:
-                        '${DateFormat.jm().format(session.startTime)} - ${DateFormat.jm().format(session.endTime)}',
-                    context: context,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoCard(
-                    icon: Icons.location_on_outlined,
-                    label: 'Location',
-                    value: session.location,
-                    context: context,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildInfoCard(
-                    icon: Icons.people_outline,
-                    label: 'Attendees',
-                    value: '${session.checkedInAttendees.length} checked in',
-                    context: context,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Download Button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton.icon(
-                  onPressed: () => _downloadQR(context),
-                  icon: const Icon(Icons.download_outlined, size: 24),
-                  label: const Text(
-                    'Download QR Code',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.namaGoldenYellow,
-                    foregroundColor: AppColors.navyBlue,
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Instructions
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                'Attendees can scan this QR code to check in to your session',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.namaMediumGray,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -221,22 +249,38 @@ class SessionQRViewerScreen extends StatelessWidget {
     required BuildContext context,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 12,
+      ),
       decoration: BoxDecoration(
-        color: AppColors.lightGray,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: AppColors.namaNavyBlue.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: AppColors.namaNavyBlue.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: AppColors.namaNavyBlue, size: 24),
+            child: Icon(
+              icon,
+              color: AppColors.namaNavyBlue,
+              size: 20,
+            ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -244,18 +288,19 @@ class SessionQRViewerScreen extends StatelessWidget {
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     color: AppColors.namaMediumGray,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 3),
                 Text(
                   value,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.namaDarkGray,
-                    fontWeight: FontWeight.w600,
-                  ),
+                        color: AppColors.namaDarkGray,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
               ],
             ),
@@ -269,6 +314,48 @@ class SessionQRViewerScreen extends StatelessWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => SessionQRDownloadPage(session: session),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  final String title;
+  final VoidCallback onBack;
+
+  const _Header({
+    required this.title,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 8, 18, 6),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(
+              Icons.arrow_back,
+              color: AppColors.namaNavyBlue,
+              size: 22,
+            ),
+            onPressed: onBack,
+          ),
+          const SizedBox(width: 2),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: AppColors.namaNavyBlue,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }

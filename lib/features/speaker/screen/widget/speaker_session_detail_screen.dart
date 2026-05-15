@@ -1,4 +1,5 @@
-// lib/features/profile/screen/speaker_session_detail_screen.dart
+// lib/features/speaker/screen/widget/speaker_session_detail_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
@@ -10,13 +11,19 @@ import 'package:intl/intl.dart';
 
 class SpeakerSessionDetailScreen extends ConsumerStatefulWidget {
   final Session session;
-  const SpeakerSessionDetailScreen({super.key, required this.session});
+
+  const SpeakerSessionDetailScreen({
+    super.key,
+    required this.session,
+  });
 
   @override
-  ConsumerState<SpeakerSessionDetailScreen> createState() => _SpeakerSessionDetailScreenState();
+  ConsumerState<SpeakerSessionDetailScreen> createState() =>
+      _SpeakerSessionDetailScreenState();
 }
 
-class _SpeakerSessionDetailScreenState extends ConsumerState<SpeakerSessionDetailScreen> {
+class _SpeakerSessionDetailScreenState
+    extends ConsumerState<SpeakerSessionDetailScreen> {
   String _currentQRPayload = '';
 
   @override
@@ -27,21 +34,19 @@ class _SpeakerSessionDetailScreenState extends ConsumerState<SpeakerSessionDetai
 
   void _handleQRAction(BuildContext context) async {
     if (_currentQRPayload.isEmpty) {
-      // Navigate to loading screen and wait for result
       final generatedQR = await Navigator.of(context).push<String>(
         MaterialPageRoute(
-          builder: (context) => QRGenerationLoadingScreen(session: widget.session),
+          builder: (context) =>
+              QRGenerationLoadingScreen(session: widget.session),
         ),
       );
-      
-      // Update local state if QR was generated
+
       if (generatedQR != null && generatedQR.isNotEmpty && mounted) {
         setState(() {
           _currentQRPayload = generatedQR;
         });
       }
     } else {
-      // Create updated session with current QR payload
       final updatedSession = Session(
         id: widget.session.id,
         eventId: widget.session.eventId,
@@ -71,7 +76,7 @@ class _SpeakerSessionDetailScreenState extends ConsumerState<SpeakerSessionDetai
         totalRating: widget.session.totalRating,
         averageRating: widget.session.averageRating,
       );
-      
+
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => SessionQRViewerScreen(session: updatedSession),
@@ -90,55 +95,232 @@ class _SpeakerSessionDetailScreenState extends ConsumerState<SpeakerSessionDetai
 
   @override
   Widget build(BuildContext context) {
+    final startTime = DateFormat.jm().format(widget.session.startTime);
+    final endTime = DateFormat.jm().format(widget.session.endTime);
+
     return Scaffold(
-      appBar: AppBar(title: Text(widget.session.title)),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+      backgroundColor: const Color(0xFFF8F8F8),
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(widget.session.title, style: Theme.of(context).textTheme.headlineMedium),
-            const SizedBox(height: 16),
-            Text('Time: ${DateFormat.jm().format(widget.session.startTime)} - ${DateFormat.jm().format(widget.session.endTime)}'),
-            Text('Location: ${widget.session.location}'),
-            const Divider(height: 32),
-            Text('Session Description', style: Theme.of(context).textTheme.titleLarge),
-            Text(widget.session.description),
-            const SizedBox(height: 32),
-            
-            // QR Code Button - Updates after returning from generation
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.qr_code_2_outlined),
-                label: Text(_currentQRPayload.isEmpty 
-                  ? 'Generate Check-in QR' 
-                  : 'View Check-in QR'),
-                onPressed: () => _handleQRAction(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.namaGoldenYellow,
-                  foregroundColor: AppColors.navyBlue,
-                ),
+            // Custom header without AppBar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 18, 6),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: AppColors.namaNavyBlue,
+                      size: 22,
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: Text(
+                      'Details',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: AppColors.namaNavyBlue,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            
-            // Open Session Chat Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.chat_outlined),
-                label: const Text('Open Session Chat'),
-                onPressed: _openSessionChat,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.namaNavyBlue,
-                  foregroundColor: Colors.white,
+
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Main content card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.session.title,
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
+                                  color: const Color(0xFF202124),
+                                  fontSize: 22,
+                                  height: 1.2,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          _InfoRow(
+                            icon: Icons.access_time,
+                            text: '$startTime - $endTime',
+                          ),
+                          const SizedBox(height: 8),
+                          _InfoRow(
+                            icon: Icons.location_on_outlined,
+                            text: widget.session.location,
+                          ),
+
+                          const SizedBox(height: 18),
+
+                          Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Colors.grey.shade300,
+                          ),
+
+                          const SizedBox(height: 18),
+
+                          Text(
+                            'Session Description',
+                            style:
+                                Theme.of(context).textTheme.titleLarge?.copyWith(
+                                      color: const Color(0xFF202124),
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                          ),
+
+                          const SizedBox(height: 10),
+
+                          Text(
+                            widget.session.description.trim().isEmpty
+                                ? 'No description added yet.'
+                                : widget.session.description,
+                            style:
+                                Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: Colors.grey.shade700,
+                                      fontSize: 13.5,
+                                      height: 1.45,
+                                    ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // QR Code Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 42,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(
+                          Icons.qr_code_2_outlined,
+                          size: 17,
+                        ),
+                        label: Text(
+                          _currentQRPayload.isEmpty
+                              ? 'Generate Check-in QR'
+                              : 'View Check-in QR',
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onPressed: () => _handleQRAction(context),
+                        style: ElevatedButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: AppColors.namaGoldenYellow,
+                          foregroundColor: AppColors.navyBlue,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Open Session Chat Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 42,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(
+                          Icons.chat_outlined,
+                          size: 17,
+                        ),
+                        label: const Text(
+                          'Open Session Chat',
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        onPressed: _openSessionChat,
+                        style: ElevatedButton.styleFrom(
+                          elevation: 0,
+                          backgroundColor: AppColors.namaNavyBlue,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _InfoRow({
+    required this.icon,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: Colors.grey.shade700,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey.shade700,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                ),
+          ),
+        ),
+      ],
     );
   }
 }

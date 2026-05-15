@@ -1,19 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/my_sessions_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_analytics_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_audience_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/session_qa_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/session_resources_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/session_feedback_screen.dart';
-import 'package:events_app_trueattempt/features/speaker/screen/widgets/dashboard_action_card.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 
-/// Enhanced Speaker Dashboard Screen
-/// Provides comprehensive tools and insights for speakers
-/// Features are controlled via Firebase Remote Config
+/// Speaker Dashboard Screen
+/// Redesigned to match the attendee-style quick actions interface.
 class SpeakerDashboardScreen extends ConsumerWidget {
   const SpeakerDashboardScreen({super.key});
 
@@ -23,12 +22,12 @@ class SpeakerDashboardScreen extends ConsumerWidget {
     final remoteConfig = ref.watch(remoteConfigServiceProvider);
     final allSessionsAsync = ref.watch(sessionsStreamProvider);
 
-    // Get quick stats for the header
     final upcomingSessionsCount = allSessionsAsync.when(
       data: (sessions) => sessions
-          .where((s) => 
-            s.speakerIds.contains(user?.uid) && 
-            s.startTime.isAfter(DateTime.now())
+          .where(
+            (s) =>
+                s.speakerIds.contains(user?.uid) &&
+                s.startTime.isAfter(DateTime.now()),
           )
           .length,
       loading: () => 0,
@@ -36,218 +35,359 @@ class SpeakerDashboardScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Welcome Header
-            Text(
-              'Welcome, ${user?.name ?? 'Speaker'}!',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: AppColors.namaNavyBlue,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your Speaker Dashboard',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: AppColors.namaMediumGray,
-              ),
-            ),
-
-            // Quick Stats Banner
-            if (upcomingSessionsCount > 0) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: AppColors.primaryGradient,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.schedule_outlined,
-                      color: Colors.white,
-                      size: 32,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Upcoming Sessions',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.white70,
-                            ),
-                          ),
-                          Text(
-                            '$upcomingSessionsCount session${upcomingSessionsCount != 1 ? 's' : ''} scheduled',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Top logo + icons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Image.asset(
+                    AppConstants.logoCombinationPath,
+                    height: 36,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) {
+                      return Icon(
+                        Icons.auto_awesome,
+                        color: AppColors.namaNavyBlue,
+                        size: 32,
+                      );
+                    },
+                  ),
+                  Row(
+                    children: [
+                      _TopCircleButton(
+                        icon: Icons.chat_bubble_outline,
+                        onTap: () {},
                       ),
+                      const SizedBox(width: 10),
+                      _TopCircleButton(
+                        icon: Icons.notifications_none_rounded,
+                        onTap: () {},
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 28),
+
+              // Welcome text
+              Text(
+                'Hi, ${user?.name ?? 'Speaker'}!',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.namaNavyBlue,
+                      fontSize: 24,
                     ),
-                  ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Philanthropy Learning Forum',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.namaMediumGray,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
+              ),
+
+              if (upcomingSessionsCount > 0) ...[
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF2F4FF),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.schedule_outlined,
+                        color: AppColors.namaNavyBlue,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          '$upcomingSessionsCount upcoming session${upcomingSessionsCount != 1 ? 's' : ''} scheduled',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: AppColors.namaNavyBlue,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13.5,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+              ],
+
+              const SizedBox(height: 34),
+
+              Row(
+                children: [
+                  Icon(
+                    Icons.bolt,
+                    color: AppColors.namaNavyBlue,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Quick Actions',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: const Color(0xFF202124),
+                          fontSize: 20,
+                        ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 18),
+
+              GridView(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 3.15,
+                ),
+                children: [
+                  _QuickActionTile(
+                    icon: Icons.calendar_month_outlined,
+                    title: 'My Sessions',
+                    iconColor: AppColors.namaNavyBlue,
+                    backgroundColor: const Color(0xFFEFF3FF),
+                    isEnabled: remoteConfig.isSpeakerQRGenerationEnabled,
+                    disabledMessage: 'Disabled',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const MySessionsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickActionTile(
+                    icon: Icons.analytics_outlined,
+                    title: 'Analytics',
+                    iconColor: AppColors.namaGoldenYellow,
+                    backgroundColor: const Color(0xFFF4EEFF),
+                    isEnabled: remoteConfig.isSpeakerAnalyticsEnabled,
+                    disabledMessage: 'Disabled',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const SpeakerAnalyticsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickActionTile(
+                    icon: Icons.people_outline_rounded,
+                    title: 'Audience',
+                    iconColor: AppColors.successGreen,
+                    backgroundColor: const Color(0xFFEFFFF8),
+                    isEnabled: remoteConfig.isSpeakerAudienceInsightsEnabled,
+                    disabledMessage: 'Disabled',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const SpeakerAudienceScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickActionTile(
+                    icon: Icons.star_border_rounded,
+                    title: 'Feedback',
+                    iconColor: AppColors.namaRichGold,
+                    backgroundColor: const Color(0xFFFFF7EA),
+                    isEnabled: true,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const SessionFeedbackScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickActionTile(
+                    icon: Icons.question_answer_outlined,
+                    title: 'Q&A',
+                    iconColor: AppColors.namaMediumGray,
+                    backgroundColor: const Color(0xFFFFEEF3),
+                    isEnabled: false,
+                    disabledMessage: 'Disabled',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const SessionQAScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickActionTile(
+                    icon: Icons.folder_outlined,
+                    title: 'Resources',
+                    iconColor: AppColors.infoBlue,
+                    backgroundColor: const Color(0xFFEFFFFF),
+                    isEnabled: false,
+                    disabledMessage: 'Disabled',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const SessionResourcesScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickActionTile(
+                    icon: Icons.person_outline_rounded,
+                    title: 'My Profile',
+                    iconColor: AppColors.namaNavyBlue,
+                    backgroundColor: const Color(0xFFF5F1FF),
+                    isEnabled: true,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const ProfileTabScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickActionTile(
+                    icon: Icons.qr_code_scanner_rounded,
+                    title: 'QR Scanner',
+                    iconColor: AppColors.namaMediumGray,
+                    backgroundColor: const Color(0xFFF1F4F7),
+                    isEnabled: true,
+                    onTap: () {},
+                  ),
+                ],
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-            const SizedBox(height: 24),
+class _TopCircleButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
 
-            // Quick Actions Section
-            Text(
-              'Quick Actions',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: AppColors.namaNavyBlue,
+  const _TopCircleButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      shape: const CircleBorder(),
+      elevation: 3,
+      shadowColor: Colors.black.withOpacity(0.08),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          height: 40,
+          width: 40,
+          child: Icon(
+            icon,
+            color: const Color(0xFF202124),
+            size: 21,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickActionTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color iconColor;
+  final Color backgroundColor;
+  final bool isEnabled;
+  final String? disabledMessage;
+  final VoidCallback onTap;
+
+  const _QuickActionTile({
+    required this.icon,
+    required this.title,
+    required this.iconColor,
+    required this.backgroundColor,
+    required this.isEnabled,
+    required this.onTap,
+    this.disabledMessage,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final effectiveIconColor =
+        isEnabled ? iconColor : AppColors.namaMediumGray.withOpacity(0.45);
+
+    final effectiveTextColor = isEnabled
+        ? const Color(0xFF202124)
+        : AppColors.namaMediumGray.withOpacity(0.55);
+
+    return Material(
+      color: isEnabled ? backgroundColor : const Color(0xFFF5F7FB),
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: isEnabled
+            ? onTap
+            : () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(disabledMessage ?? 'This feature is disabled'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                icon,
+                color: effectiveIconColor,
+                size: 21,
               ),
-            ),
-            const SizedBox(height: 12),
-
-            // My Sessions - Always available
-            DashboardActionCard(
-              icon: Icons.mic_external_on_outlined,
-              title: 'My Sessions',
-              subtitle: 'View details and generate QR codes for your sessions',
-              iconColor: AppColors.namaNavyBlue,
-              isEnabled: remoteConfig.isSpeakerQRGenerationEnabled,
-              disabledMessage: 'Session management is currently disabled',
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const MySessionsScreen(),
-                ));
-              },
-            ),
-
-            const SizedBox(height: 12),
-
-            // Analytics - Controlled by remote config
-            DashboardActionCard(
-              icon: Icons.analytics_outlined,
-              title: 'Analytics',
-              subtitle: 'Track your performance and session insights',
-              iconColor: AppColors.namaGoldenYellow,
-              isEnabled: remoteConfig.isSpeakerAnalyticsEnabled,
-              disabledMessage: 'Analytics is currently unavailable',
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const SpeakerAnalyticsScreen(),
-                ));
-              },
-            ),
-
-            const SizedBox(height: 12),
-
-            // My Audience - Controlled by remote config
-            DashboardActionCard(
-              icon: Icons.people_outline,
-              title: 'My Audience',
-              subtitle: 'Connect with attendees interested in your sessions',
-              iconColor: AppColors.infoBlue,
-              isEnabled: remoteConfig.isSpeakerAudienceInsightsEnabled,
-              disabledMessage: 'Audience insights is currently unavailable',
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const SpeakerAudienceScreen(),
-                ));
-              },
-            ),
-
-            const SizedBox(height: 24),
-
-            // Tools & Resources Section
-            Text(
-              'Tools & Resources',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: AppColors.namaNavyBlue,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: effectiveTextColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                      ),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-
-            // Session Q&A - Placeholder (Will be controlled by session chat when implemented)
-            DashboardActionCard(
-              icon: Icons.question_answer_outlined,
-              title: 'Session Q&A',
-              subtitle: 'Manage questions from attendees (Coming Soon)',
-              iconColor: AppColors.namaMediumGray,
-              isEnabled: false, // Always disabled until backend is ready
-              disabledMessage: 'Q&A feature is under development',
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const SessionQAScreen(),
-                ));
-              },
-            ),
-
-            const SizedBox(height: 12),
-
-            // My Resources - Placeholder
-            DashboardActionCard(
-              icon: Icons.folder_outlined,
-              title: 'My Resources',
-              subtitle: 'Upload and share session materials (Coming Soon)',
-              iconColor: AppColors.namaRichGold,
-              isEnabled: false, // Always disabled for now - no remote config yet
-              disabledMessage: 'Resource management is under development',
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const SessionResourcesScreen(),
-                ));
-              },
-            ),
-
-            const SizedBox(height: 12),
-
-            // Session Feedback
-            DashboardActionCard(
-              icon: Icons.rate_review_outlined,
-              title: 'Session Feedback',
-              subtitle: 'View ratings and reviews from attendees',
-              iconColor: AppColors.successGreen,
-              isEnabled: true,
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const SessionFeedbackScreen(),
-                ));
-              },
-            ),
-
-            const SizedBox(height: 24),
-
-            // Profile Section
-            Text(
-              'Profile',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: AppColors.namaNavyBlue,
+              Icon(
+                Icons.chevron_right_rounded,
+                color: effectiveIconColor,
+                size: 20,
               ),
-            ),
-            const SizedBox(height: 12),
-
-            // My Public Profile
-            DashboardActionCard(
-              icon: Icons.person_outline,
-              title: 'My Public Profile',
-              subtitle: 'View and edit how attendees see your profile',
-              iconColor: AppColors.namaNavyBlue,
-              isEnabled: true,
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const ProfileTabScreen(),
-                ));
-              },
-            ),
-
-            const SizedBox(height: 24),
-          ],
+            ],
+          ),
         ),
       ),
     );
