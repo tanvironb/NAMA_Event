@@ -1,6 +1,5 @@
 import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
@@ -24,10 +23,13 @@ class _StaffShellState extends ConsumerState<StaffShell> {
         StaffHomeDashboard(
           onTabSelected: _onItemTapped,
         ),
-        const AgendaScreen(),
         const DirectoriesHubScreen(),
         const QRHubScreen(),
-        const ProfileTabScreen(),
+
+        // Staff profile should NOT show My Calendar or My Meetings.
+        const ProfileTabScreen(
+          hideCalendarAndMeetings: true,
+        ),
       ];
 
   @override
@@ -106,16 +108,17 @@ class _StaffShellState extends ConsumerState<StaffShell> {
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
+        selectedItemColor: const Color(0xFFF5B51B),
+        unselectedItemColor: Colors.white,
+        backgroundColor: const Color(0xFF1B0F72),
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        elevation: 0,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
             label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month_outlined),
-            activeIcon: Icon(Icons.calendar_month),
-            label: 'Agenda',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.people_outline),

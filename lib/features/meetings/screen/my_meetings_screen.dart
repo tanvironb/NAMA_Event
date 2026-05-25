@@ -1,4 +1,3 @@
-// lib/features/meetings/screen/my_meetings_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
@@ -31,7 +30,6 @@ class MyMeetingsScreen extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 🔥 CENTERED TITLE
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
                     child: Stack(
@@ -51,20 +49,17 @@ class MyMeetingsScreen extends ConsumerWidget {
                         ),
                         Text(
                           'My Meetings',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.namaNavyBlue,
-                              ),
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.namaNavyBlue,
+                                  ),
                         ),
                       ],
                     ),
                   ),
 
-                  // 🔵 Tabs
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: AnimatedBuilder(
@@ -100,42 +95,46 @@ class MyMeetingsScreen extends ConsumerWidget {
 
                   const SizedBox(height: 16),
 
-                  // 🔽 Content
                   Expanded(
                     child: meetingsAsync.when(
-                      data: (meetings) => TabBarView(
-                        children: [
-                          _buildMeetingsList(
-                            context,
-                            ref,
-                            meetings
-                                .where((m) => m.status == 'pending')
-                                .toList(),
-                            'pending',
-                          ),
-                          _buildMeetingsList(
-                            context,
-                            ref,
-                            meetings
-                                .where((m) => m.status == 'accepted')
-                                .toList(),
-                            'upcoming',
-                          ),
-                          _buildMeetingsList(
-                            context,
-                            ref,
-                            meetings
-                                .where((m) => m.status == 'rejected')
-                                .toList(),
-                            'past',
-                          ),
-                        ],
-                      ),
+                      data: (meetings) {
+                        final safeMeetings = meetings.whereType<Meeting>().toList();
+
+                        return TabBarView(
+                          children: [
+                            _buildMeetingsList(
+                              context,
+                              ref,
+                              safeMeetings
+                                  .where((m) => m.status == 'pending')
+                                  .toList(),
+                              'pending',
+                            ),
+                            _buildMeetingsList(
+                              context,
+                              ref,
+                              safeMeetings
+                                  .where((m) => m.status == 'accepted')
+                                  .toList(),
+                              'upcoming',
+                            ),
+                            _buildMeetingsList(
+                              context,
+                              ref,
+                              safeMeetings
+                                  .where((m) => m.status == 'rejected')
+                                  .toList(),
+                              'past',
+                            ),
+                          ],
+                        );
+                      },
                       loading: () => const Center(child: LoadingIndicator()),
                       error: (error, stack) => Center(
                         child: Text(
                           'Error loading meetings: $error',
                           style: const TextStyle(fontSize: 13),
+                          textAlign: TextAlign.center,
                         ),
                       ),
                     ),
@@ -149,7 +148,6 @@ class MyMeetingsScreen extends ConsumerWidget {
     );
   }
 
-  // 🔵 Tab Button
   Widget _buildTabBox({
     required String text,
     required int index,
@@ -182,7 +180,6 @@ class MyMeetingsScreen extends ConsumerWidget {
     );
   }
 
-  // 🔵 List
   Widget _buildMeetingsList(
     BuildContext context,
     WidgetRef ref,
@@ -216,7 +213,6 @@ class MyMeetingsScreen extends ConsumerWidget {
     );
   }
 
-  // 🔵 Card
   Widget _buildMeetingCard(
     BuildContext context,
     WidgetRef ref,
@@ -227,7 +223,7 @@ class MyMeetingsScreen extends ConsumerWidget {
     final isRequester = meeting.requesterId == currentUserId;
     final otherUserInfo =
         isRequester ? meeting.recipientInfo : meeting.requesterInfo;
-    final otherUserName = otherUserInfo['name'] ?? 'Unknown User';
+    final otherUserName = (otherUserInfo['name'] ?? 'Unknown User').toString();
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
@@ -281,20 +277,38 @@ class MyMeetingsScreen extends ConsumerWidget {
     );
   }
 
-  // 🔵 Status
   Widget _buildStatusChip(String status) {
+    Color chipColor;
+    String label;
+
+    switch (status) {
+      case 'accepted':
+        chipColor = Colors.green;
+        label = 'Accepted';
+        break;
+      case 'rejected':
+        chipColor = Colors.red;
+        label = 'Rejected';
+        break;
+      case 'pending':
+      default:
+        chipColor = Colors.orange;
+        label = 'Pending';
+        break;
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.orange.withOpacity(0.1),
+        color: chipColor.withOpacity(0.1),
         borderRadius: BorderRadius.circular(11),
       ),
-      child: const Text(
-        'Pending',
+      child: Text(
+        label,
         style: TextStyle(
           fontSize: 10.5,
           fontWeight: FontWeight.w600,
-          color: Colors.orange,
+          color: chipColor,
         ),
       ),
     );

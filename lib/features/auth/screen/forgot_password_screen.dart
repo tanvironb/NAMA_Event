@@ -13,8 +13,64 @@ class ForgotPasswordScreen extends StatefulWidget {
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final TextEditingController _emailController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
+  final FocusNode _emailFocus = FocusNode();
 
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _emailFocus.addListener(() {
+      setState(() {});
+    });
+  }
+
+  InputDecoration _fieldDecoration({
+    required String hint,
+    required Widget suffixIcon,
+    required FocusNode focusNode,
+  }) {
+    return InputDecoration(
+      hintText: focusNode.hasFocus ? '' : hint,
+      hintStyle: TextStyle(
+        fontSize: 13,
+        color: Colors.grey.shade600,
+        fontStyle: FontStyle.italic,
+      ),
+      filled: true,
+      fillColor: const Color(0xFFE5E5E5),
+      suffixIcon: suffixIcon,
+      suffixIconColor: Colors.grey.shade700,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 22,
+        vertical: 16,
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide.none,
+      ),
+      errorStyle: const TextStyle(
+        fontSize: 11,
+      ),
+    );
+  }
 
   Future<void> _resetPassword() async {
     if (!_formKey.currentState!.validate()) return;
@@ -31,7 +87,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Reset link sent to your email"),
+          content: Text(
+            "Reset link sent to your email",
+            style: TextStyle(fontSize: 13),
+          ),
         ),
       );
 
@@ -48,7 +107,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(message),
+          content: Text(
+            message,
+            style: const TextStyle(fontSize: 13),
+          ),
           backgroundColor: AppColors.errorRed,
         ),
       );
@@ -58,6 +120,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   void dispose() {
     _emailController.dispose();
+    _emailFocus.dispose();
     super.dispose();
   }
 
@@ -66,67 +129,106 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.namaWhite,
-      appBar: AppBar(
-        title: const Text("Forgot Password"),
-        backgroundColor: AppColors.namaNavyBlue,
-        foregroundColor: AppColors.namaWhite,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                const SizedBox(height: 14),
 
-              const Text(
-                "Enter your email and we’ll send you a reset link",
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 30),
-
-              // Email field
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                  labelText: "Email",
-                  prefixIcon: Icon(Icons.email,
-                      color: AppColors.namaMediumGray),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return "Enter your email";
-                  }
-                  return null;
-                },
-              ),
-
-              const SizedBox(height: 30),
-
-              // Button
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _resetPassword,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.namaNavyBlue,
-                    foregroundColor: AppColors.namaWhite,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                // Back button + title
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: Icon(
+                        Icons.arrow_back,
+                        color: AppColors.namaNavyBlue,
+                        size: 22,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
                     ),
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text("Send Reset Link"),
+
+                    const SizedBox(width: 14),
+
+                    Text(
+                      "Forgot Password",
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.namaNavyBlue,
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 48),
+
+                const Text(
+                  "Enter your email and we’ll send you a reset link",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.black87,
+                  ),
+                ),
+
+                const SizedBox(height: 30),
+
+                // Email field
+                TextFormField(
+                  controller: _emailController,
+                  focusNode: _emailFocus,
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done,
+                  style: const TextStyle(fontSize: 13),
+                  decoration: _fieldDecoration(
+                    hint: "Email",
+                    focusNode: _emailFocus,
+                    suffixIcon: const Icon(Icons.email_outlined),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return "Enter your email";
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 34),
+
+                // Button
+                _isLoading
+                    ? CircularProgressIndicator(
+                        color: AppColors.namaNavyBlue,
+                      )
+                    : SizedBox(
+                        width: 160,
+                        height: 42,
+                        child: ElevatedButton(
+                          onPressed: _resetPassword,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3D3D9E),
+                            foregroundColor: AppColors.namaWhite,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                          ),
+                          child: const Text(
+                            "Send Reset Link",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+              ],
+            ),
           ),
         ),
       ),

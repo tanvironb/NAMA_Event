@@ -24,7 +24,10 @@ class SessionChatScreen extends ConsumerStatefulWidget {
 class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
   bool _hasShownFeedbackOnce = false;
 
-  void _toggleChatEnabled(Session currentSession, String userRole) async {
+  Future<void> _toggleChatEnabled(
+    Session currentSession,
+    String userRole,
+  ) async {
     final chatRepo = ref.read(chatRepositoryProvider);
     final newState = !currentSession.isChatEnabled;
 
@@ -47,63 +50,65 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
         closedByRole,
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(newState ? 'Chat opened' : 'Chat closed'),
-            backgroundColor:
-                newState ? AppColors.successGreen : AppColors.errorRed,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(newState ? 'Chat opened' : 'Chat closed'),
+          backgroundColor:
+              newState ? AppColors.successGreen : AppColors.errorRed,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update chat status: $e')),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update chat status: $e'),
+        ),
+      );
     }
   }
 
-  void _muteUser(String userId) async {
+  Future<void> _muteUser(String userId) async {
     final chatRepo = ref.read(chatRepositoryProvider);
 
     try {
       await chatRepo.muteUser(widget.session.id, userId);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to mute user: $e')),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to mute user: $e')),
+      );
     }
   }
 
-  void _unmuteUser(String userId) async {
+  Future<void> _unmuteUser(String userId) async {
     final chatRepo = ref.read(chatRepositoryProvider);
 
     try {
       await chatRepo.unmuteUser(widget.session.id, userId);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to unmute user: $e')),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to unmute user: $e')),
+      );
     }
   }
 
-  void _deleteMessage(String messageId) async {
+  Future<void> _deleteMessage(String messageId) async {
     final chatRepo = ref.read(chatRepositoryProvider);
 
     try {
       await chatRepo.deleteMessage(widget.session.id, messageId);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete message: $e')),
-        );
-      }
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete message: $e')),
+      );
     }
   }
 
@@ -114,11 +119,13 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
     if (!session.hasEnded) return;
     if (_hasShownFeedbackOnce) return;
 
-    final isAdmin =
-        ref.read(userAppProfileStreamProvider).asData?.value?.role == 'admin';
+    final currentUser = ref.read(userAppProfileStreamProvider).asData?.value;
+    if (currentUser == null) return;
+
+    final isAdmin = currentUser.role == 'admin';
     final isSessionSpeaker = session.speakerIds.contains(userId);
 
-    if (isAdmin == true || isSessionSpeaker) return;
+    if (isAdmin || isSessionSpeaker) return;
     if (!session.checkedInAttendees.contains(userId)) return;
 
     final feedbackRepo = FeedbackRepository();
@@ -131,28 +138,21 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
 
     _hasShownFeedbackOnce = true;
 
-    if (mounted) {
-      await Future.delayed(const Duration(milliseconds: 500));
+    await Future.delayed(const Duration(milliseconds: 500));
 
-      if (mounted) {
-        final currentUser =
-            ref.read(userAppProfileStreamProvider).asData?.value;
+    if (!mounted) return;
 
-        if (currentUser != null) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => SessionFeedbackDialog(
-              sessionId: session.id,
-              sessionTitle: session.title,
-              currentUser: currentUser,
-              onDismissed: () {},
-              onSubmitted: () {},
-            ),
-          );
-        }
-      }
-    }
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => SessionFeedbackDialog(
+        sessionId: session.id,
+        sessionTitle: session.title,
+        currentUser: currentUser,
+        onDismissed: () {},
+        onSubmitted: () {},
+      ),
+    );
   }
 
   void _showAnalyticsDialog(BuildContext context, Session currentSession) {
@@ -194,9 +194,7 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                   'Engagement Rate',
                   '${currentSession.engagementRate.toStringAsFixed(1)}%',
                 ),
-
               const Divider(height: 20),
-
               _analyticsSectionTitle(context, 'Messages by Role'),
               const SizedBox(height: 8),
               if (currentSession.messagesByRole.isEmpty)
@@ -216,9 +214,7 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                         : '${entry.value} (${((entry.value / currentSession.totalMessages) * 100).toStringAsFixed(0)}%)',
                   ),
                 ),
-
               const Divider(height: 20),
-
               _analyticsSectionTitle(context, 'Activity'),
               const SizedBox(height: 8),
               if (currentSession.firstMessageAt != null)
@@ -242,9 +238,7 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                   currentSession.averageMessagesPerParticipant
                       .toStringAsFixed(1),
                 ),
-
               const Divider(height: 20),
-
               _analyticsSectionTitle(context, 'Moderation'),
               const SizedBox(height: 8),
               _buildAnalyticsRow(
@@ -363,7 +357,6 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                           ),
                       ],
                     ),
-
                     if (currentSession.hasEnded)
                       _StatusBanner(
                         icon: Icons.event_busy,
@@ -378,7 +371,6 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                             : 'Chat is closed',
                         color: AppColors.warningAmber,
                       ),
-
                     Expanded(
                       child: messagesAsync.when(
                         data: (messages) {
@@ -488,9 +480,6 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                         ),
                       ),
                     ),
-
-                    // MessageComposer already handles the bottom closed-chat banner.
-                    // Do not add another closed-chat banner here.
                     MessageComposer(
                       session: currentSession,
                       currentUser: currentUser,

@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
-import 'package:events_app_trueattempt/core/constants/app_text_constants.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
@@ -68,7 +67,6 @@ class UserDetailsScreen extends ConsumerWidget {
                       const SizedBox(height: 25),
                       _profileImage(appUser),
                       const SizedBox(height: 16),
-
                       Text(
                         appUser.name,
                         textAlign: TextAlign.center,
@@ -78,7 +76,6 @@ class UserDetailsScreen extends ConsumerWidget {
                           color: _mainColor,
                         ),
                       ),
-
                       if (appUser.title.isNotEmpty) ...[
                         const SizedBox(height: 5),
                         Text(
@@ -90,9 +87,7 @@ class UserDetailsScreen extends ConsumerWidget {
                           ),
                         ),
                       ],
-
                       const SizedBox(height: 10),
-
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -106,14 +101,10 @@ class UserDetailsScreen extends ConsumerWidget {
                             _tag(appUser.company, icon: Icons.business),
                         ],
                       ),
-
                       const SizedBox(height: 18),
-
                       if (currentUserId != null && currentUserId != userId)
                         _actionButtons(context, appUser, currentUserId, ref),
-
                       const SizedBox(height: 20),
-
                       if (canViewFullData && appUser.bio.isNotEmpty)
                         _card(
                           title: 'About',
@@ -127,12 +118,10 @@ class UserDetailsScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
-
                       if (hasContactInfo) ...[
                         const SizedBox(height: 16),
                         _contactCard(context, appUser, canViewFullData),
                       ],
-
                       if (hasSocialMedia) ...[
                         const SizedBox(height: 16),
                         _socialMediaCard(context, appUser),
@@ -164,7 +153,11 @@ class UserDetailsScreen extends ConsumerWidget {
             backgroundColor: Colors.grey.shade300,
             child: IconButton(
               padding: EdgeInsets.zero,
-              icon: const Icon(Icons.arrow_back, size: 18, color: Colors.black87),
+              icon: const Icon(
+                Icons.arrow_back,
+                size: 18,
+                color: Colors.black87,
+              ),
               onPressed: () => Navigator.pop(context),
             ),
           ),
@@ -257,16 +250,12 @@ class UserDetailsScreen extends ConsumerWidget {
           width: 240,
           height: 40,
           child: ElevatedButton.icon(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => DirectMessageScreen(
-                    conversationId: null,
-                    otherUserId: appUser.uid,
-                    otherUserName: appUser.name,
-                    otherUserProfileImage: appUser.profileImageUrl,
-                  ),
-                ),
+            onPressed: () async {
+              await _openDirectMessageFromNetworking(
+                context: context,
+                ref: ref,
+                currentUserId: currentUserId,
+                otherUser: appUser,
               );
             },
             icon: const Icon(Icons.chat_bubble_outline, size: 16),
@@ -284,9 +273,7 @@ class UserDetailsScreen extends ConsumerWidget {
             ),
           ),
         ),
-
         const SizedBox(height: 8),
-
         SizedBox(
           width: 240,
           height: 40,
@@ -312,7 +299,6 @@ class UserDetailsScreen extends ConsumerWidget {
             ),
           ),
         ),
-
         if (appUser.role == 'speaker') ...[
           const SizedBox(height: 8),
           SizedBox(
@@ -327,6 +313,46 @@ class UserDetailsScreen extends ConsumerWidget {
         ],
       ],
     );
+  }
+
+  Future<void> _openDirectMessageFromNetworking({
+    required BuildContext context,
+    required WidgetRef ref,
+    required String currentUserId,
+    required AppUser otherUser,
+  }) async {
+    try {
+      final activeEvent = await ref.read(activeEventFutureProvider.future);
+
+      final conversationId =
+          await ref.read(messagingRepositoryProvider).createOrGetConversation(
+                currentUserId: currentUserId,
+                otherUserId: otherUser.uid,
+                eventId: activeEvent.id,
+              );
+
+      if (!context.mounted) return;
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => DirectMessageScreen(
+            conversationId: conversationId,
+            otherUserId: otherUser.uid,
+            otherUserName: otherUser.name,
+            otherUserProfileImage: otherUser.profileImageUrl,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to open conversation: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _card({
@@ -623,43 +649,14 @@ class UserDetailsScreen extends ConsumerWidget {
           children: [
             const SizedBox(height: 18),
             _topBarOnlyBack(context),
-            Expanded(
+            const Expanded(
               child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 45,
-                        backgroundColor: Colors.grey.shade200,
-                        child: const Icon(
-                          Icons.person_off_outlined,
-                          size: 42,
-                          color: AppColors.namaMediumGray,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        AppTextConstants.anonymousProfileTitle,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.namaMediumGray,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        AppTextConstants.anonymousProfileMessage,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+                child: Text(
+                  'This profile is private.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.namaMediumGray,
                   ),
                 ),
               ),
@@ -672,12 +669,12 @@ class UserDetailsScreen extends ConsumerWidget {
 
   String _getRoleDisplayName(String role) {
     switch (role.toLowerCase()) {
-      case 'speaker':
-        return 'Speaker';
-      case 'staff':
-        return 'Staff';
       case 'admin':
         return 'Admin';
+      case 'staff':
+        return 'Staff';
+      case 'speaker':
+        return 'Speaker';
       case 'attendee':
         return 'Attendee';
       default:
@@ -685,50 +682,45 @@ class UserDetailsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _launchEmail(BuildContext context, String email) async {
+    final Uri uri = Uri(
+      scheme: 'mailto',
+      path: email,
+    );
+
+    await _launchUriWithFallback(context, uri);
+  }
+
   Future<void> _launchUrl(BuildContext context, String url) async {
-    String cleanUrl = url.trim();
+    final fixedUrl = url.startsWith('http') ? url : 'https://$url';
+    final uri = Uri.parse(fixedUrl);
 
-    if (!cleanUrl.startsWith('http') &&
-        !cleanUrl.startsWith('mailto:') &&
-        !cleanUrl.startsWith('tel:')) {
-      cleanUrl = 'https://$cleanUrl';
-    }
+    await _launchUriWithFallback(context, uri);
+  }
 
+  Future<void> _launchUriWithFallback(BuildContext context, Uri uri) async {
     try {
-      final uri = Uri.parse(cleanUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        throw 'Could not launch URL';
-      }
-    } catch (e) {
-      if (context.mounted) {
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched && context.mounted) {
+        await Clipboard.setData(ClipboardData(text: uri.toString()));
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Could not open: $url'),
-            backgroundColor: Colors.red[600],
+          const SnackBar(
+            content: Text('Could not open link. Copied to clipboard.'),
           ),
         );
       }
-    }
-  }
-
-  Future<void> _launchEmail(BuildContext context, String email) async {
-    try {
-      final emailUri = Uri.parse('mailto:$email');
-
-      if (await canLaunchUrl(emailUri)) {
-        await launchUrl(emailUri, mode: LaunchMode.externalApplication);
-      } else {
-        throw 'No email app available';
-      }
-    } catch (e) {
+    } catch (_) {
       if (context.mounted) {
-        Clipboard.setData(ClipboardData(text: email));
+        await Clipboard.setData(ClipboardData(text: uri.toString()));
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Email copied to clipboard'),
-            backgroundColor: Colors.green[600],
+          const SnackBar(
+            content: Text('Could not open link. Copied to clipboard.'),
           ),
         );
       }

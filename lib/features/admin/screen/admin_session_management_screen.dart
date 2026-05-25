@@ -6,7 +6,6 @@ import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_session_detail_screen.dart';
-import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.dart';
@@ -17,11 +16,13 @@ import 'package:intl/intl.dart';
 class AdminSessionManagementScreen extends ConsumerStatefulWidget {
   final String? eventId;
   final String? eventName;
+  final bool showBottomNav;
 
   const AdminSessionManagementScreen({
     super.key,
     this.eventId,
     this.eventName,
+    this.showBottomNav = true,
   });
 
   bool get isEventSpecific => eventId != null && eventId!.isNotEmpty;
@@ -39,6 +40,18 @@ class _AdminSessionManagementScreenState
   static const Color _softPurple = Color(0xFFF4F2FB);
   static const Color _textDark = Color(0xFF111827);
   static const Color _textMuted = Color(0xFF6B7280);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+
+  static const List<String> _categories = [
+    'Keynote',
+    'Panel Discussion',
+    'Workshop',
+    'Training',
+    'Networking',
+    'Forum',
+    'Breakout Session',
+    'Other',
+  ];
 
   Stream<List<Session>> _eventSessionsStream() {
     if (!widget.isEventSpecific) {
@@ -116,6 +129,566 @@ class _AdminSessionManagementScreenState
     }
 
     return groupedSessions;
+  }
+
+  Future<void> _deleteSession(Session session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Delete Session?',
+            style: TextStyle(
+              color: _primaryColor,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: Text(
+            'Are you sure you want to delete "${session.title}"? This action cannot be undone.',
+            style: const TextStyle(
+              color: _textMuted,
+              fontSize: 13,
+              height: 1.35,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  color: _primaryColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.delete_outline, size: 17),
+              label: const Text(
+                'Delete',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              style: ElevatedButton.styleFrom(
+                elevation: 0,
+                backgroundColor: AppColors.errorRed,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('sessions')
+          .doc(session.id)
+          .delete();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Session deleted successfully.'),
+          backgroundColor: AppColors.successGreen,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete session: $e'),
+          backgroundColor: AppColors.errorRed,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showEditSessionSheet(Session session) async {
+    final titleController = TextEditingController(text: session.title);
+    final descriptionController =
+        TextEditingController(text: session.description);
+    final locationController = TextEditingController(text: session.location);
+    final liveStreamController =
+        TextEditingController(text: session.liveStreamUrl);
+
+    DateTime selectedDate = DateTime(
+      session.startTime.year,
+      session.startTime.month,
+      session.startTime.day,
+    );
+
+    TimeOfDay startTime = TimeOfDay.fromDateTime(session.startTime);
+    TimeOfDay endTime = TimeOfDay.fromDateTime(session.endTime);
+
+    final rawCategory = session.category.trim();
+    String selectedCategory = _categories.contains(rawCategory)
+        ? rawCategory
+        : 'Other';
+
+    int selectedPriority = session.priority;
+    if (selectedPriority < 1 || selectedPriority > 5) {
+      selectedPriority = 3;
+    }
+
+    bool isChatEnabled = session.isChatEnabled;
+    bool isSaving = false;
+
+    Future<void> pickDate(StateSetter setSheetState) async {
+      final now = DateTime.now();
+
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: selectedDate,
+        firstDate: DateTime(now.year - 1),
+        lastDate: DateTime(now.year + 10),
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: Theme.of(context).colorScheme.copyWith(
+                    primary: _primaryColor,
+                  ),
+            ),
+            child: child!,
+          );
+        },
+      );
+
+      if (picked != null) {
+        setSheetState(() => selectedDate = picked);
+      }
+    }
+
+    Future<void> pickStartTime(StateSetter setSheetState) async {
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: startTime,
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: Theme.of(context).colorScheme.copyWith(
+                    primary: _primaryColor,
+                  ),
+            ),
+            child: child!,
+          );
+        },
+      );
+
+      if (picked != null) {
+        setSheetState(() => startTime = picked);
+      }
+    }
+
+    Future<void> pickEndTime(StateSetter setSheetState) async {
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: endTime,
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: Theme.of(context).colorScheme.copyWith(
+                    primary: _primaryColor,
+                  ),
+            ),
+            child: child!,
+          );
+        },
+      );
+
+      if (picked != null) {
+        setSheetState(() => endTime = picked);
+      }
+    }
+
+    DateTime combineDateAndTime(DateTime date, TimeOfDay time) {
+      return DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
+    }
+
+    String formatDate(DateTime date) {
+      return DateFormat('MMM d, yyyy').format(date);
+    }
+
+    String formatTime(TimeOfDay time) {
+      final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+      final minute = time.minute.toString().padLeft(2, '0');
+      final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+
+      return '$hour:$minute $period';
+    }
+
+    Future<void> saveSession(StateSetter setSheetState) async {
+      final title = titleController.text.trim();
+      final description = descriptionController.text.trim();
+      final location = locationController.text.trim();
+      final liveStreamUrl = liveStreamController.text.trim();
+
+      if (title.isEmpty) {
+        _showMessage('Session title is required.', isError: true);
+        return;
+      }
+
+      if (location.isEmpty) {
+        _showMessage('Location is required.', isError: true);
+        return;
+      }
+
+      final newStartTime = combineDateAndTime(selectedDate, startTime);
+      final newEndTime = combineDateAndTime(selectedDate, endTime);
+
+      if (!newEndTime.isAfter(newStartTime)) {
+        _showMessage('End time must be after start time.', isError: true);
+        return;
+      }
+
+      setSheetState(() => isSaving = true);
+
+      try {
+        await FirebaseFirestore.instance
+            .collection('sessions')
+            .doc(session.id)
+            .update({
+          'title': title,
+          'description': description,
+          'location': location,
+          'startTime': Timestamp.fromDate(newStartTime),
+          'endTime': Timestamp.fromDate(newEndTime),
+          'category': selectedCategory,
+          'priority': selectedPriority,
+          'liveStreamUrl': liveStreamUrl,
+          'isChatEnabled': isChatEnabled,
+          'closedBy': isChatEnabled ? '' : session.closedBy,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        if (!mounted) return;
+
+        Navigator.of(context).pop();
+
+        _showMessage('Session updated successfully.');
+      } catch (e) {
+        if (!mounted) return;
+
+        setSheetState(() => isSaving = false);
+
+        _showMessage('Failed to update session: $e', isError: true);
+      }
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(24),
+        ),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 18,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        height: 4,
+                        width: 46,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE2DEEF),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Edit Session',
+                            style: TextStyle(
+                              color: _primaryColor,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: isSaving
+                              ? null
+                              : () => Navigator.of(context).pop(),
+                          icon: const Icon(
+                            Icons.close_rounded,
+                            color: _primaryColor,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Update the selected session details.',
+                      style: TextStyle(
+                        color: _textMuted,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _EditInputField(
+                      label: 'Session Title',
+                      controller: titleController,
+                      hint: 'Enter session title',
+                      icon: Icons.event_note_outlined,
+                    ),
+                    const SizedBox(height: 14),
+                    _EditInputField(
+                      label: 'Description',
+                      controller: descriptionController,
+                      hint: 'Optional description',
+                      icon: Icons.chat_bubble_outline_rounded,
+                      maxLines: 3,
+                    ),
+                    const SizedBox(height: 14),
+                    _EditInputField(
+                      label: 'Venue / Location',
+                      controller: locationController,
+                      hint: 'Enter location',
+                      icon: Icons.location_on_outlined,
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _EditPickerField(
+                            label: 'Date',
+                            value: formatDate(selectedDate),
+                            icon: Icons.calendar_today_outlined,
+                            onTap: isSaving
+                                ? null
+                                : () => pickDate(setSheetState),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _EditPickerField(
+                            label: 'Start',
+                            value: formatTime(startTime),
+                            icon: Icons.access_time_rounded,
+                            onTap: isSaving
+                                ? null
+                                : () => pickStartTime(setSheetState),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _EditPickerField(
+                            label: 'End',
+                            value: formatTime(endTime),
+                            icon: Icons.access_time_rounded,
+                            onTap: isSaving
+                                ? null
+                                : () => pickEndTime(setSheetState),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    _EditCategoryDropdown(
+                      value: selectedCategory,
+                      items: _categories,
+                      onChanged: isSaving
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              setSheetState(() => selectedCategory = value);
+                            },
+                    ),
+                    const SizedBox(height: 14),
+                    _EditPriorityDropdown(
+                      value: selectedPriority,
+                      onChanged: isSaving
+                          ? null
+                          : (value) {
+                              if (value == null) return;
+                              setSheetState(() => selectedPriority = value);
+                            },
+                    ),
+                    const SizedBox(height: 14),
+                    _EditInputField(
+                      label: 'Live Stream URL',
+                      controller: liveStreamController,
+                      hint: 'Optional',
+                      icon: Icons.live_tv_outlined,
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _fieldBorder,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            color: _primaryColor,
+                            size: 21,
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Enable Session Chat',
+                                  style: TextStyle(
+                                    color: _primaryColor,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                SizedBox(height: 3),
+                                Text(
+                                  'Allow attendees to chat during this session.',
+                                  style: TextStyle(
+                                    color: _textMuted,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Switch(
+                            value: isChatEnabled,
+                            activeColor: _primaryColor,
+                            onChanged: isSaving
+                                ? null
+                                : (value) {
+                                    setSheetState(() {
+                                      isChatEnabled = value;
+                                    });
+                                  },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: isSaving
+                                ? null
+                                : () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded, size: 18),
+                            label: const Text(
+                              'Cancel',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _primaryColor,
+                              side: const BorderSide(color: _fieldBorder),
+                              minimumSize: const Size(double.infinity, 46),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: isSaving
+                                ? null
+                                : () => saveSession(setSheetState),
+                            icon: isSaving
+                                ? const SizedBox(
+                                    height: 16,
+                                    width: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(Icons.check_rounded, size: 18),
+                            label: Text(
+                              isSaving ? 'Saving...' : 'Save',
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              elevation: 0,
+                              backgroundColor: _primaryColor,
+                              foregroundColor: Colors.white,
+                              minimumSize: const Size(double.infinity, 46),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    titleController.dispose();
+    descriptionController.dispose();
+    locationController.dispose();
+    liveStreamController.dispose();
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.errorRed : AppColors.successGreen,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   Widget _buildHeader() {
@@ -318,6 +891,8 @@ class _AdminSessionManagementScreenState
                     ),
                   );
                 },
+                onEdit: () => _showEditSessionSheet(session),
+                onDelete: () => _deleteSession(session),
               ),
             ),
             const SizedBox(height: 16),
@@ -362,43 +937,45 @@ class _AdminSessionManagementScreenState
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedBottomIndex,
-        selectedItemColor: const Color(0xFFF5B51B),
-        unselectedItemColor: Colors.white,
-        backgroundColor: _primaryColor,
-        selectedFontSize: 12,
-        unselectedFontSize: 12,
-        onTap: _onBottomNavTapped,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.admin_panel_settings_outlined),
-            activeIcon: Icon(Icons.admin_panel_settings),
-            label: 'Admin',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month_outlined),
-            activeIcon: Icon(Icons.calendar_month),
-            label: 'Agenda',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people_outline),
-            activeIcon: Icon(Icons.people),
-            label: 'Network',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.qr_code_scanner),
-            activeIcon: Icon(Icons.qr_code_scanner),
-            label: 'QR',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
-      ),
+      bottomNavigationBar: widget.showBottomNav
+          ? BottomNavigationBar(
+              type: BottomNavigationBarType.fixed,
+              currentIndex: _selectedBottomIndex,
+              selectedItemColor: const Color(0xFFF5B51B),
+              unselectedItemColor: Colors.white,
+              backgroundColor: _primaryColor,
+              selectedFontSize: 12,
+              unselectedFontSize: 12,
+              onTap: _onBottomNavTapped,
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.admin_panel_settings_outlined),
+                  activeIcon: Icon(Icons.admin_panel_settings),
+                  label: 'Admin',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.calendar_month_outlined),
+                  activeIcon: Icon(Icons.calendar_month),
+                  label: 'Agenda',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.people_outline),
+                  activeIcon: Icon(Icons.people),
+                  label: 'Network',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.qr_code_scanner),
+                  activeIcon: Icon(Icons.qr_code_scanner),
+                  label: 'QR',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.person_outline),
+                  activeIcon: Icon(Icons.person),
+                  label: 'Profile',
+                ),
+              ],
+            )
+          : null,
     );
   }
 }
@@ -406,10 +983,14 @@ class _AdminSessionManagementScreenState
 class _AdminSessionCard extends StatelessWidget {
   final Session session;
   final VoidCallback onTap;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   const _AdminSessionCard({
     required this.session,
     required this.onTap,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   static const Color _primaryColor = Color(0xFF1B0F72);
@@ -524,31 +1105,88 @@ class _AdminSessionCard extends StatelessWidget {
                   ),
                 ],
               ),
-              if (session.qrCodePayload.isNotEmpty ||
-                  session.totalMessages > 0) ...[
-                const SizedBox(height: 9),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 6,
-                  children: [
-                    if (session.qrCodePayload.isNotEmpty)
-                      _MiniChip(
-                        icon: Icons.qr_code_rounded,
-                        label: 'QR Active',
-                        color: AppColors.successGreen,
-                        faded: hasEnded,
-                      ),
-                    if (session.totalMessages > 0)
-                      _MiniChip(
-                        icon: Icons.chat_bubble_outline_rounded,
-                        label: '${session.totalMessages} messages',
-                        color: AppColors.infoBlue,
-                        faded: hasEnded,
-                      ),
-                  ],
-                ),
-              ],
+              const SizedBox(height: 9),
+              Row(
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        if (session.qrCodePayload.isNotEmpty)
+                          _MiniChip(
+                            icon: Icons.qr_code_rounded,
+                            label: 'QR Active',
+                            color: AppColors.successGreen,
+                            faded: hasEnded,
+                          ),
+                        if (session.totalMessages > 0)
+                          _MiniChip(
+                            icon: Icons.chat_bubble_outline_rounded,
+                            label: '${session.totalMessages} messages',
+                            color: AppColors.infoBlue,
+                            faded: hasEnded,
+                          ),
+                      ],
+                    ),
+                  ),
+                  _SmallActionButton(
+                    icon: Icons.edit_outlined,
+                    color: _primaryColor,
+                    tooltip: 'Edit Session',
+                    onTap: onEdit,
+                  ),
+                  const SizedBox(width: 6),
+                  _SmallActionButton(
+                    icon: Icons.delete_outline_rounded,
+                    color: AppColors.errorRed,
+                    tooltip: 'Delete Session',
+                    onTap: onDelete,
+                  ),
+                ],
+              ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SmallActionButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _SmallActionButton({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(11),
+        child: Container(
+          height: 32,
+          width: 32,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(
+              color: color.withOpacity(0.22),
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 17,
           ),
         ),
       ),
@@ -673,6 +1311,321 @@ class _MiniChip extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EditInputField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final String hint;
+  final IconData icon;
+  final int maxLines;
+
+  const _EditInputField({
+    required this.label,
+    required this.controller,
+    required this.hint,
+    required this.icon,
+    this.maxLines = 1,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EditFieldLabel(label),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          maxLines: maxLines,
+          cursorColor: _primaryColor,
+          style: const TextStyle(
+            color: Color(0xFF1F2937),
+            fontSize: 12.5,
+            fontWeight: FontWeight.w500,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: const TextStyle(
+              color: _textMuted,
+              fontSize: 12,
+            ),
+            prefixIcon: Icon(
+              icon,
+              color: _primaryColor,
+              size: 19,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: const BorderSide(
+                color: _fieldBorder,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(13),
+              borderSide: const BorderSide(
+                color: _primaryColor,
+                width: 1.1,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditPickerField extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  const _EditPickerField({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _EditFieldLabel(label),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(13),
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(
+                color: _fieldBorder,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  color: _primaryColor,
+                  size: 18,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF1F2937),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF454062),
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditCategoryDropdown extends StatelessWidget {
+  final String value;
+  final List<String> items;
+  final ValueChanged<String?>? onChanged;
+
+  const _EditCategoryDropdown({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+
+  @override
+  Widget build(BuildContext context) {
+    final safeItems = items.isEmpty ? ['Other'] : items;
+    final safeValue = safeItems.contains(value) ? value : safeItems.first;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _EditFieldLabel('Category'),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 48,
+          child: DropdownButtonFormField<String>(
+            value: safeValue,
+            isExpanded: true,
+            onChanged: onChanged,
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF454062),
+              size: 18,
+            ),
+            style: const TextStyle(
+              color: Color(0xFF1F2937),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(
+                Icons.sell_outlined,
+                color: _primaryColor,
+                size: 19,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 11,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(color: _fieldBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: _primaryColor,
+                  width: 1.1,
+                ),
+              ),
+            ),
+            items: safeItems.map((item) {
+              return DropdownMenuItem<String>(
+                value: item,
+                child: Text(
+                  item,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditPriorityDropdown extends StatelessWidget {
+  final int value;
+  final ValueChanged<int?>? onChanged;
+
+  const _EditPriorityDropdown({
+    required this.value,
+    required this.onChanged,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+
+  @override
+  Widget build(BuildContext context) {
+    final safeValue = value >= 1 && value <= 5 ? value : 3;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _EditFieldLabel('Priority'),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 48,
+          child: DropdownButtonFormField<int>(
+            value: safeValue,
+            isExpanded: true,
+            onChanged: onChanged,
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF454062),
+              size: 18,
+            ),
+            style: const TextStyle(
+              color: Color(0xFF1F2937),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              prefixIcon: const Icon(
+                Icons.priority_high_rounded,
+                color: _primaryColor,
+                size: 19,
+              ),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 11,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(color: _fieldBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(
+                  color: _primaryColor,
+                  width: 1.1,
+                ),
+              ),
+            ),
+            items: const [
+              DropdownMenuItem(value: 1, child: Text('1 - Low')),
+              DropdownMenuItem(value: 2, child: Text('2')),
+              DropdownMenuItem(value: 3, child: Text('3 - Normal')),
+              DropdownMenuItem(value: 4, child: Text('4')),
+              DropdownMenuItem(value: 5, child: Text('5 - High')),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditFieldLabel extends StatelessWidget {
+  final String label;
+
+  const _EditFieldLabel(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: const TextStyle(
+        color: Color(0xFF1B0F72),
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
       ),
     );
   }

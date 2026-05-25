@@ -160,8 +160,6 @@ final sponsorsStreamProvider = StreamProvider.autoDispose<List<Sponsor>>((ref) {
   return Stream.value([]);
 });
 
-// UPDATED: Venue maps now come from session venue images.
-// Admin Create Session saves venue image as `venueImageUrl` inside `sessions`.
 final venueMapsStreamProvider =
     StreamProvider.autoDispose<List<VenueMap>>((ref) {
   final eventAsync = ref.watch(activeEventFutureProvider);
@@ -178,8 +176,7 @@ final venueMapsStreamProvider =
       for (final doc in snapshot.docs) {
         final data = doc.data();
 
-        final venueImageUrl =
-            (data['venueImageUrl'] ?? '').toString().trim();
+        final venueImageUrl = (data['venueImageUrl'] ?? '').toString().trim();
 
         if (venueImageUrl.isEmpty) continue;
 
@@ -244,9 +241,8 @@ final featuredSpeakersFutureProvider =
 
       final now = DateTime.now();
 
-      final currentOrUpcomingSessions = sessions
-          .where((session) => session.endTime.isAfter(now))
-          .toList();
+      final currentOrUpcomingSessions =
+          sessions.where((session) => session.endTime.isAfter(now)).toList();
 
       currentOrUpcomingSessions.sort((a, b) {
         final priorityCompare = b.priority.compareTo(a.priority);
@@ -369,12 +365,20 @@ final meetingRepositoryProvider = Provider(
 
 final meetingsStreamProvider = StreamProvider.autoDispose<List<Meeting>>((ref) {
   final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
+  final activeEventAsync = ref.watch(activeEventFutureProvider);
 
-  if (userId != null) {
-    return ref.watch(meetingRepositoryProvider).getMeetingsStream(userId);
-  }
+  if (userId == null) return Stream.value([]);
 
-  return Stream.value([]);
+  return activeEventAsync.when(
+    data: (event) {
+      return ref.watch(meetingRepositoryProvider).getMeetingsStream(
+            userId: userId,
+            eventId: event.id,
+          );
+    },
+    loading: () => Stream.value([]),
+    error: (_, __) => Stream.value([]),
+  );
 });
 
 // --- Remote Config Providers ---

@@ -9,6 +9,7 @@ import 'package:events_app_trueattempt/features/speaker/screen/session_qa_screen
 import 'package:events_app_trueattempt/features/speaker/screen/session_resources_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/session_feedback_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
+import 'package:events_app_trueattempt/features/certificates/screen/my_certificates_screen.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 
 /// Speaker Dashboard Screen
@@ -217,6 +218,20 @@ class SpeakerDashboardScreen extends ConsumerWidget {
                       Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (context) => const SessionFeedbackScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _QuickActionTile(
+                    icon: Icons.workspace_premium_rounded,
+                    title: 'My Certificates',
+                    iconColor: AppColors.namaGoldenYellow,
+                    backgroundColor: const Color(0xFFFFF7EA),
+                    isEnabled: true,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const MyCertificatesScreen(),
                         ),
                       );
                     },

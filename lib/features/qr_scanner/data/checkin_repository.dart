@@ -10,22 +10,51 @@ class CheckinRepository {
     required String sessionId,
     required String userId,
   }) async {
-    final checkinData = {
-      'timestamp': FieldValue.serverTimestamp(),
-    };
+    final firestore = FirebaseFirestore.instance;
 
-    await _firestoreService.createCheckinDocument(
-      sessionId: sessionId,
-      userId: userId,
-      checkinData: checkinData,
-    );
+    final sessionRef = firestore.collection('sessions').doc(sessionId);
+    final checkinRef = sessionRef.collection('checkins').doc(userId);
+    final userRef = firestore.collection('users').doc(userId);
 
-    await _firestoreService.updateUserDocument(
-      userId,
-      {
+    await firestore.runTransaction((transaction) async {
+      final sessionSnapshot = await transaction.get(sessionRef);
+      final checkinSnapshot = await transaction.get(checkinRef);
+
+      if (!sessionSnapshot.exists) {
+        throw Exception('session_not_found');
+      }
+
+      final sessionData =
+          sessionSnapshot.data() as Map<String, dynamic>? ?? {};
+
+      // If old check-in document already exists, repair checkedInAttendees.
+      if (checkinSnapshot.exists) {
+        transaction.update(sessionRef, {
+          'checkedInAttendees': FieldValue.arrayUnion([userId]),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        return;
+      }
+
+      transaction.set(checkinRef, {
+        'userId': userId,
+        'sessionId': sessionId,
+        'eventId': sessionData['eventId'] ?? '',
+        'timestamp': FieldValue.serverTimestamp(),
+        'checkedInBy': 'self_scan',
+        'qrType': 'session_checkin',
+      });
+
+      transaction.update(sessionRef, {
+        'checkedInAttendees': FieldValue.arrayUnion([userId]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      transaction.update(userRef, {
         'points': FieldValue.increment(10),
-      },
-    );
+      });
+    });
   }
 
   Future<void> checkInEvent({
@@ -34,11 +63,9 @@ class CheckinRepository {
   }) async {
     final firestore = FirebaseFirestore.instance;
 
-    final eventAttendanceRef = firestore
-        .collection('events')
-        .doc(eventId)
-        .collection('attendance')
-        .doc(userId);
+    final eventRef = firestore.collection('events').doc(eventId);
+
+    final eventAttendanceRef = eventRef.collection('attendance').doc(userId);
 
     final userRef = firestore.collection('users').doc(userId);
 
@@ -68,6 +95,11 @@ class CheckinRepository {
         'checkedInAt': FieldValue.serverTimestamp(),
         'checkedInBy': 'self_scan',
         'qrType': 'event_attendance',
+      });
+
+      transaction.update(eventRef, {
+        'checkedInAttendees': FieldValue.arrayUnion([userId]),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
       transaction.update(userRef, {

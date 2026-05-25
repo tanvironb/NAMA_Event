@@ -1,71 +1,91 @@
-import {
-  onDocumentWritten,
-  onDocumentCreated,
-} from "firebase-functions/v2/firestore";
+/* eslint-disable max-len */
+/* eslint-disable require-jsdoc */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable no-multiple-empty-lines */
+
+
+import {onDocumentCreated, onDocumentWritten} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 
 admin.initializeApp();
+
 const db = admin.firestore();
 
-// Region configuration - must match your Firestore region (asia-southeast1)
+// Region configuration - must match your Firestore region
 const FUNCTION_REGION = "asia-southeast1";
+
+// ============================================================================
+// USER QR GENERATION
+// ============================================================================
 
 /**
  * Triggered on any write to a user document.
- * Generates a secure QR code payload when a user's status becomes 'approved'.
+ * Generates a secure QR code payload when a user's status becomes approved.
  */
 export const handleUserWrite = onDocumentWritten(
-  {document: "users/{userId}", region: FUNCTION_REGION},
+  {
+    document: "users/{userId}",
+    region: FUNCTION_REGION,
+  },
   async (event) => {
     const userId = event.params.userId;
-    const before = event.data?.before?.exists ? event.data.before.data() : null;
-    const after = event.data?.after?.exists ? event.data.after.data() : null;
 
-    // Exit early if this is a deletion
+    const before = event.data?.before.exists ?
+      event.data.before.data() :
+      null;
+
+    const after = event.data?.after.exists ?
+      event.data.after.data() :
+      null;
+
     if (!after) return null;
 
-    // Check if user status changed to 'approved' and doesn't already have QR
     const wasApproved = before?.status === "approved";
     const isNowApproved = after.status === "approved";
     const hasQrPayload = after.qrCodePayload && after.qrCodePayload.length > 0;
 
     if (isNowApproved && !wasApproved && !hasQrPayload) {
-      console.log(
-        `Generating QR payload for newly approved user: ${userId}`
-      );
+      console.log(`Generating QR payload for newly approved user: ${userId}`);
 
-      // Generate a secure, unguessable token for the user QR code
       const randomBytes = crypto.randomBytes(16).toString("hex");
       const uniquePayload = `user::${userId}_${randomBytes}`;
 
-      // Update the user document with the new QR payload
-      return event.data?.after?.ref.update({
+      return event.data?.after.ref.update({
         qrCodePayload: uniquePayload,
         qrCodeGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 
     return null;
-  });
+  }
+);
+
+// ============================================================================
+// SESSION QR GENERATION
+// ============================================================================
 
 /**
- * NEW: Triggered when a new session is created.
+ * Triggered when a new session is created.
  * Generates a secure, unique QR code payload for the session.
  */
 export const onSessionCreate = onDocumentCreated(
-  {document: "sessions/{sessionId}", region: FUNCTION_REGION},
+  {
+    document: "sessions/{sessionId}",
+    region: FUNCTION_REGION,
+  },
   async (event) => {
     const sessionId = event.params.sessionId;
-    // Generate a secure, unguessable token for the session QR code.
+
     const randomBytes = crypto.randomBytes(8).toString("hex");
     const uniquePayload = `session::${sessionId}_${randomBytes}`;
 
     console.log(`Generating QR payload for session ${sessionId}`);
 
-    // Update the session document with the new QR payload.
-    return event.data?.ref.update({qrCodePayload: uniquePayload});
+    return event.data?.ref.update({
+      qrCodePayload: uniquePayload,
+    });
   }
 );
 
@@ -74,7 +94,9 @@ export const onSessionCreate = onDocumentCreated(
  * Called by speakers when auto-generation fails or QR is missing.
  */
 export const generateSessionQR = onCall(
-  {region: FUNCTION_REGION},
+  {
+    region: FUNCTION_REGION,
+  },
   async (request) => {
     console.log("=== Start Generate Session QR ===");
 
@@ -83,9 +105,8 @@ export const generateSessionQR = onCall(
     }
 
     const sessionId = request.data.sessionId;
-    console.log(
-      `User ${request.auth.uid} requesting QR for session ${sessionId}`
-    );
+
+    console.log(`User ${request.auth.uid} requesting QR for session ${sessionId}`);
 
     if (!sessionId || typeof sessionId !== "string") {
       throw new HttpsError(
@@ -95,7 +116,6 @@ export const generateSessionQR = onCall(
     }
 
     try {
-      // Get session document
       const sessionRef = db.collection("sessions").doc(sessionId);
       const sessionDoc = await sessionRef.get();
 
@@ -105,7 +125,6 @@ export const generateSessionQR = onCall(
 
       const sessionData = sessionDoc.data();
 
-      // Verify user is a speaker for this session
       if (!sessionData?.speakerIds?.includes(request.auth.uid)) {
         throw new HttpsError(
           "permission-denied",
@@ -113,12 +132,12 @@ export const generateSessionQR = onCall(
         );
       }
 
-      // Check if QR already exists
       if (
         sessionData.qrCodePayload &&
         sessionData.qrCodePayload.trim() !== ""
       ) {
         console.log("QR already exists, returning existing payload");
+
         return {
           success: true,
           qrCodePayload: sessionData.qrCodePayload,
@@ -126,32 +145,30 @@ export const generateSessionQR = onCall(
         };
       }
 
-      // Generate new QR payload
       const randomBytes = crypto.randomBytes(8).toString("hex");
       const uniquePayload = `session::${sessionId}_${randomBytes}`;
 
-      console.log(`Generated new QR payload for session ${sessionId}`);
+      await sessionRef.update({
+        qrCodePayload: uniquePayload,
+      });
 
-      // Update session with QR payload
-      await sessionRef.update({qrCodePayload: uniquePayload});
-
-      console.log("=== End Generate Session QR (Success) ===");
+      console.log("=== End Generate Session QR Success ===");
 
       return {
         success: true,
         qrCodePayload: uniquePayload,
         message: "QR code generated successfully",
       };
-    } catch (error: unknown) {
+    } catch (error) {
       console.error("Error generating session QR:", error);
-      console.log("=== End Generate Session QR (Error) ===");
 
       if (error instanceof HttpsError) {
         throw error;
       }
 
-      const errorMessage = error instanceof Error ?
-        error.message : "Unknown error";
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+
       throw new HttpsError(
         "internal",
         `Failed to generate QR: ${errorMessage}`
@@ -160,19 +177,26 @@ export const generateSessionQR = onCall(
   }
 );
 
+// ============================================================================
+// QR VALIDATION
+// ============================================================================
+
 /**
- * Securely validates ANY QR code payload (user or session).
- * Returns the type of code and the minimal public data.
+ * Securely validates ANY QR code payload.
+ * Supports user QR and session QR.
  */
 export const validateQrCode = onCall(
-  {region: FUNCTION_REGION},
+  {
+    region: FUNCTION_REGION,
+  },
   async (request) => {
     if (!request.auth || !request.auth.uid) {
       throw new HttpsError("unauthenticated", "Authentication is required.");
     }
 
     const qrPayload = request.data.payload;
-    console.log(`Validating QR payload: ${qrPayload}`); // todo: remove in prod
+
+    console.log(`Validating QR payload: ${qrPayload}`);
 
     if (!qrPayload || typeof qrPayload !== "string") {
       throw new HttpsError(
@@ -181,13 +205,13 @@ export const validateQrCode = onCall(
       );
     }
 
-    // --- NEW: Distinguish between user and session QR codes ---
     if (qrPayload.startsWith("user::")) {
       const snapshot = await db
         .collection("users")
         .where("qrCodePayload", "==", qrPayload)
         .limit(1)
         .get();
+
       if (snapshot.empty) {
         throw new HttpsError("not-found", "User QR not found.");
       }
@@ -195,7 +219,6 @@ export const validateQrCode = onCall(
       const userDoc = snapshot.docs[0];
       const userData = userDoc.data();
 
-      // Security check: Ensure user data exists
       if (!userData) {
         throw new HttpsError("not-found", "User data not found.");
       }
@@ -211,14 +234,19 @@ export const validateQrCode = onCall(
           title: userData.title,
         },
       };
-    } else if (qrPayload.startsWith("session::")) {
+    }
+
+    if (qrPayload.startsWith("session::")) {
       const sessionId = qrPayload.split("::")[1].split("_")[0];
+
       const sessionDoc = await db.collection("sessions").doc(sessionId).get();
+
       if (!sessionDoc.exists) {
         throw new HttpsError("not-found", "Session QR not found.");
       }
 
       const sessionData = sessionDoc.data();
+
       if (!sessionData) {
         throw new HttpsError("not-found", "Session data not found.");
       }
@@ -234,17 +262,27 @@ export const validateQrCode = onCall(
             new Date().toISOString(),
         },
       };
-    } else {
-      throw new HttpsError("invalid-argument", "Invalid QR code format.");
     }
-  });
+
+    throw new HttpsError(
+      "invalid-argument",
+      "Invalid QR code format."
+    );
+  }
+);
+
+// ============================================================================
+// EVENT CHECK-IN
+// ============================================================================
 
 /**
  * Securely logs an EVENT check-in.
- * Only Admins or Staff can call this successfully.
+ * Only admins or staff can call this successfully.
  */
 export const logEventCheckIn = onCall(
-  {region: FUNCTION_REGION},
+  {
+    region: FUNCTION_REGION,
+  },
   async (request) => {
     if (!request.auth || !request.auth.uid) {
       throw new HttpsError("unauthenticated", "Authentication is required.");
@@ -260,13 +298,14 @@ export const logEventCheckIn = onCall(
       );
     }
 
-    // Verify admin/staff permissions
     const adminDoc = await db.collection("users").doc(adminUid).get();
+
     if (!adminDoc.exists) {
       throw new HttpsError("not-found", "Admin user not found.");
     }
 
     const adminData = adminDoc.data();
+
     if (!adminData) {
       throw new HttpsError("not-found", "Admin data not found.");
     }
@@ -278,21 +317,21 @@ export const logEventCheckIn = onCall(
       );
     }
 
-    // Verify scanned user exists
     const scannedUserDoc = await db
       .collection("users")
       .doc(scannedUserId)
       .get();
+
     if (!scannedUserDoc.exists) {
       throw new HttpsError("not-found", "Scanned user not found.");
     }
 
     const scannedUserData = scannedUserDoc.data();
+
     if (!scannedUserData) {
       throw new HttpsError("not-found", "Scanned user data not found.");
     }
 
-    // Log the event check-in
     await db.collection("eventCheckins").add({
       scannedUserId,
       adminUserId: adminUid,
@@ -301,7 +340,6 @@ export const logEventCheckIn = onCall(
       adminUserName: adminData.name,
     });
 
-    // Award points to the checked-in user
     await db.collection("users").doc(scannedUserId).update({
       points: admin.firestore.FieldValue.increment(5),
     });
@@ -314,14 +352,25 @@ export const logEventCheckIn = onCall(
         name: scannedUserData.name,
       },
     };
-  });
+  }
+);
+
+// ============================================================================
+// SESSION CHECK-IN - UPDATED FIX
+// ============================================================================
 
 /**
- * NEW: Securely logs a SESSION check-in.
+ * Securely logs a SESSION check-in.
  * Any approved user can call this.
+ *
+ * IMPORTANT FIX:
+ * This now updates sessions/{sessionId}.checkedInAttendees.
+ * Speaker audience, analytics, feedback, and engagement pages depend on this.
  */
 export const logSessionCheckIn = onCall(
-  {region: FUNCTION_REGION},
+  {
+    region: FUNCTION_REGION,
+  },
   async (request) => {
     if (!request.auth || !request.auth.uid) {
       throw new HttpsError("unauthenticated", "Authentication is required.");
@@ -337,60 +386,106 @@ export const logSessionCheckIn = onCall(
       );
     }
 
-    // --- NEW: Time Validation Logic ---
-    const sessionDoc = await db.collection("sessions").doc(sessionId).get();
-    if (!sessionDoc.exists) {
-      throw new HttpsError("not-found", "Session not found.");
-    }
+    const sessionRef = db.collection("sessions").doc(sessionId);
+    const checkinRef = sessionRef.collection("checkins").doc(scannerUid);
+    const userRef = db.collection("users").doc(scannerUid);
 
-    const sessionData = sessionDoc.data();
-    if (!sessionData) {
-      throw new HttpsError("not-found", "Session data not found.");
-    }
+    let alreadyCheckedIn = false;
 
-    const now = new Date();
-    const startTime = (sessionData.startTime as admin.firestore.Timestamp)
-      .toDate();
-    const endTime = (sessionData.endTime as admin.firestore.Timestamp)
-      .toDate();
+    let sessionReturnData: {
+      id: string;
+      title: string;
+      eventId: string;
+    } | null = null;
 
-    // Check if the current time is within the session's active window
-    if (now < startTime || now > endTime) {
-      throw new HttpsError(
-        "failed-precondition",
-        "This session is not currently active."
-      );
-    }
+    await db.runTransaction(async (transaction) => {
+      const sessionDoc = await transaction.get(sessionRef);
+      const checkinDoc = await transaction.get(checkinRef);
 
-    // Log the session check-in event.
-    await db.collection("sessions")
-      .doc(sessionId)
-      .collection("checkins")
-      .doc(scannerUid)
-      .set({
+      if (!sessionDoc.exists) {
+        throw new HttpsError("not-found", "Session not found.");
+      }
+
+      const sessionData = sessionDoc.data();
+
+      if (!sessionData) {
+        throw new HttpsError("not-found", "Session data not found.");
+      }
+
+      sessionReturnData = {
+        id: sessionDoc.id,
+        title: sessionData.title || "Session",
+        eventId: sessionData.eventId || "",
+      };
+
+      // If old check-in exists, repair checkedInAttendees.
+      if (checkinDoc.exists) {
+        alreadyCheckedIn = true;
+
+        transaction.update(sessionRef, {
+          checkedInAttendees:
+            admin.firestore.FieldValue.arrayUnion(scannerUid),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        return;
+      }
+
+      const now = new Date();
+
+      const startTime = (
+        sessionData.startTime as admin.firestore.Timestamp
+      ).toDate();
+
+      const endTime = (
+        sessionData.endTime as admin.firestore.Timestamp
+      ).toDate();
+
+      if (now < startTime || now > endTime) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This session is not currently active."
+        );
+      }
+
+      transaction.set(checkinRef, {
+        userId: scannerUid,
+        sessionId: sessionId,
+        eventId: sessionData.eventId || "",
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        checkedInBy: "self_scan",
+        qrType: "session_checkin",
       });
 
-    // Increment user's points for the leaderboard.
-    await db.collection("users").doc(scannerUid).update({
-      points: admin.firestore.FieldValue.increment(10),
+      transaction.update(sessionRef, {
+        checkedInAttendees:
+          admin.firestore.FieldValue.arrayUnion(scannerUid),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      transaction.update(userRef, {
+        points: admin.firestore.FieldValue.increment(10),
+      });
     });
 
     return {
       success: true,
-      message: "Checked into session successfully.",
-      // Return session data so the app can navigate
-      session: {
-        id: sessionDoc.id,
-        title: sessionData.title,
-        eventId: sessionData.eventId, // Add eventId for Flutter app
-      },
+      alreadyCheckedIn: alreadyCheckedIn,
+      message: alreadyCheckedIn ?
+        "Already checked in. Attendance record repaired." :
+        "Checked into session successfully.",
+      session: sessionReturnData,
     };
-  });
+  }
+);
+
+// ============================================================================
+// DIRECT MESSAGE NOTIFICATIONS
+// ============================================================================
 
 /**
- * NEW: Triggered when a new direct message is created.
- * Sends a push notification ONLY to the recipient (NOT the sender).
+ * Triggered when a new direct message is created.
+ * Sends a push notification only to the recipient, not sender.
  */
 export const onNewDirectMessage = onDocumentCreated(
   {
@@ -399,6 +494,7 @@ export const onNewDirectMessage = onDocumentCreated(
   },
   async (event) => {
     const messageData = event.data?.data();
+
     if (!messageData) {
       console.log("No message data found.");
       return null;
@@ -411,9 +507,10 @@ export const onNewDirectMessage = onDocumentCreated(
     console.log(`Conversation: ${conversationId}`);
     console.log(`Sender: ${senderId}`);
 
-    // Get the conversation members from the parent document
-    const conversationDoc = await db.collection("directMessages")
-      .doc(conversationId).get();
+    const conversationDoc = await db
+      .collection("directMessages")
+      .doc(conversationId)
+      .get();
 
     if (!conversationDoc.exists) {
       console.log("ERROR: Conversation document does not exist.");
@@ -421,34 +518,20 @@ export const onNewDirectMessage = onDocumentCreated(
     }
 
     const conversationData = conversationDoc.data();
-    const members = conversationData?.members as string[];
+    const members = conversationData?.members;
 
     if (!members || members.length !== 2) {
       console.log(`ERROR: Invalid members array: ${JSON.stringify(members)}`);
       return null;
     }
 
-    console.log(`Conversation members: ${JSON.stringify(members)}`);
-
-    // Find the recipient's ID (the OTHER person, not the sender)
     const recipientId = members.find((id: string) => id !== senderId);
 
-    if (!recipientId) {
-      console.log("ERROR: Could not find recipient ID (different from sender)");
+    if (!recipientId || recipientId === senderId) {
+      console.log("ERROR: Could not find valid recipient.");
       return null;
     }
 
-    // CRITICAL: Triple-check that recipient is NOT the sender
-    if (recipientId === senderId) {
-      console.log(`ERROR: Recipient equals sender (${recipientId}). ABORTING.`);
-      return null;
-    }
-
-    console.log(`✓ Recipient identified: ${recipientId}`);
-    console.log(`✓ Sender: ${senderId}`);
-    console.log(`✓ Recipient ≠ Sender: ${recipientId !== senderId}`);
-
-    // Get recipient's user document to find their FCM token
     const recipientDoc = await db.collection("users").doc(recipientId).get();
 
     if (!recipientDoc.exists) {
@@ -464,34 +547,15 @@ export const onNewDirectMessage = onDocumentCreated(
       return null;
     }
 
-    // CRITICAL: Get sender's FCM token to compare
     const senderDoc = await db.collection("users").doc(senderId).get();
     const senderData = senderDoc.data();
     const senderFcmToken = senderData?.fcmToken;
 
-    const senderTokenPreview =
-      senderFcmToken?.substring(0, 20) || "none";
-    console.log(
-      `Sender FCM token (first 20 chars): ${senderTokenPreview}...`
-    );
-    const recipientTokenPreview = recipientFcmToken.substring(0, 20);
-    console.log(
-      `Recipient FCM token (first 20 chars): ${recipientTokenPreview}...`
-    );
-
-    // CRITICAL: If both users have the SAME FCM token, don't send notification
-    // This happens when testing with same device logged into multiple accounts
     if (senderFcmToken && recipientFcmToken === senderFcmToken) {
-      console.log("WARNING: Sender and recipient have the SAME FCM token!");
-      console.log("This means that...");
-      console.log("you are testing with the same device for 2 accs");
-      console.log("SKIPPING notification to prevent self-notification.");
+      console.log("Sender and recipient have same FCM token. Skipping.");
       return null;
     }
 
-    console.log("✓ FCM tokens are different. Safe to send notification.");
-
-    // Construct the notification message using FCM HTTP v1 API
     const message = {
       token: recipientFcmToken,
       notification: {
@@ -523,18 +587,18 @@ export const onNewDirectMessage = onDocumentCreated(
 
     try {
       const response = await admin.messaging().send(message);
-      console.log(`✓ SUCCESS: Notification sent to ${recipientId}`);
-      console.log(`Response: ${response}`);
-      console.log("=== End DM Notification ===\n");
+      console.log(`SUCCESS: Notification sent to ${recipientId}`);
       return response;
     } catch (error) {
       console.error("ERROR sending DM notification:", error);
 
-      // If token is invalid, remove it from the user document
-      if (error instanceof Error &&
-          (error.message.includes("registration-token-not-registered") ||
-           error.message.includes("invalid-registration-token"))) {
-        console.log(`Removing invalid FCM token for user ${recipientId}`);
+      if (
+        error instanceof Error &&
+        (
+          error.message.includes("registration-token-not-registered") ||
+          error.message.includes("invalid-registration-token")
+        )
+      ) {
         await db.collection("users").doc(recipientId).update({
           fcmToken: admin.firestore.FieldValue.delete(),
         });
@@ -545,10 +609,13 @@ export const onNewDirectMessage = onDocumentCreated(
   }
 );
 
+// ============================================================================
+// ADMIN NOTIFICATION FCM
+// ============================================================================
+
 /**
- * NEW: Triggered when a new notification is created.
- * Sends FCM push notification for admin-sent notifications
- * (alert, announcement, information, maintenance).
+ * Triggered when a new notification is created.
+ * Sends FCM push notification for admin-sent notifications.
  */
 export const onNotificationCreate = onDocumentCreated(
   {
@@ -566,19 +633,15 @@ export const onNotificationCreate = onDocumentCreated(
     }
 
     const notificationType = notificationData.type;
-
-    // Only send FCM for admin-sendable types
     const adminTypes = ["alert", "announcement", "information", "maintenance"];
+
     if (!adminTypes.includes(notificationType)) {
       console.log(`Skipping FCM for type: ${notificationType}`);
       return null;
     }
 
-    console.log("\n=== Admin Notification FCM Triggered ===");
-    console.log(`User: ${userId}, Type: ${notificationType}`);
-
-    // Get user's FCM token and role
     const userDoc = await db.collection("users").doc(userId).get();
+
     if (!userDoc.exists) {
       console.log(`ERROR: User ${userId} does not exist.`);
       return null;
@@ -593,20 +656,14 @@ export const onNotificationCreate = onDocumentCreated(
       return null;
     }
 
-    // Check if notification is targeted and user matches target audience
     const targetRole = notificationData.targetRole || "all";
+
     if (targetRole !== "all" && userRole !== targetRole) {
-      console.log(
-        `Skipping FCM: User role '${userRole}' does not match ` +
-        `target audience '${targetRole}'`
-      );
+      console.log("Skipping FCM due to target role mismatch.");
       return null;
     }
 
-    console.log(`✓ User role '${userRole}' matches target '${targetRole}'`);
-
-    // Construct FCM message
-    const message = {
+    const message: admin.messaging.Message = {
       token: fcmToken,
       notification: {
         title: notificationData.title || "New Notification",
@@ -622,9 +679,7 @@ export const onNotificationCreate = onDocumentCreated(
         notification: {
           sound: "default",
           clickAction: "FLUTTER_NOTIFICATION_CLICK",
-          priority: notificationType === "alert" ?
-            "high" as const :
-            "default" as const,
+          priority: notificationType === "alert" ? "high" : "default",
         },
       },
       apns: {
@@ -639,18 +694,18 @@ export const onNotificationCreate = onDocumentCreated(
 
     try {
       const response = await admin.messaging().send(message);
-      console.log(`✓ SUCCESS: FCM sent to ${userId}`);
-      console.log(`Response: ${response}`);
-      console.log("=== End Admin Notification FCM ===\n");
+      console.log(`SUCCESS: FCM sent to ${userId}`);
       return response;
     } catch (error) {
       console.error("ERROR sending FCM:", error);
 
-      // If token is invalid, remove it
-      if (error instanceof Error &&
-          (error.message.includes("registration-token-not-registered") ||
-           error.message.includes("invalid-registration-token"))) {
-        console.log(`Removing invalid FCM token for user ${userId}`);
+      if (
+        error instanceof Error &&
+        (
+          error.message.includes("registration-token-not-registered") ||
+          error.message.includes("invalid-registration-token")
+        )
+      ) {
         await db.collection("users").doc(userId).update({
           fcmToken: admin.firestore.FieldValue.delete(),
         });
@@ -661,40 +716,44 @@ export const onNotificationCreate = onDocumentCreated(
   }
 );
 
+// ============================================================================
+// SESSION END FEEDBACK NOTIFICATION
+// ============================================================================
+
 /**
- * Sends feedback request notifications to
- * all checked-in attendees (excluding speakers).
+ * Sends feedback request notifications to all checked-in attendees.
  */
 export const onSessionEnd = onDocumentWritten(
-  {document: "sessions/{sessionId}", region: FUNCTION_REGION},
+  {
+    document: "sessions/{sessionId}",
+    region: FUNCTION_REGION,
+  },
   async (event) => {
-    const beforeData = event.data?.before?.exists ?
+    const beforeData = event.data?.before.exists ?
       event.data.before.data() :
       null;
-    const afterData = event.data?.after?.exists ?
+
+    const afterData = event.data?.after.exists ?
       event.data.after.data() :
       null;
 
-    // Only proceed if this is an update (not creation or deletion)
     if (!beforeData || !afterData) return null;
 
     const sessionId = event.params.sessionId;
-    const endTime = (afterData.endTime as admin.firestore.Timestamp).toDate();
+    const endTime = afterData.endTime.toDate();
     const now = new Date();
 
-    // Check if session just ended (within last 5 minutes)
     const timeSinceEnd = now.getTime() - endTime.getTime();
+
     if (timeSinceEnd < 0 || timeSinceEnd > 5 * 60 * 1000) {
-      return null; // Session hasn't ended yet or ended more than 5 minutes ago
+      return null;
     }
 
-    // Get checked-in attendees (excluding speakers)
     const checkedInAttendees = afterData.checkedInAttendees || [];
     const speakerIds = afterData.speakerIds || [];
     const sessionTitle = afterData.title || "Session";
     const eventId = afterData.eventId;
 
-    // Filter out speakers from attendees
     const attendeesToNotify = checkedInAttendees.filter(
       (uid: string) => !speakerIds.includes(uid)
     );
@@ -704,12 +763,6 @@ export const onSessionEnd = onDocumentWritten(
       return null;
     }
 
-    console.log(
-      `Sending feedback notifications for session ${sessionId} ` +
-      `to ${attendeesToNotify.length} attendees`
-    );
-
-    // Send notifications to all attendees
     const notificationPromises = attendeesToNotify.map(
       async (attendeeId: string) => {
         try {
@@ -717,7 +770,7 @@ export const onSessionEnd = onDocumentWritten(
           const fcmToken = userDoc.data()?.fcmToken;
 
           if (!fcmToken) {
-            console.log(`Attendee ${attendeeId} does not have an FCM token.`);
+            console.log(`Attendee ${attendeeId} does not have FCM token.`);
             return null;
           }
 
@@ -748,49 +801,35 @@ export const onSessionEnd = onDocumentWritten(
             },
           };
 
-          const response = await admin.messaging().send(message);
-          console.log(
-            `Sent feedback notification to ${attendeeId}: ${response}`
-          );
-          return response;
+          return await admin.messaging().send(message);
         } catch (error) {
-          console.error(
-            `Error sending feedback notification to ${attendeeId}:`,
-            error
-          );
-
-          // If token is invalid, remove it
-          if (error instanceof Error &&
-              (error.message.includes("registration-token-not-registered") ||
-               error.message.includes("invalid-registration-token"))) {
-            console.log(`Removing invalid FCM token for user ${attendeeId}`);
-            await db.collection("users").doc(attendeeId).update({
-              fcmToken: admin.firestore.FieldValue.delete(),
-            });
-          }
-
+          console.error(`Error sending feedback notification to ${attendeeId}:`, error);
           return null;
         }
       }
     );
 
     await Promise.all(notificationPromises);
+
     return null;
   }
 );
 
-/**
- * NEW: Triggered on any write to the meetings collection.
- * Sends a notification for new requests or status updates.
- * ONLY sends to the affected party (NOT the action initiator).
- */
+// ============================================================================
+// MEETING NOTIFICATIONS
+// ============================================================================
+
 export const onMeetingWrite = onDocumentWritten(
-  {document: "meetings/{meetingId}", region: FUNCTION_REGION},
+  {
+    document: "meetings/{meetingId}",
+    region: FUNCTION_REGION,
+  },
   async (event) => {
-    const beforeData = event.data?.before?.exists ?
+    const beforeData = event.data?.before.exists ?
       event.data.before.data() :
       null;
-    const afterData = event.data?.after?.exists ?
+
+    const afterData = event.data?.after.exists ?
       event.data.after.data() :
       null;
 
@@ -799,34 +838,20 @@ export const onMeetingWrite = onDocumentWritten(
       return null;
     }
 
-    console.log("\n=== Meeting Notification Triggered ===");
-    console.log(`Meeting ID: ${event.params.meetingId}`);
-
     let recipientId: string | null = null;
     let senderId: string | null = null;
-    let payload: admin.messaging.MessagingPayload;
+    let payload: any = null;
 
-    // Case 1: A new meeting is created (a new request is sent)
-    // Notify the RECIPIENT (person receiving the request), NOT the requester
     if (!beforeData && afterData) {
       const requesterId = afterData.requesterId;
       const potentialRecipientId = afterData.recipientId;
 
-      console.log("Case: New meeting request");
-      console.log(`Requester: ${requesterId}`);
-      console.log(`Recipient: ${potentialRecipientId}`);
-
-      // CRITICAL: Ensure we're NOT notifying the person who sent the request
       if (potentialRecipientId === requesterId) {
-        console.log("ERROR: Requester equals recipient. ABORTING.");
         return null;
       }
 
       recipientId = potentialRecipientId;
       senderId = requesterId;
-
-      console.log(`✓ Will notify: ${recipientId} (recipient)`);
-      console.log(`✓ Won't notify: ${senderId} (requester)`);
 
       payload = {
         notification: {
@@ -836,97 +861,73 @@ export const onMeetingWrite = onDocumentWritten(
         data: {
           type: "meeting_request",
           meetingId: event.params.meetingId,
-          senderId: requesterId, // Who sent the request
+          senderId: requesterId,
           requesterName: afterData.requesterInfo.name,
           proposedTime: afterData.proposedTime.toDate().toISOString(),
         },
       };
     } else if (
-      beforeData && afterData &&
+      beforeData &&
+      afterData &&
       beforeData.status === "pending" &&
       afterData.status !== "pending"
     ) {
-      // Case 2: An existing meeting is updated (accepted/rejected)
-      // Notify the REQUESTER (original person who sent the request)
       const requesterId = afterData.requesterId;
       const responderId = afterData.recipientId;
 
-      console.log(`Case: Meeting status updated to ${afterData.status}`);
-      console.log(`Original requester: ${requesterId}`);
-      console.log(`Responder: ${responderId}`);
-
-      // CRITICAL: Ensure we're NOT notifying the person who just responded
       if (requesterId === responderId) {
-        console.log("ERROR: Requester equals responder. ABORTING.");
         return null;
       }
 
       recipientId = requesterId;
       senderId = responderId;
 
-      console.log(`✓ Will notify: ${recipientId} (original requester)`);
-      console.log(`✓ Won't notify: ${senderId} (responder)`);
-
       payload = {
         notification: {
           title: `Meeting Request ${afterData.status}`,
-          body: `${afterData.recipientInfo.name} has ` +
+          body:
+            `${afterData.recipientInfo.name} has ` +
             `${afterData.status} your meeting request.`,
         },
         data: {
           type: "meeting_update",
           meetingId: event.params.meetingId,
-          senderId: responderId, // Who responded to the request
+          senderId: responderId,
           status: afterData.status,
         },
       };
     } else {
-      console.log("No notification needed for this meeting change.");
       return null;
     }
 
-    if (!recipientId) {
-      console.log("ERROR: No recipient ID determined.");
+    if (!recipientId || !payload) {
       return null;
     }
 
-    // Step 1: Create in-app notification in Firestore
-    // This ensures the notification appears in the user's notification list
     try {
-      const notificationType = payload.data?.type === "meeting_request" ?
-        "meetingRequest" :
-        "meetingRequest"; // Both use meetingRequest type for in-app display
-
-      const inAppNotificationData = {
-        title: payload.notification?.title || "Meeting Notification",
-        subtitle: null,
-        body: payload.notification?.body || "",
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        timeFrom: null,
-        timeTo: null,
-        isRead: false,
-        type: notificationType,
-        targetRole: "all",
-        data: payload.data || {},
-      };
-
       await db
         .collection("users")
         .doc(recipientId)
         .collection("notifications")
-        .add(inAppNotificationData);
-
-      console.log(`✓ In-app notification created for ${recipientId}`);
+        .add({
+          title: payload.notification.title,
+          subtitle: null,
+          body: payload.notification.body,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          timeFrom: null,
+          timeTo: null,
+          isRead: false,
+          type: "meetingRequest",
+          targetRole: "all",
+          data: payload.data || {},
+        });
     } catch (error) {
       console.error("ERROR creating in-app notification:", error);
-      // Continue to FCM even if in-app notification fails
     }
 
-    // Step 2: Get recipient's FCM token and send push notification
     const recipientDoc = await db.collection("users").doc(recipientId).get();
 
     if (!recipientDoc.exists) {
-      console.log(`ERROR: Recipient user ${recipientId} does not exist.`);
       return null;
     }
 
@@ -934,31 +935,19 @@ export const onMeetingWrite = onDocumentWritten(
     const recipientFcmToken = recipientData?.fcmToken;
 
     if (!recipientFcmToken) {
-      console.log(`Recipient ${recipientId} does not have an FCM token.`);
-      console.log("In-app notification created, but skipping FCM.");
       return null;
     }
 
-    // CRITICAL: Get sender's FCM token to compare (if sender exists)
     if (senderId) {
       const senderDoc = await db.collection("users").doc(senderId).get();
       const senderData = senderDoc.data();
       const senderFcmToken = senderData?.fcmToken;
 
-      console.log(`Sndr FCM: ${senderFcmToken?.substring(0, 20) || "none"}...`);
-      console.log(`Recipient FCM: ${recipientFcmToken.substring(0, 20)}...`);
-
-      // If both users have the SAME FCM token, don't send
       if (senderFcmToken && recipientFcmToken === senderFcmToken) {
-        console.log("WARNING: Sender and recipient have SAME FCM token!");
-        console.log("Testing with same device. SKIPPING FCM (in-app created).");
         return null;
       }
-
-      console.log("✓ FCM tokens are different. Safe to send.");
     }
 
-    // Construct the notification message using FCM HTTP v1 API
     const message = {
       token: recipientFcmToken,
       notification: payload.notification,
@@ -979,97 +968,66 @@ export const onMeetingWrite = onDocumentWritten(
     };
 
     try {
-      const response = await admin.messaging().send(message);
-      console.log(`✓ SUCCESS: Meeting FCM sent to ${recipientId}`);
-      console.log(`Response: ${response}`);
-      console.log("=== End Meeting Notification ===\n");
-      return response;
+      return await admin.messaging().send(message);
     } catch (error) {
       console.error("ERROR sending meeting FCM:", error);
-
-      // If token is invalid, remove it from the user document
-      if (error instanceof Error &&
-          (error.message.includes("registration-token-not-registered") ||
-           error.message.includes("invalid-registration-token"))) {
-        console.log(`Removing invalid FCM token for user ${recipientId}`);
-        await db.collection("users").doc(recipientId).update({
-          fcmToken: admin.firestore.FieldValue.delete(),
-        });
-      }
-
-      // Don't throw - in-app notification was already created successfully
-      console.log("FCM failed but in-app notification exists.");
       return null;
     }
   }
 );
 
 // ============================================================================
-// NOTIFICATION MANAGEMENT FUNCTIONS (Edit/Delete with Rate Limiting)
+// NOTIFICATION MANAGEMENT
 // ============================================================================
 
-// Rate limiting configuration
-const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_WINDOW_MS = 60000;
 const MAX_EDIT_REQUESTS_PER_WINDOW = 10;
 const MAX_DELETE_REQUESTS_PER_WINDOW = 5;
 
-// In-memory rate limit tracking
-// Consider using Firebase Realtime Database for production
-const rateLimitMap = new Map<string, {
-  count: number;
-  resetTime: number;
-}>();
+const rateLimitMap = new Map<string, {count: number; resetTime: number}>();
 
-/**
- * Helper function to check rate limit
- * @param {string} userId - The user ID to check rate limit for
- * @param {"edit" | "delete"} action - The action type (edit or delete)
- * @return {boolean} True if within rate limit, false if exceeded
- */
-function checkRateLimit(
-  userId: string,
-  action: "edit" | "delete"
-): boolean {
+function checkRateLimit(userId: string, action: "edit" | "delete"): boolean {
   const key = `${userId}_${action}`;
   const now = Date.now();
-  const limit = action === "edit" ?
-    MAX_EDIT_REQUESTS_PER_WINDOW :
-    MAX_DELETE_REQUESTS_PER_WINDOW;
+
+  const limit =
+    action === "edit" ?
+      MAX_EDIT_REQUESTS_PER_WINDOW :
+      MAX_DELETE_REQUESTS_PER_WINDOW;
 
   const entry = rateLimitMap.get(key);
 
   if (!entry || now > entry.resetTime) {
-    // Reset or create new entry
-    rateLimitMap.set(key, {count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS});
+    rateLimitMap.set(key, {
+      count: 1,
+      resetTime: now + RATE_LIMIT_WINDOW_MS,
+    });
+
     return true;
   }
 
   if (entry.count >= limit) {
-    return false; // Rate limit exceeded
+    return false;
   }
 
-  // Increment count
   entry.count++;
+
   return true;
 }
 
-/**
- * Edit notification for all users
- * Updates the central adminNotifications doc and all user copies
- */
 export const editNotification = onCall(
-  {region: FUNCTION_REGION},
+  {
+    region: FUNCTION_REGION,
+  },
   async (request) => {
-    console.log("=== Start Edit Notification ===");
-
     if (!request.auth || !request.auth.uid) {
       throw new HttpsError("unauthenticated", "Authentication is required.");
     }
 
     const userId = request.auth.uid;
 
-    // Check if user is admin
     const userDoc = await db.collection("users").doc(userId).get();
+
     if (!userDoc.exists || userDoc.data()?.role !== "admin") {
       throw new HttpsError(
         "permission-denied",
@@ -1077,13 +1035,8 @@ export const editNotification = onCall(
       );
     }
 
-    // Rate limiting
     if (!checkRateLimit(userId, "edit")) {
-      throw new HttpsError(
-        "resource-exhausted",
-        "Rate limit exceeded. " +
-        `Max ${MAX_EDIT_REQUESTS_PER_WINDOW} edits per minute.`
-      );
+      throw new HttpsError("resource-exhausted", "Rate limit exceeded.");
     }
 
     const {notificationId, title, subtitle, body} = request.data;
@@ -1095,127 +1048,101 @@ export const editNotification = onCall(
       );
     }
 
-    console.log(`Admin ${userId} editing notification ${notificationId}`);
+    const adminNotifRef = db
+      .collection("adminNotifications")
+      .doc(notificationId);
 
-    try {
-      // Get the admin notification
-      const adminNotifRef = db.collection("adminNotifications")
-        .doc(notificationId);
-      const adminNotifDoc = await adminNotifRef.get();
+    const adminNotifDoc = await adminNotifRef.get();
 
-      if (!adminNotifDoc.exists) {
-        throw new HttpsError("not-found", "Notification not found.");
-      }
+    if (!adminNotifDoc.exists) {
+      throw new HttpsError("not-found", "Notification not found.");
+    }
 
-      const adminNotifData = adminNotifDoc.data();
-      if (!adminNotifData) {
-        throw new HttpsError("not-found", "Notification data not found.");
-      }
-      const targetRole = adminNotifData.targetRole as string;
-      const timestamp = admin.firestore.Timestamp.now();
+    const adminNotifData = adminNotifDoc.data();
 
-      // Update the admin notification
-      const updateData: {
-        [key: string]: string | admin.firestore.Timestamp |
-        admin.firestore.FieldValue;
-      } = {
-        title: title,
-        body: body,
-        editedAt: timestamp,
-      };
+    if (!adminNotifData) {
+      throw new HttpsError("not-found", "Notification data not found.");
+    }
 
-      if (subtitle) {
-        updateData.subtitle = subtitle;
-      } else {
-        updateData.subtitle = admin.firestore.FieldValue.delete();
-      }
+    const targetRole = adminNotifData.targetRole;
+    const timestamp = admin.firestore.Timestamp.now();
 
-      await adminNotifRef.update(updateData);
+    const updateData: Record<string, any> = {
+      title,
+      body,
+      editedAt: timestamp,
+    };
 
-      // Query users based on target role
-      const usersQuery = targetRole === "all" ?
+    if (subtitle) {
+      updateData.subtitle = subtitle;
+    } else {
+      updateData.subtitle = admin.firestore.FieldValue.delete();
+    }
+
+    await adminNotifRef.update(updateData);
+
+    const usersQuery =
+      targetRole === "all" ?
         db.collection("users").where("status", "==", "approved") :
-        db.collection("users")
+        db
+          .collection("users")
           .where("status", "==", "approved")
           .where("role", "==", targetRole);
 
-      const usersSnapshot = await usersQuery.get();
+    const usersSnapshot = await usersQuery.get();
 
-      // Update notifications for all users in batches
-      const batchSize = 500; // Firestore batch write limit
-      let updatedCount = 0;
+    let updatedCount = 0;
 
-      for (let i = 0; i < usersSnapshot.docs.length; i += batchSize) {
-        const batch = db.batch();
-        const batchDocs = usersSnapshot.docs.slice(i, i + batchSize);
+    for (const userDocSnap of usersSnapshot.docs) {
+      const userNotifSnapshot = await db
+        .collection("users")
+        .doc(userDocSnap.id)
+        .collection("notifications")
+        .where("data.notificationId", "==", notificationId)
+        .limit(1)
+        .get();
 
-        for (const userDoc of batchDocs) {
-          // Find the user's notification with matching notificationId
-          const userNotifSnapshot = await db
-            .collection("users")
-            .doc(userDoc.id)
-            .collection("notifications")
-            .where("data.notificationId", "==", notificationId)
-            .limit(1)
-            .get();
+      if (!userNotifSnapshot.empty) {
+        const userNotifRef = userNotifSnapshot.docs[0].ref;
 
-          if (!userNotifSnapshot.empty) {
-            const userNotifRef = userNotifSnapshot.docs[0].ref;
-            const userUpdateData: {
-              [key: string]: string | boolean | admin.firestore.Timestamp |
-              admin.firestore.FieldValue;
-            } = {
-              "title": title,
-              "body": body,
-              "isRead": false, // Reset to unread when edited
-              "data.editedAt": timestamp,
-            };
+        const userUpdateData: Record<string, any> = {
+          title,
+          body,
+          "isRead": false,
+          "data.editedAt": timestamp,
+        };
 
-            if (subtitle) {
-              userUpdateData.subtitle = subtitle;
-            } else {
-              userUpdateData.subtitle = admin.firestore.FieldValue.delete();
-            }
-
-            batch.update(userNotifRef, userUpdateData);
-            updatedCount++;
-          }
+        if (subtitle) {
+          userUpdateData.subtitle = subtitle;
+        } else {
+          userUpdateData.subtitle = admin.firestore.FieldValue.delete();
         }
 
-        await batch.commit();
+        await userNotifRef.update(userUpdateData);
+        updatedCount++;
       }
-
-      console.log(`✓ Notification edited for ${updatedCount} user(s)`);
-      console.log("=== End Edit Notification ===\n");
-
-      return {
-        success: true,
-        updatedCount: updatedCount,
-      };
-    } catch (error) {
-      console.error("ERROR editing notification:", error);
-      throw error;
     }
+
+    return {
+      success: true,
+      updatedCount,
+    };
   }
 );
 
-/**
- * Delete notification for all users
- * Removes from adminNotifications and all user copies
- */
 export const deleteNotification = onCall(
-  {region: FUNCTION_REGION},
+  {
+    region: FUNCTION_REGION,
+  },
   async (request) => {
-    console.log("=== Start Delete Notification ===");
-
     if (!request.auth || !request.auth.uid) {
       throw new HttpsError("unauthenticated", "Authentication is required.");
     }
 
     const userId = request.auth.uid;
 
-    // Check if user is admin
     const userDoc = await db.collection("users").doc(userId).get();
+
     if (!userDoc.exists || userDoc.data()?.role !== "admin") {
       throw new HttpsError(
         "permission-denied",
@@ -1223,107 +1150,79 @@ export const deleteNotification = onCall(
       );
     }
 
-    // Rate limiting
     if (!checkRateLimit(userId, "delete")) {
-      throw new HttpsError(
-        "resource-exhausted",
-        "Rate limit exceeded. " +
-        `Max ${MAX_DELETE_REQUESTS_PER_WINDOW} deletions per minute.`
-      );
+      throw new HttpsError("resource-exhausted", "Rate limit exceeded.");
     }
 
     const {notificationId} = request.data;
 
     if (!notificationId) {
-      throw new HttpsError(
-        "invalid-argument",
-        "notificationId is required."
-      );
+      throw new HttpsError("invalid-argument", "notificationId is required.");
     }
 
-    console.log(`Admin ${userId} deleting notification ${notificationId}`);
+    const adminNotifRef = db
+      .collection("adminNotifications")
+      .doc(notificationId);
 
-    try {
-      // Get the admin notification
-      const adminNotifRef = db.collection("adminNotifications")
-        .doc(notificationId);
-      const adminNotifDoc = await adminNotifRef.get();
+    const adminNotifDoc = await adminNotifRef.get();
 
-      if (!adminNotifDoc.exists) {
-        throw new HttpsError("not-found", "Notification not found.");
-      }
+    if (!adminNotifDoc.exists) {
+      throw new HttpsError("not-found", "Notification not found.");
+    }
 
-      const adminNotifData = adminNotifDoc.data();
-      if (!adminNotifData) {
-        throw new HttpsError("not-found", "Notification data not found.");
-      }
-      const targetRole = adminNotifData.targetRole as string;
+    const adminNotifData = adminNotifDoc.data();
 
-      // Query users based on target role
-      const usersQuery = targetRole === "all" ?
+    if (!adminNotifData) {
+      throw new HttpsError("not-found", "Notification data not found.");
+    }
+
+    const targetRole = adminNotifData.targetRole;
+
+    const usersQuery =
+      targetRole === "all" ?
         db.collection("users").where("status", "==", "approved") :
-        db.collection("users")
+        db
+          .collection("users")
           .where("status", "==", "approved")
           .where("role", "==", targetRole);
 
-      const usersSnapshot = await usersQuery.get();
+    const usersSnapshot = await usersQuery.get();
 
-      // Delete notifications for all users in batches
-      const batchSize = 500;
-      let deletedCount = 0;
+    let deletedCount = 0;
 
-      for (let i = 0; i < usersSnapshot.docs.length; i += batchSize) {
-        const batch = db.batch();
-        const batchDocs = usersSnapshot.docs.slice(i, i + batchSize);
+    for (const userDocSnap of usersSnapshot.docs) {
+      const userNotifSnapshot = await db
+        .collection("users")
+        .doc(userDocSnap.id)
+        .collection("notifications")
+        .where("data.notificationId", "==", notificationId)
+        .limit(1)
+        .get();
 
-        for (const userDoc of batchDocs) {
-          // Find the user's notification with matching notificationId
-          const userNotifSnapshot = await db
-            .collection("users")
-            .doc(userDoc.id)
-            .collection("notifications")
-            .where("data.notificationId", "==", notificationId)
-            .limit(1)
-            .get();
-
-          if (!userNotifSnapshot.empty) {
-            batch.delete(userNotifSnapshot.docs[0].ref);
-            deletedCount++;
-          }
-        }
-
-        await batch.commit();
+      if (!userNotifSnapshot.empty) {
+        await userNotifSnapshot.docs[0].ref.delete();
+        deletedCount++;
       }
-
-      // Delete the admin notification
-      await adminNotifRef.delete();
-
-      console.log(`✓ Notification deleted for ${deletedCount} user(s)`);
-      console.log("=== End Delete Notification ===\n");
-
-      return {
-        success: true,
-        deletedCount: deletedCount,
-      };
-    } catch (error) {
-      console.error("ERROR deleting notification:", error);
-      throw error;
     }
+
+    await adminNotifRef.delete();
+
+    return {
+      success: true,
+      deletedCount,
+    };
   }
 );
 
-/**
- * Add a scanned connection between two users
- * Called when a user scans another user's QR code
- * Creates a unidirectional connection-
- * (scanner can see scanned user's full profile)
- */
-export const addScannedConnection = onCall(
-  {region: FUNCTION_REGION},
-  async (request) => {
-    console.log("=== Start Add Scanned Connection ===");
+// ============================================================================
+// CONNECTIONS
+// ============================================================================
 
-    // Authentication check
+export const addScannedConnection = onCall(
+  {
+    region: FUNCTION_REGION,
+  },
+  async (request) => {
     if (!request.auth || !request.auth.uid) {
       throw new HttpsError("unauthenticated", "Not authenticated");
     }
@@ -1331,9 +1230,6 @@ export const addScannedConnection = onCall(
     const scannerUserId = request.auth.uid;
     const scannedUserId = request.data.scannedUserId;
 
-    console.log(`Scanner: ${scannerUserId}, Scanned: ${scannedUserId}`);
-
-    // Validation
     if (!scannedUserId || typeof scannedUserId !== "string") {
       throw new HttpsError(
         "invalid-argument",
@@ -1341,7 +1237,6 @@ export const addScannedConnection = onCall(
       );
     }
 
-    // Prevent self-scanning
     if (scannerUserId === scannedUserId) {
       throw new HttpsError(
         "invalid-argument",
@@ -1349,79 +1244,42 @@ export const addScannedConnection = onCall(
       );
     }
 
-    try {
-      // Fetch both users in parallel
-      const [scannerDoc, scannedDoc] = await Promise.all([
-        db.collection("users").doc(scannerUserId).get(),
-        db.collection("users").doc(scannedUserId).get(),
-      ]);
+    const [scannerDoc, scannedDoc] = await Promise.all([
+      db.collection("users").doc(scannerUserId).get(),
+      db.collection("users").doc(scannedUserId).get(),
+    ]);
 
-      // Validate both users exist
-      if (!scannerDoc.exists) {
-        throw new HttpsError("not-found", "Scanner user not found");
-      }
-      if (!scannedDoc.exists) {
-        throw new HttpsError("not-found", "Scanned user not found");
-      }
+    if (!scannerDoc.exists) {
+      throw new HttpsError("not-found", "Scanner user not found");
+    }
 
-      const scannerData = scannerDoc.data();
-      const scannedData = scannedDoc.data();
+    if (!scannedDoc.exists) {
+      throw new HttpsError("not-found", "Scanned user not found");
+    }
 
-      // Validate both users are approved
-      if (scannerData?.status !== "approved") {
-        throw new HttpsError(
-          "permission-denied",
-          "Your account is not approved"
-        );
-      }
-      if (scannedData?.status !== "approved") {
-        throw new HttpsError(
-          "permission-denied",
-          "The scanned user is not approved"
-        );
-      }
+    const scannerData = scannerDoc.data();
+    const scannedData = scannedDoc.data();
 
-      // Check for duplicate scan (idempotent)
-      const usersIScanned = scannerData?.usersIScanned || [];
-      const alreadyScanned = usersIScanned.includes(scannedUserId);
+    if (scannerData?.status !== "approved") {
+      throw new HttpsError("permission-denied", "Your account is not approved");
+    }
 
-      if (alreadyScanned) {
-        console.log("Connection already exists");
-        return {
-          success: false,
-          message: "User already connected",
-          user: {
-            uid: scannedData?.uid || scannedUserId,
-            name: scannedData?.name || "Unknown",
-            email: scannedData?.email || "",
-            profileImageUrl: scannedData?.profileImageUrl || "",
-            company: scannedData?.company || "",
-            title: scannedData?.title || "",
-            role: scannedData?.role || "attendee",
-            profileVisibility: scannedData?.profileVisibility || "minimal",
-          },
-        };
-      }
+    if (scannedData?.status !== "approved") {
+      throw new HttpsError(
+        "permission-denied",
+        "The scanned user is not approved"
+      );
+    }
 
-      // Add connection using atomic updates
-      // (optimized for 100 concurrent scans)
-      await Promise.all([
-        db.collection("users").doc(scannerUserId).update({
-          usersIScanned: admin.firestore.FieldValue.arrayUnion(scannedUserId),
-        }),
-        db.collection("users").doc(scannedUserId).update({
-          scannedByUsers: admin.firestore.FieldValue.arrayUnion(scannerUserId),
-        }),
-      ]);
+    const usersIScanned = scannerData?.usersIScanned || [];
+    const alreadyScanned = usersIScanned.includes(scannedUserId);
 
-      console.log("✓ Connection established successfully");
-      console.log("=== End Add Scanned Connection ===\n");
-
+    if (alreadyScanned) {
       return {
-        success: true,
-        message: "Connection established",
+        success: false,
+        message: "User already connected",
         user: {
-          uid: scannedData?.uid || scannedUserId,
+          uid: scannedUserId,
           name: scannedData?.name || "Unknown",
           email: scannedData?.email || "",
           profileImageUrl: scannedData?.profileImageUrl || "",
@@ -1429,68 +1287,101 @@ export const addScannedConnection = onCall(
           title: scannedData?.title || "",
           role: scannedData?.role || "attendee",
           profileVisibility: scannedData?.profileVisibility || "minimal",
-          bio: scannedData?.bio || "",
-          phone: scannedData?.phone || "",
-          linkedin: scannedData?.linkedin || "",
-          twitter: scannedData?.twitter || "",
-          website: scannedData?.website || "",
         },
       };
-    } catch (error) {
-      console.error("ERROR adding scanned connection:", error);
-      throw error;
     }
+
+    await Promise.all([
+      db.collection("users").doc(scannerUserId).update({
+        usersIScanned: admin.firestore.FieldValue.arrayUnion(scannedUserId),
+      }),
+      db.collection("users").doc(scannedUserId).update({
+        scannedByUsers: admin.firestore.FieldValue.arrayUnion(scannerUserId),
+      }),
+    ]);
+
+    return {
+      success: true,
+      message: "Connection established",
+      user: {
+        uid: scannedUserId,
+        name: scannedData?.name || "Unknown",
+        email: scannedData?.email || "",
+        profileImageUrl: scannedData?.profileImageUrl || "",
+        company: scannedData?.company || "",
+        title: scannedData?.title || "",
+        role: scannedData?.role || "attendee",
+        profileVisibility: scannedData?.profileVisibility || "minimal",
+        bio: scannedData?.bio || "",
+        phone: scannedData?.phone || "",
+        linkedin: scannedData?.linkedin || "",
+        twitter: scannedData?.twitter || "",
+        website: scannedData?.website || "",
+      },
+    };
   }
 );
 
-/**
- * TESTING ONLY: Manually verify user emails
- * 
- * HOW TO USE:
- * 1. Update the hardcoded emails array below (lines 20-25)
- * 2. Deploy: firebase deploy --only functions:manuallyVerifyEmails
- * 3. Run in Google Cloud Shell:
- *    gcloud functions call manuallyVerifyEmails --region=asia-southeast1 --data='{}'
- * 4. After testing, comment out this function and redeploy to remove it
- * 
- * UNCOMMENT BELOW TO USE:
- */
-/*
+// ============================================================================
+// MANUAL EMAIL VERIFICATION
+// ============================================================================
+
 export const manuallyVerifyEmails = onCall(
-  {region: FUNCTION_REGION},
+  {
+    region: FUNCTION_REGION,
+  },
   async (request) => {
     console.log("=== Start Manual Email Verification ===");
 
-    // HARDCODED EMAILS - Update these before deploying
-    const emails = [
-      "adminuser@gmail.com",
-      "testuser1@gmail.com",
-      "speaker1@gmail.com",
-      "testuser3@gmail.com",
-    ];
+    let emails: string[];
 
-    console.log(`Verifying ${emails.length} emails: ${emails.join(", ")}`);
+    if (!request.auth || !request.auth.uid) {
+      console.log("Running in HARDCODED mode");
 
-    const results: Array<{email: string; success: boolean; error?: string}> =
-      [];
+      emails = [
+        "adminuser@gmail.com",
+        "testuser1@gmail.com",
+        "speaker1@gmail.com",
+        "testuser3@gmail.com",
+      ];
+    } else {
+      const adminUid = request.auth.uid;
+
+      const adminDoc = await db.collection("users").doc(adminUid).get();
+
+      if (!adminDoc.exists || adminDoc.data()?.role !== "admin") {
+        throw new HttpsError(
+          "permission-denied",
+          "Only admins can manually verify emails."
+        );
+      }
+
+      emails = request.data.emails;
+
+      if (!emails || !Array.isArray(emails) || emails.length === 0) {
+        throw new HttpsError(
+          "invalid-argument",
+          "An array of email addresses is required."
+        );
+      }
+    }
+
+    const results = [];
 
     for (const email of emails) {
       try {
-        // Get user by email
         const userRecord = await admin.auth().getUserByEmail(email);
 
-        // Check if already verified
         if (userRecord.emailVerified) {
           results.push({
             email,
             success: true,
             error: "Already verified",
           });
-          console.log(`✓ ${email} - Already verified`);
+
           continue;
         }
 
-        // Update user to mark email as verified
         await admin.auth().updateUser(userRecord.uid, {
           emailVerified: true,
         });
@@ -1499,36 +1390,27 @@ export const manuallyVerifyEmails = onCall(
           email,
           success: true,
         });
-
-        console.log(`✓ ${email} - Successfully verified`);
       } catch (error) {
-        const errorMessage = error instanceof Error ?
-          error.message :
-          "Unknown error";
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+
         results.push({
           email,
           success: false,
           error: errorMessage,
         });
-
-        console.error(`✗ ${email} - Error: ${errorMessage}`);
       }
     }
 
     const successCount = results.filter((r) => r.success).length;
     const failureCount = results.length - successCount;
 
-    console.log(`✓ Verified ${successCount} emails`);
-    console.log(`✗ Failed ${failureCount} emails`);
-    console.log("=== End Manual Email Verification ===\n");
-
     return {
       success: true,
       total: emails.length,
       verified: successCount,
       failed: failureCount,
-      results: results,
+      results,
     };
   }
 );
-*/

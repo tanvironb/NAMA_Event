@@ -45,6 +45,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   static const Color primaryBlue = Color(0xFF0D1496);
   static const Color cardGrey = Color(0xFFEFEFEF);
+  static const Color namaGoldenYellow = Color(0xFFD6A329);
 
   @override
   void dispose() {
@@ -142,6 +143,61 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     return names.map((e) => e.split(' ').first).join(', ');
   }
 
+  DateTime? _toDateTime(dynamic value) {
+    if (value == null) return null;
+
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+
+    if (value is DateTime) {
+      return value;
+    }
+
+    if (value is String) {
+      return DateTime.tryParse(value);
+    }
+
+    return null;
+  }
+
+  String _formatEventDate(Map<String, dynamic> data) {
+    final startDate = _toDateTime(
+      data['startDate'] ??
+          data['startTime'] ??
+          data['eventStartDate'] ??
+          data['date'],
+    );
+
+    final endDate = _toDateTime(
+      data['endDate'] ??
+          data['endTime'] ??
+          data['eventEndDate'],
+    );
+
+    if (startDate == null && endDate == null) {
+      return '';
+    }
+
+    if (startDate != null && endDate == null) {
+      return DateFormat('MMM d, yyyy').format(startDate);
+    }
+
+    if (startDate == null && endDate != null) {
+      return DateFormat('MMM d, yyyy').format(endDate);
+    }
+
+    final sameDay = startDate!.year == endDate!.year &&
+        startDate.month == endDate.month &&
+        startDate.day == endDate.day;
+
+    if (sameDay) {
+      return DateFormat('MMM d, yyyy').format(startDate);
+    }
+
+    return '${DateFormat('MMM d, yyyy').format(startDate)} - ${DateFormat('MMM d, yyyy').format(endDate)}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final sessionsAsync = ref.watch(sessionsStreamProvider);
@@ -171,26 +227,16 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     style: const TextStyle(
                       fontSize: 28,
                       color: primaryBlue,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
                   );
                 },
               ),
             ),
 
-            const SizedBox(height: 2),
+            const SizedBox(height: 6),
 
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 32),
-              child: Text(
-                'Explore our events',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ),
+            _activeEventInfo(),
 
             const SizedBox(height: 18),
 
@@ -248,6 +294,91 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
+  Widget _activeEventInfo() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: FirebaseFirestore.instance
+            .collection('events')
+            .where('isActive', isEqualTo: true)
+            .limit(1)
+            .snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Loading event...',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No active event',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            );
+          }
+
+          final data = snapshot.data!.docs.first.data();
+
+          final eventName = (data['name'] ??
+                  data['title'] ??
+                  data['eventName'] ??
+                  'Current Event')
+              .toString()
+              .trim();
+
+          final eventDate = _formatEventDate(data);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                eventName.isEmpty ? 'Current Event' : eventName,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: primaryBlue,
+                  fontSize: 18,
+                  height: 1.2,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              if (eventDate.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  eventDate,
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   Widget _header(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 22, 32, 0),
@@ -283,7 +414,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   Widget _joinSessionsCard(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 45),
       child: GestureDetector(
         onTap: () {
           Navigator.push(
@@ -328,7 +459,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Join Sessions',
+                      'Join Session',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,

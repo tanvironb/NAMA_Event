@@ -1,13 +1,12 @@
 import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
-import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/home_dashboard_screen.dart';
-import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live_player.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/core/services/notification_services.dart';
+import 'package:events_app_trueattempt/features/profile/screen/attendee_more_screen.dart';
 
 class AttendeeShell extends ConsumerStatefulWidget {
   const AttendeeShell({super.key});
@@ -23,13 +22,13 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
   List<Widget> _pages(String currentUserId) => <Widget>[
         HomeDashboardScreen(
           onSeeAllUpcomingSessions: () {
-            _onItemTapped(1); // 🔥 switch to Agenda tab
+            _onItemTapped(1);
           },
         ),
         const AgendaScreen(),
         const DirectoriesHubScreen(),
         const QRHubScreen(),
-        const ProfileTabScreen(),
+        const AttendeeMoreScreen(),
       ];
 
   @override
@@ -79,12 +78,6 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
             index: _selectedIndex,
             children: _pages(currentUserId),
           ),
-          // const Positioned(
-          //   bottom: 0,
-          //   left: 0,
-          //   right: 0,
-          //   child: YoutubeLivePlayer(),
-          // ),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -112,9 +105,9 @@ class _HomeScreenState extends ConsumerState<AttendeeShell> {
             label: 'Scan',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profile',
+            icon: Icon(Icons.more_horiz_rounded),
+            activeIcon: Icon(Icons.more_rounded),
+            label: 'More',
           ),
         ],
       ),

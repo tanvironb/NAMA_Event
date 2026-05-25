@@ -2,17 +2,19 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
-import 'package:events_app_trueattempt/features/admin/screen/create_event_screen.dart';
-import 'package:events_app_trueattempt/features/admin/screen/notification_management_screen.dart';
-import 'package:events_app_trueattempt/features/admin/screen/send_notification_screen.dart';
-import 'package:events_app_trueattempt/features/admin/screen/user_management_screen.dart';
-import 'package:events_app_trueattempt/features/analytics/screen/admin_analytics_screen.dart';
 import 'package:events_app_trueattempt/features/help/data/help_repository.dart';
 import 'package:events_app_trueattempt/features/help/screen/admin_help_tickets_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'admin_session_management_screen.dart';
+import 'create_event_screen.dart';
+import 'event_photos_screen.dart';
+import 'event_report_dashboard_screen.dart' as event_report;
+import 'notification_management_screen.dart';
+import 'send_notification_screen.dart';
+import 'user_management_screen.dart';
 
 class AdminDashboardScreen extends ConsumerStatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -403,8 +405,6 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-
-      /// No AppBar and no bottom navbar on admin dashboard.
       body: SafeArea(
         child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
           stream: _eventsStream(),
@@ -551,6 +551,13 @@ class _HeaderLogoRow extends ConsumerWidget {
           height: 68,
           width: 68,
           fit: BoxFit.contain,
+          errorBuilder: (_, __, ___) {
+            return const Icon(
+              Icons.auto_awesome,
+              color: primaryColor,
+              size: 32,
+            );
+          },
         ),
         const Spacer(),
         InkWell(
@@ -640,7 +647,7 @@ class _SearchBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 56,
-      clipBehavior: Clip.antiAlias,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(32),
@@ -657,13 +664,12 @@ class _SearchBox extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const SizedBox(width: 18),
           const Icon(
             Icons.search_rounded,
             color: textMuted,
             size: 23,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: TextField(
               controller: controller,
@@ -682,33 +688,25 @@ class _SearchBox extends StatelessWidget {
                   fontSize: 13.5,
                   fontWeight: FontWeight.w400,
                 ),
-                filled: false,
-                fillColor: Colors.transparent,
-                hoverColor: Colors.transparent,
-                focusColor: Colors.transparent,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
                 disabledBorder: InputBorder.none,
                 errorBorder: InputBorder.none,
                 focusedErrorBorder: InputBorder.none,
+                filled: false,
+                fillColor: Colors.transparent,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
               ),
             ),
           ),
-          Container(
-            height: 28,
-            width: 1,
-            color: const Color(0xFFE4E0F2),
-          ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           const Icon(
             Icons.search_rounded,
             color: primaryColor,
-            size: 26,
+            size: 25,
           ),
-          const SizedBox(width: 18),
         ],
       ),
     );
@@ -1192,11 +1190,53 @@ class AdminEventControlScreen extends ConsumerStatefulWidget {
 class _AdminEventControlScreenState
     extends ConsumerState<AdminEventControlScreen> {
   static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color navyText = Color(0xFF050A35);
+  static const Color mutedText = Color(0xFF6F7282);
+  static const Color softBackground = Color(0xFFFAFAFD);
+  static const Color green = Color(0xFF0ABF63);
 
   void _openScreen(Widget screen) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => screen),
     );
+  }
+
+  Stream<int> _usersCountStream() {
+    return FirebaseFirestore.instance
+        .collection('events')
+        .doc(widget.eventId)
+        .collection('users')
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
+  Stream<int> _sessionsCountStream() {
+    return FirebaseFirestore.instance
+        .collection('sessions')
+        .where('eventId', isEqualTo: widget.eventId)
+        .snapshots()
+        .map((snapshot) => snapshot.docs.length);
+  }
+
+  Stream<int> _appInstalledCountStream() {
+    return FirebaseFirestore.instance
+        .collection('events')
+        .doc(widget.eventId)
+        .collection('users')
+        .snapshots()
+        .map((snapshot) {
+      return snapshot.docs.where((doc) {
+        final data = doc.data();
+
+        final hasFcmToken =
+            (data['fcmToken'] ?? '').toString().trim().isNotEmpty;
+        final hasDeviceToken =
+            (data['deviceToken'] ?? '').toString().trim().isNotEmpty;
+        final appInstalled = data['appInstalled'] == true;
+
+        return hasFcmToken || hasDeviceToken || appInstalled;
+      }).length;
+    });
   }
 
   @override
@@ -1205,326 +1245,673 @@ class _AdminEventControlScreenState
     final eventName = widget.eventName;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: softBackground,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
           children: [
-            Row(
-              children: [
-                InkWell(
-                  onTap: () => Navigator.of(context).pop(),
-                  borderRadius: BorderRadius.circular(10),
-                  child: Container(
-                    height: 32,
-                    width: 32,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF4F2FB),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: primaryColor,
-                      size: 14,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    eventName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF111827),
-                      fontSize: 17,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Admin Panel',
+            _buildHeader(),
+            const SizedBox(height: 20),
+            _buildStatsRow(),
+            const SizedBox(height: 24),
+            const Text(
+              'Admin Tools',
               style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+                color: navyText,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                letterSpacing: -0.2,
               ),
             ),
-            const SizedBox(height: 22),
-
-            _AdminActionCard(
-              icon: Icons.analytics_outlined,
-              title: 'Admin Analytics Dashboard',
-              subtitle: 'Monitor users, sessions, attendance, chat, and app usage.',
-              onTap: () {
-                _openScreen(
-                  AdminAnalyticsScreen(
-                    eventId: eventId,
-                  ),
-                );
-              },
+            const SizedBox(height: 12),
+            _buildAdminTools(
+              eventId: eventId,
+              eventName: eventName,
             ),
-
-            _AdminActionCard(
-              icon: Icons.send,
-              title: 'Send Push Notification',
-              subtitle: 'Broadcast a message to this event users.',
-              onTap: () {
-                _openScreen(
-                  SendNotificationScreen(
-                    eventId: eventId,
-                    eventName: eventName,
-                  ),
-                );
-              },
-            ),
-            _AdminActionCard(
-              icon: Icons.notifications_active,
-              title: 'Manage Notifications',
-              subtitle: 'View, edit, and delete this event notifications.',
-              onTap: () {
-                _openScreen(
-                  NotificationManagementScreen(
-                    eventId: eventId,
-                    eventName: eventName,
-                  ),
-                );
-              },
-            ),
-            _AdminActionCard(
-              icon: Icons.people,
-              title: 'Manage Users',
-              subtitle: 'View users for this event.',
-              onTap: () {
-                _openScreen(
-                  UserManagementScreen(
-                    eventId: eventId,
-                    eventName: eventName,
-                  ),
-                );
-              },
-            ),
-            StreamBuilder<int>(
-              stream: ref
-                  .watch(helpRepositoryProvider)
-                  .getPendingTicketsCountStream(eventId: eventId),
-              builder: (context, snapshot) {
-                final pendingCount = snapshot.data ?? 0;
-
-                return _AdminActionCardWithBadge(
-                  icon: Icons.help_outline,
-                  title: 'Help Tickets',
-                  subtitle: 'Manage this event support requests.',
-                  badgeCount: pendingCount,
-                  onTap: () {
-                    _openScreen(
-                      AdminHelpTicketsScreen(
-                        eventId: eventId,
-                        eventName: eventName,
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-            _AdminActionCard(
-              icon: Icons.event_note,
-              title: 'Manage Sessions',
-              subtitle: 'View and manage sessions for this event.',
-              onTap: () {
-                _openScreen(
-                  AdminSessionManagementScreen(
-                    eventId: eventId,
-                    eventName: eventName,
-                  ),
-                );
-              },
-            ),
+            const SizedBox(height: 18),
+            _buildBottomCard(),
           ],
         ),
       ),
     );
   }
-}
 
-class _AdminActionCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  Widget _buildHeader() {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('events')
+          .doc(widget.eventId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final eventData = snapshot.data?.data();
+        final bool isActive = eventData?['isActive'] == true;
 
-  const _AdminActionCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: () => Navigator.of(context).pop(),
+              borderRadius: BorderRadius.circular(15),
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: navyText,
+                  size: 18,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.eventName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: navyText,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                        height: 1.15,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    const Text(
+                      'Admin Control Center',
+                      style: TextStyle(
+                        color: mutedText,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              margin: const EdgeInsets.only(top: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? const Color(0xFFE9FAF1)
+                    : const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.circle,
+                    color: isActive ? green : const Color(0xFF9CA3AF),
+                    size: 7,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    isActive ? 'Active' : 'Inactive',
+                    style: TextStyle(
+                      color: isActive
+                          ? const Color(0xFF088B4A)
+                          : const Color(0xFF6B7280),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
-  static const Color primaryColor = Color(0xFF1B0F72);
-  static const Color hoverColor = Color(0xFFF3F4F6);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.045),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
+  Widget _buildStatsRow() {
+    return SizedBox(
+      height: 118,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          _DashboardStatCard(
+            title: 'User\nCount',
+            subtitle: 'Total Users',
+            icon: Icons.groups_rounded,
+            stream: _usersCountStream(),
+          ),
+          const SizedBox(width: 10),
+          _DashboardStatCard(
+            title: 'Session\nCount',
+            subtitle: 'Total Sessions',
+            icon: Icons.event_note_rounded,
+            stream: _sessionsCountStream(),
+          ),
+          const SizedBox(width: 10),
+          _DashboardStatCard(
+            title: 'App\nInstalled',
+            subtitle: 'Total Installs',
+            icon: Icons.phone_iphone_rounded,
+            stream: _appInstalledCountStream(),
+          ),
+          const SizedBox(width: 10),
+          const _DashboardStaticStatCard(
+            title: 'Screen\nTime',
+            value: '2h 34m',
+            subtitle: 'Avg. per User',
+            icon: Icons.access_time_filled_rounded,
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
-      child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          hoverColor: hoverColor,
-          highlightColor: Colors.transparent,
-          splashColor: Colors.transparent,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 15,
+    );
+  }
+
+  Widget _buildAdminTools({
+    required String eventId,
+    required String eventName,
+  }) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _ModernAdminToolCard(
+                icon: Icons.event_note_rounded,
+                title: 'Manage Session',
+                subtitle: 'Manage sessions',
+                onTap: () {
+                  _openScreen(
+                    AdminSessionManagementScreen(
+                      eventId: eventId,
+                      eventName: eventName,
+                    ),
+                  );
+                },
+              ),
             ),
-            child: Row(
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ModernAdminToolCard(
+                icon: Icons.people_alt_rounded,
+                title: 'Manage User',
+                subtitle: 'Manage users',
+                onTap: () {
+                  _openScreen(
+                    UserManagementScreen(
+                      eventId: eventId,
+                      eventName: eventName,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _ModernAdminToolCard(
+                icon: Icons.send_rounded,
+                title: 'Push Notification',
+                subtitle: 'Send messages',
+                onTap: () {
+                  _openScreen(
+                    SendNotificationScreen(
+                      eventId: eventId,
+                      eventName: eventName,
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ModernAdminToolCard(
+                icon: Icons.notifications_rounded,
+                title: 'Notifications',
+                subtitle: 'Edit notifications',
+                onTap: () {
+                  _openScreen(
+                    NotificationManagementScreen(
+                      eventId: eventId,
+                      eventName: eventName,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _ModernAdminToolCard(
+                icon: Icons.description_rounded,
+                title: 'Event Report',
+                subtitle: 'Reports & analytics',
+                onTap: () {
+                  _openScreen(
+                    event_report.EventReportDashboardScreen(
+                      eventId: eventId,
+                      eventName: eventName,
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ModernAdminToolCard(
+                icon: Icons.image_rounded,
+                title: 'Event Photos',
+                subtitle: 'Manage photos',
+                onTap: () {
+                  _openScreen(
+                    EventPhotosScreen(
+                      eventId: eventId,
+                      eventName: eventName,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        StreamBuilder<int>(
+          stream: ref
+              .watch(helpRepositoryProvider)
+              .getPendingTicketsCountStream(eventId: eventId),
+          builder: (context, snapshot) {
+            final pendingCount = snapshot.data ?? 0;
+
+            return _ModernAdminToolCard(
+              icon: Icons.help_rounded,
+              title: 'Help Tickets',
+              subtitle: 'Support requests',
+              fullWidth: true,
+              badgeCount: pendingCount,
+              onTap: () {
+                _openScreen(
+                  AdminHelpTicketsScreen(
+                    eventId: eventId,
+                    eventName: eventName,
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBottomCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFF4F0FF),
+            Color(0xFFFBFAFF),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE9E2FF),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: const Icon(
+              Icons.shield_rounded,
+              color: primaryColor,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  icon,
-                  size: 29,
-                  color: primaryColor,
-                ),
-                const SizedBox(width: 18),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF2C2C2C),
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 11.5,
-                          color: Color(0xFF666666),
-                        ),
-                      ),
-                    ],
+                Text(
+                  "You're in control",
+                  style: TextStyle(
+                    color: navyText,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(width: 10),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFF333333),
+                SizedBox(height: 5),
+                Text(
+                  'Manage every aspect of your event from one place.',
+                  style: TextStyle(
+                    color: mutedText,
+                    fontSize: 12,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
           ),
-        ),
+          SizedBox(width: 8),
+          SizedBox(
+            width: 74,
+            height: 58,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.all(Radius.circular(16)),
+              ),
+              child: Icon(
+                Icons.analytics_rounded,
+                color: primaryColor,
+                size: 34,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _AdminActionCardWithBadge extends StatelessWidget {
-  final IconData icon;
+class _DashboardStatCard extends StatelessWidget {
   final String title;
   final String subtitle;
-  final int badgeCount;
-  final VoidCallback onTap;
+  final IconData icon;
+  final Stream<int> stream;
 
-  const _AdminActionCardWithBadge({
-    required this.icon,
+  const _DashboardStatCard({
     required this.title,
     required this.subtitle,
-    required this.badgeCount,
-    required this.onTap,
+    required this.icon,
+    required this.stream,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<int>(
+      stream: stream,
+      builder: (context, snapshot) {
+        final value = snapshot.hasError
+            ? '0'
+            : snapshot.connectionState == ConnectionState.waiting
+                ? '...'
+                : _formatNumber(snapshot.data ?? 0);
+
+        return _BaseStatCard(
+          title: title,
+          value: value,
+          subtitle: subtitle,
+          icon: icon,
+        );
+      },
+    );
+  }
+
+  static String _formatNumber(int number) {
+    if (number < 1000) return number.toString();
+
+    final text = number.toString();
+    final buffer = StringBuffer();
+
+    for (int i = 0; i < text.length; i++) {
+      final indexFromEnd = text.length - i;
+      buffer.write(text[i]);
+
+      if (indexFromEnd > 1 && indexFromEnd % 3 == 1) {
+        buffer.write(',');
+      }
+    }
+
+    return buffer.toString();
+  }
+}
+
+class _DashboardStaticStatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+
+  const _DashboardStaticStatCard({
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _BaseStatCard(
+      title: title,
+      value: value,
+      subtitle: subtitle,
+      icon: icon,
+    );
+  }
+}
+
+class _BaseStatCard extends StatelessWidget {
+  final String title;
+  final String value;
+  final String subtitle;
+  final IconData icon;
+
+  const _BaseStatCard({
+    required this.title,
+    required this.value,
+    required this.subtitle,
+    required this.icon,
   });
 
   static const Color primaryColor = Color(0xFF1B0F72);
-  static const Color hoverColor = Color(0xFFF3F4F6);
+  static const Color navyText = Color(0xFF050A35);
+  static const Color mutedText = Color(0xFF6F7282);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      width: 128,
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.045),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 7),
           ),
         ],
       ),
-      clipBehavior: Clip.antiAlias,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0ECFF),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: primaryColor,
+              size: 21,
+            ),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  maxLines: 2,
+                  style: const TextStyle(
+                    color: navyText,
+                    fontSize: 11,
+                    height: 1.2,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: navyText,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: mutedText,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModernAdminToolCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final bool fullWidth;
+  final int badgeCount;
+
+  const _ModernAdminToolCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.fullWidth = false,
+    this.badgeCount = 0,
+  });
+
+  static const Color navyText = Color(0xFF050A35);
+  static const Color mutedText = Color(0xFF51556D);
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: fullWidth ? 88 : 104,
       child: Material(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        clipBehavior: Clip.antiAlias,
+        color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          hoverColor: hoverColor,
+          borderRadius: BorderRadius.circular(18),
+          hoverColor: const Color(0xFFF3F4F6),
           highlightColor: Colors.transparent,
           splashColor: Colors.transparent,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 15,
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 16,
+                  offset: const Offset(0, 7),
+                ),
+              ],
             ),
             child: Row(
               children: [
                 Stack(
                   clipBehavior: Clip.none,
                   children: [
-                    Icon(
-                      icon,
-                      size: 29,
-                      color: primaryColor,
+                    Container(
+                      width: 46,
+                      height: 46,
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0xFF3923B7),
+                            Color(0xFF18077D),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(
+                        icon,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
                     if (badgeCount > 0)
                       Positioned(
-                        right: -6,
-                        top: -6,
+                        right: -5,
+                        top: -5,
                         child: Container(
-                          padding: const EdgeInsets.all(4),
+                          padding: const EdgeInsets.all(3),
                           decoration: const BoxDecoration(
                             color: Colors.red,
                             shape: BoxShape.circle,
                           ),
                           constraints: const BoxConstraints(
-                            minWidth: 18,
-                            minHeight: 18,
+                            minWidth: 16,
+                            minHeight: 16,
                           ),
                           child: Center(
                             child: Text(
                               badgeCount > 99 ? '99+' : badgeCount.toString(),
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 8.5,
+                                fontSize: 7.5,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1533,38 +1920,43 @@ class _AdminActionCardWithBadge extends StatelessWidget {
                       ),
                   ],
                 ),
-                const SizedBox(width: 18),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
-                        maxLines: 1,
+                        maxLines: fullWidth ? 1 : 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF2C2C2C),
+                          color: navyText,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: -0.1,
                         ),
                       ),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 5),
                       Text(
                         subtitle,
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 11.5,
-                          color: Color(0xFF666666),
+                          color: mutedText,
+                          fontSize: 10.8,
+                          height: 1.25,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 5),
                 const Icon(
-                  Icons.chevron_right_rounded,
-                  color: Color(0xFF333333),
+                  Icons.arrow_forward_ios_rounded,
+                  color: navyText,
+                  size: 15,
                 ),
               ],
             ),

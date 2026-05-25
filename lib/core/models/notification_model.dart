@@ -17,6 +17,11 @@ class AppNotification {
   final String targetRole;
   final Map<String, dynamic> data;
 
+  // QR announcement fields
+  final String qrPayload;
+  final String sessionCode;
+  final String sessionTitle;
+
   AppNotification({
     required this.id,
     this.eventId = '',
@@ -31,6 +36,9 @@ class AppNotification {
     this.type = AppNotificationType.generic,
     this.targetRole = 'all',
     this.data = const {},
+    this.qrPayload = '',
+    this.sessionCode = '',
+    this.sessionTitle = '',
   });
 
   factory AppNotification.fromFirestore(DocumentSnapshot doc) {
@@ -60,6 +68,24 @@ class AppNotification {
     final timestampValue = docData['timestamp'];
     final eventTimestampValue = docData['eventTimestamp'];
 
+    final dataMap = docData['data'] is Map<String, dynamic>
+        ? docData['data'] as Map<String, dynamic>
+        : <String, dynamic>{};
+
+    final qrPayload = (docData['qrPayload'] ?? dataMap['qrPayload'] ?? '')
+        .toString()
+        .trim();
+
+    final sessionCode =
+        (docData['sessionCode'] ?? dataMap['sessionCode'] ?? '')
+            .toString()
+            .trim();
+
+    final sessionTitle =
+        (docData['sessionTitle'] ?? dataMap['sessionTitle'] ?? '')
+            .toString()
+            .trim();
+
     return AppNotification(
       id: doc.id,
       eventId: docData['eventId'] as String? ?? '',
@@ -74,11 +100,16 @@ class AppNotification {
       isRead: docData['isRead'] as bool? ?? false,
       type: typeFromString(docData['type'] as String?),
       targetRole: docData['targetRole'] as String? ?? 'all',
-      data: docData['data'] as Map<String, dynamic>? ?? {},
+      data: dataMap,
+      qrPayload: qrPayload,
+      sessionCode: sessionCode,
+      sessionTitle: sessionTitle,
     );
   }
 
   String get priority => type.priority;
 
   bool get showsPopup => type.showsPopup;
+
+  bool get hasQrData => qrPayload.isNotEmpty || sessionCode.isNotEmpty;
 }

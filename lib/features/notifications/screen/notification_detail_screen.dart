@@ -1,11 +1,14 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
+// lib/features/notifications/screen/notification_detail_screen.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:events_app_trueattempt/core/enums/notification_type.dart';
+import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class NotificationDetailScreen extends ConsumerStatefulWidget {
   final AppNotification notification;
@@ -16,27 +19,45 @@ class NotificationDetailScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<NotificationDetailScreen> createState() => _NotificationDetailScreenState();
+  ConsumerState<NotificationDetailScreen> createState() =>
+      _NotificationDetailScreenState();
 }
 
-class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScreen> {
+class _NotificationDetailScreenState
+    extends ConsumerState<NotificationDetailScreen> {
   late TextEditingController _titleController;
   late TextEditingController _subtitleController;
   late TextEditingController _bodyController;
+
   late DateTime? _editedAt;
+
   bool _isEditing = false;
   bool _isLoading = false;
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _textMuted = Color(0xFF6B7280);
+  static const Color _softPurple = Color(0xFFF1EEFB);
+  static const Color _borderColor = Color(0xFFE1DDF0);
 
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.notification.title);
-    _subtitleController = TextEditingController(text: widget.notification.subtitle ?? '');
-    _bodyController = TextEditingController(text: widget.notification.body);
-    // Check if editedAt exists in data map
-    _editedAt = widget.notification.data['editedAt'] != null 
-        ? (widget.notification.data['editedAt'] as Timestamp).toDate()
-        : null;
+
+    _titleController = TextEditingController(
+      text: widget.notification.title,
+    );
+
+    _subtitleController = TextEditingController(
+      text: widget.notification.subtitle ?? '',
+    );
+
+    _bodyController = TextEditingController(
+      text: widget.notification.body,
+    );
+
+    final editedAtValue = widget.notification.data['editedAt'];
+
+    _editedAt = editedAtValue is Timestamp ? editedAtValue.toDate() : null;
   }
 
   @override
@@ -47,8 +68,61 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
     super.dispose();
   }
 
+  String get _qrPayload {
+    final fromModel = widget.notification.qrPayload.trim();
+    if (fromModel.isNotEmpty) return fromModel;
+
+    return (widget.notification.data['qrPayload'] ?? '').toString().trim();
+  }
+
+  String get _sessionCode {
+    final fromModel = widget.notification.sessionCode.trim();
+    if (fromModel.isNotEmpty) return fromModel;
+
+    return (widget.notification.data['sessionCode'] ?? '').toString().trim();
+  }
+
+  String get _sessionTitle {
+    final fromModel = widget.notification.sessionTitle.trim();
+    if (fromModel.isNotEmpty) return fromModel;
+
+    final fromData =
+        (widget.notification.data['sessionTitle'] ?? '').toString().trim();
+
+    if (fromData.isNotEmpty) return fromData;
+
+    if ((widget.notification.subtitle ?? '').trim().isNotEmpty) {
+      return widget.notification.subtitle!.trim();
+    }
+
+    return widget.notification.eventName.trim();
+  }
+
+  bool get _hasQrPayload => _qrPayload.isNotEmpty;
+
+  bool get _hasSessionCode => _sessionCode.isNotEmpty;
+
+  bool get _hasQrAnnouncement => _hasQrPayload || _hasSessionCode;
+
+  Future<void> _copySessionCode() async {
+    if (_sessionCode.isEmpty) return;
+
+    await Clipboard.setData(
+      ClipboardData(text: _sessionCode),
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Session code copied.'),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   Future<void> _saveChanges() async {
-    if (!_titleController.text.trim().isNotEmpty) {
+    if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Title cannot be empty')),
       );
@@ -58,31 +132,32 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
     setState(() => _isLoading = true);
 
     try {
-      // Get the shared notification ID from data field
-      final sharedNotificationId = widget.notification.data['notificationId'] as String?;
-      
+      final sharedNotificationId =
+          widget.notification.data['notificationId'] as String?;
+
       if (sharedNotificationId == null) {
-        throw Exception('Notification ID not found. This notification may not support editing.');
+        throw Exception(
+          'Notification ID not found. This notification may not support editing.',
+        );
       }
 
-      // Get the target role to query the right users
       final targetRole = widget.notification.targetRole;
 
-      // Query all users based on target role
       final usersQuery = targetRole == 'all'
-          ? FirebaseFirestore.instance.collection('users').where('status', isEqualTo: 'approved')
-          : FirebaseFirestore.instance.collection('users')
+          ? FirebaseFirestore.instance
+              .collection('users')
+              .where('status', isEqualTo: 'approved')
+          : FirebaseFirestore.instance
+              .collection('users')
               .where('status', isEqualTo: 'approved')
               .where('role', isEqualTo: targetRole);
 
       final usersSnapshot = await usersQuery.get();
 
-      // Update notification for all users using batch
       final batch = FirebaseFirestore.instance.batch();
       int updatedCount = 0;
 
       for (final userDoc in usersSnapshot.docs) {
-        // Query this user's notifications to find the one with matching notificationId
         final notificationsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(userDoc.id)
@@ -93,67 +168,82 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
 
         if (notificationsSnapshot.docs.isNotEmpty) {
           final notificationRef = notificationsSnapshot.docs.first.reference;
-          
+
           batch.update(notificationRef, {
             'title': _titleController.text.trim(),
-            'subtitle': _subtitleController.text.trim().isEmpty 
-                ? FieldValue.delete() 
+            'subtitle': _subtitleController.text.trim().isEmpty
+                ? FieldValue.delete()
                 : _subtitleController.text.trim(),
             'body': _bodyController.text.trim(),
             'data.editedAt': Timestamp.now(),
           });
+
           updatedCount++;
         }
       }
 
       await batch.commit();
 
-      if (mounted) {
-        setState(() {
-          _isEditing = false;
-          _isLoading = false;
-          _editedAt = DateTime.now();
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Notification updated for $updatedCount user(s)'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      setState(() {
+        _isEditing = false;
+        _isLoading = false;
+        _editedAt = DateTime.now();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Notification updated for $updatedCount user(s)'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update notification: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update notification: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   Future<void> _deleteNotification() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Notification'),
-        content: const Text(
-          'Are you sure you want to delete this notification for ALL users? This action cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      builder: (context) {
+        return AlertDialog(
+          title: const Text(
+            'Delete Notification',
+            style: TextStyle(fontSize: 16),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+          content: const Text(
+            'Are you sure you want to delete this notification for ALL users? This action cannot be undone.',
+            style: TextStyle(fontSize: 13),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text(
+                'Delete',
+                style: TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        );
+      },
     );
 
     if (confirmed != true || !mounted) return;
@@ -161,31 +251,32 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
     setState(() => _isLoading = true);
 
     try {
-      // Get the shared notification ID from data field
-      final sharedNotificationId = widget.notification.data['notificationId'] as String?;
-      
+      final sharedNotificationId =
+          widget.notification.data['notificationId'] as String?;
+
       if (sharedNotificationId == null) {
-        throw Exception('Notification ID not found. This notification may not support deletion.');
+        throw Exception(
+          'Notification ID not found. This notification may not support deletion.',
+        );
       }
 
-      // Get the target role to query the right users
       final targetRole = widget.notification.targetRole;
 
-      // Query all users based on target role
       final usersQuery = targetRole == 'all'
-          ? FirebaseFirestore.instance.collection('users').where('status', isEqualTo: 'approved')
-          : FirebaseFirestore.instance.collection('users')
+          ? FirebaseFirestore.instance
+              .collection('users')
+              .where('status', isEqualTo: 'approved')
+          : FirebaseFirestore.instance
+              .collection('users')
               .where('status', isEqualTo: 'approved')
               .where('role', isEqualTo: targetRole);
 
       final usersSnapshot = await usersQuery.get();
 
-      // Delete notification for all users using batch
       final batch = FirebaseFirestore.instance.batch();
       int deletedCount = 0;
 
       for (final userDoc in usersSnapshot.docs) {
-        // Query this user's notifications to find the one with matching notificationId
         final notificationsSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(userDoc.id)
@@ -202,25 +293,27 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
 
       await batch.commit();
 
-      if (mounted) {
-        Navigator.pop(context, true); // Return true to indicate deletion
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Notification deleted for $deletedCount user(s)'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      Navigator.pop(context, true);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Notification deleted for $deletedCount user(s)'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to delete notification: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete notification: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -235,22 +328,26 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
 
   String _formatEventTimestamp() {
     if (widget.notification.eventTimestamp == null) return '';
-    
+
     final eventTime = widget.notification.eventTimestamp!;
+
     if (widget.notification.includeDate) {
-      final format = DateFormat('EEEE, MMMM d, yyyy • h:mm a');
-      return format.format(eventTime);
-    } else {
-      final format = DateFormat('h:mm a');
-      return format.format(eventTime);
+      return DateFormat('EEEE, MMMM d, yyyy • h:mm a').format(eventTime);
     }
+
+    return DateFormat('h:mm a').format(eventTime);
+  }
+
+  String _formatCreatedAt() {
+    return DateFormat('MMM d, yyyy • h:mm a').format(
+      widget.notification.timestamp.toDate(),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Get current user from stream provider
     final currentUserAsync = ref.watch(userAppProfileStreamProvider);
-    
+
     final isAdmin = currentUserAsync.when(
       data: (user) => user?.role.toLowerCase() == 'admin',
       loading: () => false,
@@ -258,129 +355,233 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
     );
 
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: AppColors.namaNavyBlue,
-        foregroundColor: AppColors.namaWhite,
-        title: const Text('Notification Details'),
-        actions: [
-          if (isAdmin && !_isEditing)
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: AppColors.namaNavyBlue,
+                ),
+              )
+            : Column(
+                children: [
+                  _buildHeader(isAdmin),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(18, 8, 18, 28),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildTopSummary(),
+                          const SizedBox(height: 22),
+
+                          if (_isEditing) ...[
+                            _buildEditableFields(),
+                          ] else ...[
+                            if (_hasQrAnnouncement) ...[
+                              _buildQrPreviewCard(),
+                              const SizedBox(height: 20),
+                            ],
+                            _buildMessageSection(),
+                          ],
+
+                          const SizedBox(height: 22),
+
+                          if (widget.notification.eventTimestamp != null)
+                            _buildInfoCard(
+                              widget.notification.includeDate
+                                  ? 'Event Time'
+                                  : 'Time',
+                              _formatEventTimestamp(),
+                              Icons.event_outlined,
+                            ),
+
+                          if (widget.notification.eventTimestamp != null)
+                            const SizedBox(height: 12),
+
+                          _buildInfoCard(
+                            'Target Audience',
+                            widget.notification.targetRole == 'all'
+                                ? 'All Users'
+                                : _capitalize(widget.notification.targetRole),
+                            Icons.people_outline,
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          _buildTimestampInfo(),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(bool isAdmin) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 12, 12, 10),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(
+              Icons.arrow_back,
+              color: AppColors.namaNavyBlue,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 2),
+          const Expanded(
+            child: Text(
+              'Notification',
+              style: TextStyle(
+                color: AppColors.namaNavyBlue,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          if (isAdmin && !_isEditing) ...[
             IconButton(
-              icon: const Icon(Icons.edit),
+              icon: const Icon(
+                Icons.edit_outlined,
+                color: AppColors.namaNavyBlue,
+                size: 21,
+              ),
               onPressed: () => setState(() => _isEditing = true),
               tooltip: 'Edit',
             ),
-          if (isAdmin && !_isEditing)
             IconButton(
-              icon: const Icon(Icons.delete),
+              icon: const Icon(
+                Icons.delete_outline,
+                color: Colors.red,
+                size: 21,
+              ),
               onPressed: _deleteNotification,
               tooltip: 'Delete',
             ),
-          if (_isEditing)
+          ],
+          if (_isEditing) ...[
             IconButton(
-              icon: const Icon(Icons.close),
+              icon: const Icon(
+                Icons.close,
+                color: Colors.red,
+                size: 21,
+              ),
               onPressed: _cancelEditing,
               tooltip: 'Cancel',
             ),
-          if (_isEditing)
             IconButton(
-              icon: const Icon(Icons.check),
+              icon: const Icon(
+                Icons.check,
+                color: AppColors.successGreen,
+                size: 21,
+              ),
               onPressed: _isLoading ? null : _saveChanges,
               tooltip: 'Save',
             ),
+          ],
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Type Badge
-                  _buildTypeBadge(),
-                  const SizedBox(height: 16),
-
-                  // Title
-                  _buildField(
-                    label: 'Title',
-                    controller: _titleController,
-                    isEditing: _isEditing,
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Subtitle
-                  if (widget.notification.subtitle != null || _isEditing)
-                    _buildField(
-                      label: 'Subtitle',
-                      controller: _subtitleController,
-                      isEditing: _isEditing,
-                      maxLines: 2,
-                    ),
-                  if (widget.notification.subtitle != null || _isEditing)
-                    const SizedBox(height: 16),
-
-                  // Body
-                  _buildField(
-                    label: 'Description',
-                    controller: _bodyController,
-                    isEditing: _isEditing,
-                    maxLines: 5,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Target Role
-                  _buildInfoCard(
-                    'Target Audience',
-                    widget.notification.targetRole == 'all' 
-                        ? 'All Users' 
-                        : widget.notification.targetRole[0].toUpperCase() + widget.notification.targetRole.substring(1),
-                    Icons.people,
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Event Timestamp (if specified)
-                  if (widget.notification.eventTimestamp != null)
-                    _buildInfoCard(
-                      widget.notification.includeDate ? 'Event Time' : 'Time',
-                      _formatEventTimestamp(),
-                      Icons.event,
-                    ),
-                  if (widget.notification.eventTimestamp != null)
-                    const SizedBox(height: 12),
-
-                  // Timestamps
-                  const Divider(height: 32),
-                  _buildTimestampInfo(),
-                ],
-              ),
-            ),
     );
   }
 
-  Widget _buildTypeBadge() {
+  Widget _buildTopSummary() {
     final type = widget.notification.type;
-    final badgeColor = type.color;
-    final icon = type.icon;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
       decoration: BoxDecoration(
-        color: badgeColor.withOpacity(0.1),
-        border: Border.all(color: badgeColor),
-        borderRadius: BorderRadius.circular(20),
+        color: type.color.withOpacity(0.08),
+        border: Border(
+          bottom: BorderSide(
+            color: type.color.withOpacity(0.25),
+          ),
+        ),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: badgeColor),
-          const SizedBox(width: 8),
-          Text(
-            type.displayName.toUpperCase(),
-            style: TextStyle(
-              color: badgeColor,
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: type.color.withOpacity(0.08),
+              border: Border.all(
+                color: type.color,
+                width: 1.5,
+              ),
+            ),
+            child: Icon(
+              type.icon,
+              color: type.color,
+              size: 25,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  type.displayName.toUpperCase(),
+                  style: TextStyle(
+                    color: type.color,
+                    fontSize: 11.5,
+                    letterSpacing: 1.1,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Text(
+                  widget.notification.title,
+                  style: const TextStyle(
+                    color: AppColors.namaNavyBlue,
+                    fontSize: 20,
+                    height: 1.18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if ((widget.notification.subtitle ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.notification.subtitle!,
+                    style: const TextStyle(
+                      color: _textMuted,
+                      fontSize: 13,
+                      height: 1.25,
+                      fontStyle: FontStyle.italic,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: _textMuted,
+                    ),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        _formatCreatedAt(),
+                        style: const TextStyle(
+                          color: _textMuted,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -388,59 +589,266 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
     );
   }
 
-  Widget _buildField({
-    required String label,
-    required TextEditingController controller,
-    required bool isEditing,
-    int maxLines = 1,
-  }) {
-    if (isEditing) {
-      return TextField(
-        controller: controller,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.all(12),
+  Widget _buildQrPreviewCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F7FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: _borderColor,
         ),
-      );
-    }
+      ),
+      child: Column(
+        children: [
+          const Text(
+            'Session QR Code',
+            style: TextStyle(
+              color: _primaryColor,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
 
+          if (_sessionTitle.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              _sessionTitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF111827),
+                fontSize: 13,
+                height: 1.25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 14),
+
+          if (_hasQrPayload)
+            Container(
+              padding: const EdgeInsets.all(11),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.namaGoldenYellow,
+                  width: 1.5,
+                ),
+              ),
+              child: QrImageView(
+                data: _qrPayload,
+                version: QrVersions.auto,
+                size: 170,
+                backgroundColor: Colors.white,
+                foregroundColor: AppColors.namaNavyBlue,
+              ),
+            ),
+
+          if (_hasSessionCode) ...[
+            const SizedBox(height: 14),
+            InkWell(
+              onTap: _copySessionCode,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                width: 230,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: _softPurple,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  children: [
+                    const Text(
+                      'Session Code / PIN',
+                      style: TextStyle(
+                        color: _textMuted,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      _sessionCode,
+                      style: const TextStyle(
+                        color: _primaryColor,
+                        fontSize: 19,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: 180,
+              height: 36,
+              child: OutlinedButton.icon(
+                onPressed: _copySessionCode,
+                icon: const Icon(
+                  Icons.copy_rounded,
+                  size: 15,
+                ),
+                label: const Text(
+                  'Copy PIN',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _primaryColor,
+                  side: const BorderSide(
+                    color: _primaryColor,
+                    width: 1.2,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 10),
+
+          const Text(
+            'Scan the QR code or copy the PIN to check in.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 11.5,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
-            fontWeight: FontWeight.w500,
+        const Text(
+          'Message',
+          style: TextStyle(
+            color: AppColors.namaNavyBlue,
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          controller.text,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.grey.shade300,
+            ),
+          ),
+          child: Text(
+            widget.notification.body,
+            style: const TextStyle(
+              color: AppColors.namaNavyBlue,
+              fontSize: 13,
+              height: 1.45,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ),
       ],
     );
   }
 
+  Widget _buildEditableFields() {
+    return Column(
+      children: [
+        _buildEditField(
+          label: 'Title',
+          controller: _titleController,
+          maxLines: 2,
+        ),
+        const SizedBox(height: 14),
+        _buildEditField(
+          label: 'Subtitle',
+          controller: _subtitleController,
+          maxLines: 2,
+        ),
+        const SizedBox(height: 14),
+        _buildEditField(
+          label: 'Message',
+          controller: _bodyController,
+          maxLines: 7,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditField({
+    required String label,
+    required TextEditingController controller,
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: const TextStyle(
+        fontSize: 13,
+        color: Color(0xFF111827),
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(
+          color: _textMuted,
+          fontSize: 12,
+        ),
+        contentPadding: const EdgeInsets.all(12),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: _borderColor,
+          ),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(
+            color: _primaryColor,
+            width: 1.2,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildInfoCard(String label, String value, IconData icon) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
+        color: const Color(0xFFF7F7FA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _borderColor,
+        ),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: AppColors.namaNavyBlue),
-          const SizedBox(width: 12),
+          Icon(
+            icon,
+            size: 19,
+            color: AppColors.namaNavyBlue,
+          ),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -448,17 +856,18 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
                 Text(
                   label,
                   style: const TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
+                    fontSize: 11,
+                    color: _textMuted,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
+                    color: Color(0xFF111827),
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -471,34 +880,49 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
 
   Widget _buildTimestampInfo() {
     final dateFormat = DateFormat('MMM dd, yyyy hh:mm a');
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Timestamps',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7FA),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _borderColor,
         ),
-        const SizedBox(height: 12),
-        _buildTimestampRow('Created', dateFormat.format(widget.notification.timestamp.toDate())),
-        if (_editedAt != null) ...[
-          const SizedBox(height: 8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Timestamps',
+            style: TextStyle(
+              color: AppColors.namaNavyBlue,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
           _buildTimestampRow(
-            'Edited',
-            dateFormat.format(_editedAt!),
-            color: Colors.orange,
+            'Created',
+            dateFormat.format(widget.notification.timestamp.toDate()),
+          ),
+          if (_editedAt != null) ...[
+            const SizedBox(height: 7),
+            _buildTimestampRow(
+              'Edited',
+              dateFormat.format(_editedAt!),
+              color: Colors.orange,
+            ),
+          ],
+          const SizedBox(height: 7),
+          _buildTimestampRow(
+            'Read Status',
+            widget.notification.isRead ? 'Read' : 'Unread',
+            color: widget.notification.isRead ? Colors.green : Colors.grey,
           ),
         ],
-        const SizedBox(height: 8),
-        _buildTimestampRow(
-          'Read Status',
-          widget.notification.isRead ? 'Read' : 'Unread',
-          color: widget.notification.isRead ? Colors.green : Colors.grey,
-        ),
-      ],
+      ),
     );
   }
 
@@ -506,12 +930,12 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
     return Row(
       children: [
         SizedBox(
-          width: 80,
+          width: 86,
           child: Text(
             label,
             style: const TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
+              fontSize: 12,
+              color: _textMuted,
             ),
           ),
         ),
@@ -519,13 +943,18 @@ class _NotificationDetailScreenState extends ConsumerState<NotificationDetailScr
           child: Text(
             value,
             style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color ?? const Color(0xFF111827),
             ),
           ),
         ),
       ],
     );
+  }
+
+  String _capitalize(String value) {
+    if (value.trim().isEmpty) return value;
+    return value[0].toUpperCase() + value.substring(1).toLowerCase();
   }
 }

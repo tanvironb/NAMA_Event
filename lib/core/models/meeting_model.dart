@@ -1,8 +1,8 @@
-// lib/core/models/meeting_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Meeting {
   final String id;
+  final String eventId;
   final String requesterId;
   final String recipientId;
   final Map<String, dynamic> requesterInfo;
@@ -14,6 +14,7 @@ class Meeting {
 
   Meeting({
     required this.id,
+    required this.eventId,
     required this.requesterId,
     required this.recipientId,
     required this.requesterInfo,
@@ -25,22 +26,28 @@ class Meeting {
   });
 
   factory Meeting.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+    final data = doc.data() as Map<String, dynamic>? ?? {};
+
     return Meeting(
       id: doc.id,
+      eventId: data['eventId'] ?? '',
       requesterId: data['requesterId'] ?? '',
       recipientId: data['recipientId'] ?? '',
       requesterInfo: Map<String, dynamic>.from(data['requesterInfo'] ?? {}),
       recipientInfo: Map<String, dynamic>.from(data['recipientInfo'] ?? {}),
       status: data['status'] ?? 'pending',
-      proposedTime: data['proposedTime'] ?? Timestamp.now(),
+      proposedTime: data['proposedTime'] is Timestamp
+          ? data['proposedTime']
+          : Timestamp.now(),
       location: data['location'] ?? '',
-      createdAt: data['createdAt'] ?? Timestamp.now(),
+      createdAt:
+          data['createdAt'] is Timestamp ? data['createdAt'] : Timestamp.now(),
     );
   }
 
   Map<String, dynamic> toFirestore() {
     return {
+      'eventId': eventId,
       'requesterId': requesterId,
       'recipientId': recipientId,
       'requesterInfo': requesterInfo,
@@ -49,12 +56,13 @@ class Meeting {
       'proposedTime': proposedTime,
       'location': location,
       'createdAt': createdAt,
-      'memberIds': [requesterId, recipientId], // For efficient querying
+      'memberIds': [requesterId, recipientId],
     };
   }
 
   Meeting copyWith({
     String? id,
+    String? eventId,
     String? requesterId,
     String? recipientId,
     Map<String, dynamic>? requesterInfo,
@@ -66,6 +74,7 @@ class Meeting {
   }) {
     return Meeting(
       id: id ?? this.id,
+      eventId: eventId ?? this.eventId,
       requesterId: requesterId ?? this.requesterId,
       recipientId: recipientId ?? this.recipientId,
       requesterInfo: requesterInfo ?? this.requesterInfo,

@@ -1,4 +1,7 @@
 // lib/features/settings/screen/settings_screen.dart
+
+import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/certificates/screen/my_certificates_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 import 'package:events_app_trueattempt/features/settings/screen/about_event_screen.dart';
 import 'package:flutter/material.dart';
@@ -6,7 +9,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
-import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -37,10 +39,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
   }
 
+  bool _canSeeCertificates(String? role) {
+    final cleanRole = (role ?? '').trim().toLowerCase();
+
+    return cleanRole == 'attendee' || cleanRole == 'speaker';
+  }
+
+  bool _canSeeConnections(String? role) {
+    final cleanRole = (role ?? '').trim().toLowerCase();
+
+    // Connections should show for staff, attendee, and speaker.
+    return cleanRole == 'staff' ||
+        cleanRole == 'attendee' ||
+        cleanRole == 'speaker';
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final buttonWidth = screenWidth * 0.55;
+
+    final userAsync = ref.watch(userAppProfileStreamProvider);
+
+    final userRole = userAsync.asData?.value?.role;
+    final showCertificates = _canSeeCertificates(userRole);
+    final showConnections = _canSeeConnections(userRole);
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -71,30 +94,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
               ),
               const SizedBox(height: 24),
-              _buildItem(
-                icon: Icons.event,
-                title: 'My Meeting',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const MyMeetingsScreen(),
-                    ),
-                  );
-                },
-              ),
-              _buildItem(
-                icon: Icons.people_outline,
-                title: 'Connections',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const ConnectionsScreen(),
-                    ),
-                  );
-                },
-              ),
+
+              if (showCertificates)
+                _buildItem(
+                  icon: Icons.workspace_premium_outlined,
+                  title: 'My Certificates',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const MyCertificatesScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+              if (showConnections)
+                _buildItem(
+                  icon: Icons.people_outline,
+                  title: 'Connections',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ConnectionsScreen(),
+                      ),
+                    );
+                  },
+                ),
+
               _buildItem(
                 icon: Icons.info_outline_rounded,
                 title: 'About Event',
@@ -107,6 +135,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
+
               _buildItem(
                 icon: Icons.lock_outline,
                 title: 'Privacy',
@@ -119,6 +148,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
+
               _buildItem(
                 icon: Icons.help_outline,
                 title: 'Help Centre',
@@ -131,13 +161,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 90),
+
+              const Spacer(),
+
               Center(
-                child: SizedBox(
-                  width: buttonWidth.clamp(170.0, 240.0),
-                  child: _buildLogoutButton(),
+                child: ValueListenableBuilder<double>(
+                  valueListenable: _scale,
+                  builder: (context, scale, child) {
+                    return Transform.scale(
+                      scale: scale,
+                      child: GestureDetector(
+                        onTapDown: (_) => _scale.value = 0.96,
+                        onTapCancel: () => _scale.value = 1,
+                        onTapUp: (_) {
+                          _scale.value = 1;
+                          _logout();
+                        },
+                        child: Container(
+                          width: buttonWidth,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade600,
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.red.withOpacity(0.2),
+                                blurRadius: 18,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'Log Out',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
+
+              const SizedBox(height: 230),
             ],
           ),
         ),
@@ -155,10 +225,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       child: Container(
         height: 48,
         decoration: BoxDecoration(
+          color: Colors.transparent,
           border: Border(
             bottom: BorderSide(
-              color: Colors.black.withOpacity(0.25),
-              width: 0.6,
+              color: AppColors.namaMediumGray.withOpacity(0.25),
+              width: 0.8,
             ),
           ),
         ),
@@ -175,14 +246,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title,
                 style: const TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w400,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ),
             const Icon(
               Icons.arrow_forward,
-              size: 20,
-              color: Colors.black87,
+              size: 22,
+              color: AppColors.textPrimary,
             ),
           ],
         ),
@@ -190,77 +262,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  Widget _buildLogoutButton() {
-    return GestureDetector(
-      onTapDown: (_) => _scale.value = 0.96,
-      onTapUp: (_) => _scale.value = 1,
-      onTapCancel: () => _scale.value = 1,
-      child: ValueListenableBuilder<double>(
-        valueListenable: _scale,
-        builder: (context, value, child) {
-          return AnimatedScale(
-            scale: value,
-            duration: const Duration(milliseconds: 120),
-            child: Container(
-              height: 42,
-              decoration: BoxDecoration(
-                color: const Color(0xFFD32F2F),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.red.withOpacity(0.25),
-                    blurRadius: 20,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: _logout,
-                  child: const Center(
-                    child: Text(
-                      'Log Out',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   Future<bool?> _showLogoutDialog(BuildContext context) {
     return showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Log Out'),
-        content: const Text('Are you sure you want to log out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      barrierDismissible: true,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
+          title: const Text(
+            'Log Out',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: AppColors.namaNavyBlue,
             ),
-            child: const Text('Log Out'),
           ),
-        ],
-      ),
+          content: const Text(
+            'Are you sure you want to log out?',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  color: AppColors.namaMediumGray,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Log Out',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }

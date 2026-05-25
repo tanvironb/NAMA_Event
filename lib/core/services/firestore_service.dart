@@ -116,9 +116,7 @@ class FirestoreService {
         .get();
 
     if (snapshot.docs.isEmpty) {
-      throw Exception(
-        "No active event found! Please ensure an event is marked 'isActive: true' in Firestore.",
-      );
+      throw Exception("No active event found!");
     }
 
     return snapshot.docs.first;
@@ -355,10 +353,14 @@ class FirestoreService {
   }
 
   // --- Meeting operations ---
-  Stream<QuerySnapshot> getMeetingsCollectionStream(String userId) {
+  Stream<QuerySnapshot> getMeetingsCollectionStream({
+    required String userId,
+    required String eventId,
+  }) {
     return _db
         .collection('meetings')
         .where('memberIds', arrayContains: userId)
+        .where('eventId', isEqualTo: eventId)
         .orderBy('createdAt', descending: true)
         .snapshots();
   }

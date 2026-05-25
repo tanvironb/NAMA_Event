@@ -1,10 +1,9 @@
 // lib/features/calendar/data/calendar_repository.dart
 
-import 'dart:async';
 import 'package:async/async.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/core/models/meeting_model.dart';
+import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/features/calendar/models/calendar_entry.dart';
 import 'package:events_app_trueattempt/features/calendar/models/calendar_entry_type.dart';
 
@@ -13,137 +12,245 @@ class CalendarRepository {
 
   CalendarRepository(this._firestore);
 
-  /// Get real-time stream of calendar entries for a user (bookmarked sessions + approved meetings)
+  /// Real-time calendar entries for the active event.
+  ///
+  /// Role logic:
+  /// - attendee/staff: bookmarked active-event sessions + meetings
+  /// - speaker/admin: meetings only
   Stream<List<CalendarEntry>> getCalendarEntriesStream({
     required String userId,
     required String eventId,
     required List<String> bookmarkedSessionIds,
+    required bool includeSessions,
   }) async* {
-    // Combine both streams (sessions and meetings) and merge them
-    final sessionsStream = _getBookmarkedSessionsStream(eventId, bookmarkedSessionIds);
-    final meetingsStream = _getApprovedMeetingsStream(userId);
-    
+    final sessionsStream = includeSessions
+        ? _getBookmarkedSessionsStream(
+            eventId: eventId,
+            sessionIds: bookmarkedSessionIds,
+          )
+        : Stream<List<Session>>.value([]);
+
+    final meetingsStream = _getMeetingsStream(
+      userId: userId,
+      eventId: eventId,
+    );
+
     await for (final results in StreamZip([sessionsStream, meetingsStream])) {
       final sessions = results[0] as List<Session>;
       final meetings = results[1] as List<Meeting>;
-      
+
       final List<CalendarEntry> entries = [];
-      
-      // Convert sessions to calendar entries WITH notes
+
       for (final session in sessions) {
         final notes = await getEntryNotes(
           userId: userId,
           entryId: session.id,
           entryType: CalendarEntryType.session,
         );
-        entries.add(CalendarEntry.fromSession(session, notes: notes));
+
+        entries.add(
+          CalendarEntry.fromSession(
+            session,
+            notes: notes,
+          ),
+        );
       }
-      
-      // Convert meetings to calendar entries WITH notes
+
       for (final meeting in meetings) {
         final notes = await getEntryNotes(
           userId: userId,
           entryId: meeting.id,
           entryType: CalendarEntryType.meeting,
         );
-        entries.add(CalendarEntry.fromMeeting(meeting, notes: notes));
+
+        entries.add(
+          CalendarEntry.fromMeeting(
+            meeting,
+            notes: notes,
+          ),
+        );
       }
-      
-      // Sort by start time
+
       entries.sort((a, b) => a.startTime.compareTo(b.startTime));
-      
+
       yield entries;
     }
   }
 
-  /// Get all calendar entries for a user (bookmarked sessions + approved meetings)
+  /// One-time calendar entries for the active event.
+  ///
+  /// Role logic:
+  /// - attendee/staff: bookmarked active-event sessions + meetings
+  /// - speaker/admin: meetings only
   Future<List<CalendarEntry>> getCalendarEntries({
     required String userId,
     required String eventId,
     required List<String> bookmarkedSessionIds,
+    required bool includeSessions,
   }) async {
-    print('📅 CALENDAR: Fetching entries for user: $userId, event: $eventId');
-    print('📅 CALENDAR: Bookmarked sessions: ${bookmarkedSessionIds.length} IDs');
-    
     final List<CalendarEntry> entries = [];
-    
-    // Fetch bookmarked sessions
-    final sessions = await _getBookmarkedSessions(eventId, bookmarkedSessionIds);
-    print('📅 CALENDAR: Fetched ${sessions.length} sessions from DB');
-    
-    for (final session in sessions) {
-      print('  📌 Session: ${session.id} - ${session.title}');
-      entries.add(CalendarEntry.fromSession(session));
+
+    if (includeSessions) {
+      final sessions = await _getBookmarkedSessions(
+        eventId: eventId,
+        sessionIds: bookmarkedSessionIds,
+      );
+
+      for (final session in sessions) {
+        final notes = await getEntryNotes(
+          userId: userId,
+          entryId: session.id,
+          entryType: CalendarEntryType.session,
+        );
+
+        entries.add(
+          CalendarEntry.fromSession(
+            session,
+            notes: notes,
+          ),
+        );
+      }
     }
-    
-    // Fetch approved meetings
-    final meetings = await _getApprovedMeetings(userId);
-    print('📅 CALENDAR: Fetched ${meetings.length} meetings from DB');
-    
+
+    final meetings = await _getMeetings(
+      userId: userId,
+      eventId: eventId,
+    );
+
     for (final meeting in meetings) {
-      print('  🤝 Meeting: ${meeting.id}');
-      entries.add(CalendarEntry.fromMeeting(meeting));
+      final notes = await getEntryNotes(
+        userId: userId,
+        entryId: meeting.id,
+        entryType: CalendarEntryType.meeting,
+      );
+
+      entries.add(
+        CalendarEntry.fromMeeting(
+          meeting,
+          notes: notes,
+        ),
+      );
     }
-    
-    print('📅 CALENDAR: Total entries created: ${entries.length}');
-    
-    // Sort by start time
+
     entries.sort((a, b) => a.startTime.compareTo(b.startTime));
-    
+
     return entries;
   }
 
-  /// Get stream of bookmarked sessions for the current event
-  Stream<List<Session>> _getBookmarkedSessionsStream(String eventId, List<String> sessionIds) {
+  /// Bookmarked sessions from active event only.
+  ///
+  /// We fetch sessions by eventId first, then filter bookmark IDs locally.
+  /// This avoids Firestore whereIn limit issues when user has more than 10 bookmarks.
+  Stream<List<Session>> _getBookmarkedSessionsStream({
+    required String eventId,
+    required List<String> sessionIds,
+  }) {
     if (sessionIds.isEmpty) {
       return Stream.value([]);
     }
 
+    final bookmarkedIdsSet = sessionIds.toSet();
+
     return _firestore
         .collection('sessions')
         .where('eventId', isEqualTo: eventId)
-        .where(FieldPath.documentId, whereIn: sessionIds)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => Session.fromFirestore(doc)).toList());
+        .map((snapshot) {
+      final sessions = snapshot.docs
+          .where((doc) => bookmarkedIdsSet.contains(doc.id))
+          .map((doc) => Session.fromFirestore(doc))
+          .toList();
+
+      sessions.sort((a, b) => a.startTime.compareTo(b.startTime));
+
+      return sessions;
+    });
   }
 
-  /// Get stream of approved meetings for the user
-  Stream<List<Meeting>> _getApprovedMeetingsStream(String userId) {
+  /// Active event meetings only.
+  ///
+  /// Shows meetings that appear in My Meetings:
+  /// - pending
+  /// - accepted
+  ///
+  /// Rejected meetings are excluded from calendar.
+  Stream<List<Meeting>> _getMeetingsStream({
+    required String userId,
+    required String eventId,
+  }) {
     return _firestore
         .collection('meetings')
         .where('memberIds', arrayContains: userId)
-        .where('status', isEqualTo: 'accepted')
+        .where('eventId', isEqualTo: eventId)
+        .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) => Meeting.fromFirestore(doc)).toList());
+        .map((snapshot) {
+      final meetings = snapshot.docs
+          .map((doc) => Meeting.fromFirestore(doc))
+          .where((meeting) {
+        return meeting.status == 'pending' || meeting.status == 'accepted';
+      }).toList();
+
+      meetings.sort(
+        (a, b) => a.proposedTime.toDate().compareTo(b.proposedTime.toDate()),
+      );
+
+      return meetings;
+    });
   }
 
-  /// Get bookmarked sessions for the current event
-  Future<List<Session>> _getBookmarkedSessions(String eventId, List<String> sessionIds) async {
+  /// Bookmarked sessions from active event only.
+  Future<List<Session>> _getBookmarkedSessions({
+    required String eventId,
+    required List<String> sessionIds,
+  }) async {
     if (sessionIds.isEmpty) {
       return [];
     }
 
+    final bookmarkedIdsSet = sessionIds.toSet();
+
     final snapshot = await _firestore
         .collection('sessions')
         .where('eventId', isEqualTo: eventId)
-        .where(FieldPath.documentId, whereIn: sessionIds)
         .get();
-    
-    return snapshot.docs.map((doc) => Session.fromFirestore(doc)).toList();
+
+    final sessions = snapshot.docs
+        .where((doc) => bookmarkedIdsSet.contains(doc.id))
+        .map((doc) => Session.fromFirestore(doc))
+        .toList();
+
+    sessions.sort((a, b) => a.startTime.compareTo(b.startTime));
+
+    return sessions;
   }
 
-  /// Get approved meetings for the user
-  Future<List<Meeting>> _getApprovedMeetings(String userId) async {
+  /// Active event meetings only.
+  Future<List<Meeting>> _getMeetings({
+    required String userId,
+    required String eventId,
+  }) async {
     final snapshot = await _firestore
         .collection('meetings')
         .where('memberIds', arrayContains: userId)
-        .where('status', isEqualTo: 'accepted')
+        .where('eventId', isEqualTo: eventId)
+        .orderBy('createdAt', descending: true)
         .get();
-    
-    return snapshot.docs.map((doc) => Meeting.fromFirestore(doc)).toList();
+
+    final meetings = snapshot.docs
+        .map((doc) => Meeting.fromFirestore(doc))
+        .where((meeting) {
+      return meeting.status == 'pending' || meeting.status == 'accepted';
+    }).toList();
+
+    meetings.sort(
+      (a, b) => a.proposedTime.toDate().compareTo(b.proposedTime.toDate()),
+    );
+
+    return meetings;
   }
 
-  /// Save custom notes for a calendar entry
+  /// Save custom notes for a calendar entry.
   Future<void> saveEntryNotes({
     required String userId,
     required String entryId,
@@ -161,7 +268,7 @@ class CalendarRepository {
     });
   }
 
-  /// Get custom notes for a calendar entry
+  /// Get custom notes for a calendar entry.
   Future<String?> getEntryNotes({
     required String userId,
     required String entryId,
@@ -174,9 +281,8 @@ class CalendarRepository {
         .doc('${entryType.name}_$entryId')
         .get();
 
-    if (doc.exists) {
-      return doc.data()?['notes'] as String?;
-    }
-    return null;
+    if (!doc.exists) return null;
+
+    return doc.data()?['notes'] as String?;
   }
 }

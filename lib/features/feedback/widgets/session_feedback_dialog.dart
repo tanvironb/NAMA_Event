@@ -21,13 +21,14 @@ class SessionFeedbackDialog extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<SessionFeedbackDialog> createState() => _SessionFeedbackDialogState();
+  ConsumerState<SessionFeedbackDialog> createState() =>
+      _SessionFeedbackDialogState();
 }
 
 class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
   int _selectedRating = 0;
   bool _isAnonymous = false;
-  final _commentController = TextEditingController();
+  final TextEditingController _commentController = TextEditingController();
   bool _isSubmitting = false;
 
   @override
@@ -51,6 +52,7 @@ class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
 
     try {
       final feedbackRepo = FeedbackRepository();
+
       await feedbackRepo.submitFeedback(
         sessionId: widget.sessionId,
         userId: widget.currentUser.uid,
@@ -61,31 +63,32 @@ class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
         userRole: widget.currentUser.role,
       );
 
-      if (mounted) {
-        Navigator.of(context).pop();
-        widget.onSubmitted();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Thank you for your feedback!'),
-            backgroundColor: AppColors.successGreen,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      Navigator.of(context).pop();
+      widget.onSubmitted();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Thank you for your feedback!'),
+          backgroundColor: AppColors.successGreen,
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to submit feedback: $e'),
-            backgroundColor: AppColors.errorRed,
-          ),
-        );
-      }
+      if (!mounted) return;
+
+      setState(() => _isSubmitting = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit feedback: $e'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
     }
   }
 
   Future<void> _handleDismiss() async {
-    // Show confirmation dialog
     final shouldDismiss = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -113,21 +116,22 @@ class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
     if (shouldDismiss == true && mounted) {
       try {
         final feedbackRepo = FeedbackRepository();
+
         await feedbackRepo.dismissFeedback(
           userId: widget.currentUser.uid,
           sessionId: widget.sessionId,
         );
-        
-        if (mounted) {
-          Navigator.of(context).pop();
-          widget.onDismissed();
-        }
+
+        if (!mounted) return;
+
+        Navigator.of(context).pop();
+        widget.onDismissed();
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: $e')),
-          );
-        }
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
       }
     }
   }
@@ -139,17 +143,19 @@ class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
   @override
   Widget build(BuildContext context) {
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
       child: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with close button
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
@@ -158,17 +164,18 @@ class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
                         const Text(
                           'Session Feedback',
                           style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
                             color: AppColors.navyBlue,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 5),
                         Text(
                           widget.sessionTitle,
                           style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             color: AppColors.textSecondary,
+                            height: 1.25,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -177,105 +184,116 @@ class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: AppColors.textSecondary),
-                    onPressed: _handleDismiss,
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.close,
+                      color: AppColors.textSecondary,
+                      size: 21,
+                    ),
+                    onPressed: _isSubmitting ? null : _handleDismiss,
                   ),
                 ],
               ),
-              
-              const SizedBox(height: 24),
-              
-              // Rating Section
+              const SizedBox(height: 22),
               const Text(
                 'How would you rate this session?',
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 16),
-              
-              // Star Rating
+              const SizedBox(height: 14),
               Center(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 3,
                   children: List.generate(5, (index) {
                     final starNumber = index + 1;
                     final isSelected = starNumber <= _selectedRating;
-                    
+
                     return GestureDetector(
-                      onTap: () => setState(() => _selectedRating = starNumber),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeInOut,
-                        transform: Matrix4.identity()
-                          ..scale(isSelected ? 1.1 : 1.0),
+                      onTap: _isSubmitting
+                          ? null
+                          : () {
+                              setState(() => _selectedRating = starNumber);
+                            },
+                      child: AnimatedScale(
+                        scale: isSelected ? 1.08 : 1.0,
+                        duration: const Duration(milliseconds: 160),
                         child: Icon(
                           isSelected ? Icons.star : Icons.star_border,
-                          size: 48,
-                          color: isSelected ? AppColors.goldenYellow : AppColors.lightGray,
+                          size: 40,
+                          color: isSelected
+                              ? AppColors.goldenYellow
+                              : AppColors.lightGray,
                         ),
                       ),
                     );
                   }),
                 ),
               ),
-              
-              const SizedBox(height: 24),
-              
-              // Comment Section
+              const SizedBox(height: 22),
               const Text(
                 'Additional Comments (Optional)',
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                   color: AppColors.textPrimary,
                 ),
               ),
-              const SizedBox(height: 12),
-              
+              const SizedBox(height: 10),
               TextField(
                 controller: _commentController,
+                enabled: !_isSubmitting,
                 maxLines: 4,
                 maxLength: 500,
+                style: const TextStyle(fontSize: 13),
                 decoration: InputDecoration(
                   hintText: 'Share your thoughts about the session...',
-                  hintStyle: const TextStyle(color: AppColors.textSecondary),
+                  hintStyle: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: AppColors.lightGray),
                   ),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     borderSide: const BorderSide(color: AppColors.lightGray),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: const BorderSide(color: AppColors.navyBlue, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(
+                      color: AppColors.navyBlue,
+                      width: 1.6,
+                    ),
                   ),
                   filled: true,
                   fillColor: AppColors.surface,
                 ),
               ),
-              
-              const SizedBox(height: 16),
-              
-              // Anonymous Checkbox
+              const SizedBox(height: 10),
               CheckboxListTile(
                 value: _isAnonymous,
-                onChanged: (value) => setState(() => _isAnonymous = value ?? false),
+                onChanged: _isSubmitting
+                    ? null
+                    : (value) {
+                        setState(() => _isAnonymous = value ?? false);
+                      },
                 title: const Text(
                   'Submit as Anonymous',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 subtitle: const Text(
                   'Your identity will be hidden from the speaker',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     color: AppColors.textSecondary,
                   ),
                 ),
@@ -283,27 +301,25 @@ class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
               ),
-              
-              const SizedBox(height: 24),
-              
-              // Action Buttons
+              const SizedBox(height: 18),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _isSubmitting ? null : _handleReviewLater,
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
                         side: const BorderSide(color: AppColors.navyBlue),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                       child: const Text(
                         'Review Later',
                         style: TextStyle(
                           color: AppColors.navyBlue,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
                         ),
                       ),
                     ),
@@ -313,17 +329,17 @@ class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
                     child: ElevatedButton(
                       onPressed: _isSubmitting ? null : _submitFeedback,
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
                         backgroundColor: AppColors.navyBlue,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                       child: _isSubmitting
                           ? const SizedBox(
-                              width: 20,
-                              height: 20,
+                              width: 18,
+                              height: 18,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
                                 color: Colors.white,
@@ -332,7 +348,8 @@ class _SessionFeedbackDialogState extends ConsumerState<SessionFeedbackDialog> {
                           : const Text(
                               'Submit',
                               style: TextStyle(
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
                               ),
                             ),
                     ),

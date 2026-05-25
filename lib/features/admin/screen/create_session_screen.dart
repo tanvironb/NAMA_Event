@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -31,8 +32,6 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   final _sessionLocationController = TextEditingController();
   final _liveStreamController = TextEditingController();
 
-  final List<_SpeakerFormData> _speakers = [_SpeakerFormData()];
-
   DateTime? _selectedDate;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
@@ -46,6 +45,8 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   int _priority = 3;
   bool _isChatEnabled = true;
   bool _isSaving = false;
+
+  final List<String?> _selectedSpeakerIds = [null];
 
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _textMuted = Color(0xFF6B7280);
@@ -68,12 +69,71 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     _sessionDescriptionController.dispose();
     _sessionLocationController.dispose();
     _liveStreamController.dispose();
+    super.dispose();
+  }
 
-    for (final speaker in _speakers) {
-      speaker.dispose();
+  Stream<List<_SpeakerOption>> _speakersStream() {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'speaker')
+        .where('eventIds', arrayContains: widget.eventId)
+        .snapshots()
+        .map((snapshot) {
+      final speakers = snapshot.docs.map((doc) {
+        final data = doc.data();
+
+        return _SpeakerOption(
+          id: doc.id,
+          name: (data['name'] ?? '').toString(),
+          email: (data['email'] ?? '').toString(),
+          company: (data['company'] ?? '').toString(),
+        );
+      }).toList();
+
+      speakers.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+
+      return speakers;
+    });
+  }
+
+  Future<String> _getCurrentUserRole() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+
+      if (currentUser == null) return '';
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      final userData = userDoc.data();
+
+      return (userData?['role'] ?? '').toString().toLowerCase().trim();
+    } catch (e) {
+      debugPrint('Failed to get current user role: $e');
+      return '';
+    }
+  }
+
+  Future<void> _redirectAfterCreate() async {
+    final role = await _getCurrentUserRole();
+
+    if (!mounted) return;
+
+    if (role == 'admin') {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const AdminDashboardScreen(),
+        ),
+        (route) => false,
+      );
+      return;
     }
 
-    super.dispose();
+    Navigator.of(context).pop();
   }
 
   Future<void> _pickSessionImage() async {
@@ -130,26 +190,28 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
     final uploadTask = await ref.putData(
       imageBytes,
-      SettableMetadata(
-        contentType: 'image/jpeg',
-      ),
+      SettableMetadata(contentType: 'image/jpeg'),
     );
 
     return uploadTask.ref.getDownloadURL();
   }
 
-  void _addMoreSpeaker() {
+  void _addSpeakerDropdown() {
     setState(() {
-      _speakers.add(_SpeakerFormData());
+      _selectedSpeakerIds.add(null);
     });
   }
 
-  void _removeSpeaker(int index) {
-    if (_speakers.length == 1) return;
+  void _removeSpeakerDropdown(int index) {
+    if (_selectedSpeakerIds.length == 1) {
+      setState(() {
+        _selectedSpeakerIds[index] = null;
+      });
+      return;
+    }
 
     setState(() {
-      final removedSpeaker = _speakers.removeAt(index);
-      removedSpeaker.dispose();
+      _selectedSpeakerIds.removeAt(index);
     });
   }
 
@@ -160,14 +222,6 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     _sessionDescriptionController.clear();
     _sessionLocationController.clear();
     _liveStreamController.clear();
-
-    for (final speaker in _speakers) {
-      speaker.dispose();
-    }
-
-    _speakers
-      ..clear()
-      ..add(_SpeakerFormData());
 
     setState(() {
       _selectedDate = null;
@@ -180,6 +234,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       _venueImageBytes = null;
       _sessionImageName = null;
       _venueImageName = null;
+      _selectedSpeakerIds
+        ..clear()
+        ..add(null);
     });
   }
 
@@ -280,74 +337,23 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     return '$hour:$minute $period';
   }
 
-  Future<String> _createOrGetSpeakerProfile(_SpeakerFormData speaker) async {
-    final email = speaker.emailController.text.trim().toLowerCase();
+  bool _validateSelectedSpeakers() {
+    final selectedIds = _selectedSpeakerIds
+        .whereType<String>()
+        .where((id) => id.trim().isNotEmpty)
+        .toList();
 
-    if (email.isNotEmpty) {
-      final existingSpeaker = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-
-      if (existingSpeaker.docs.isNotEmpty) {
-        final speakerId = existingSpeaker.docs.first.id;
-
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(speakerId)
-            .update({
-          'name': speaker.nameController.text.trim(),
-          'email': email,
-          'role': 'speaker',
-          'title': speaker.roleController.text.trim(),
-          'position': speaker.positionController.text.trim(),
-          'company': speaker.companyController.text.trim(),
-          'bio': speaker.bioController.text.trim(),
-          'status': 'approved',
-
-          // Connect this speaker to the current event.
-          'eventIds': FieldValue.arrayUnion([widget.eventId]),
-
-          // AppUser supports: anonymous, minimal, full.
-          'profileVisibility': 'full',
-
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        return speakerId;
-      }
+    if (selectedIds.isEmpty) {
+      _showMessage('Please select at least one speaker.');
+      return false;
     }
 
-    final speakerDoc = FirebaseFirestore.instance.collection('users').doc();
+    if (selectedIds.toSet().length != selectedIds.length) {
+      _showMessage('You selected the same speaker more than once.');
+      return false;
+    }
 
-    await speakerDoc.set({
-      'uid': speakerDoc.id,
-      'name': speaker.nameController.text.trim(),
-      'email': email,
-      'role': 'speaker',
-      'title': speaker.roleController.text.trim(),
-      'position': speaker.positionController.text.trim(),
-      'company': speaker.companyController.text.trim(),
-      'bio': speaker.bioController.text.trim(),
-      'profileImageUrl': '',
-      'status': 'approved',
-      'points': 0,
-
-      // Connect this new speaker to the current event.
-      'eventIds': [widget.eventId],
-
-      // AppUser supports: anonymous, minimal, full.
-      'profileVisibility': 'full',
-
-      'needsPrivacySelection': false,
-      'createdByAdmin': true,
-      'authAccountCreated': false,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-
-    return speakerDoc.id;
+    return true;
   }
 
   Future<bool> _saveSessionToFirebase() async {
@@ -367,6 +373,10 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
     if (_endTime == null) {
       _showMessage('Please select end time.');
+      return false;
+    }
+
+    if (!_validateSelectedSpeakers()) {
       return false;
     }
 
@@ -391,12 +401,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final List<String> speakerIds = [];
-
-      for (final speaker in _speakers) {
-        final speakerId = await _createOrGetSpeakerProfile(speaker);
-        speakerIds.add(speakerId);
-      }
+      final speakerIds = _selectedSpeakerIds
+          .whereType<String>()
+          .where((id) => id.trim().isNotEmpty)
+          .toSet()
+          .toList();
 
       final sessionDoc = FirebaseFirestore.instance.collection('sessions').doc();
 
@@ -444,6 +453,14 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
+      await FirebaseFirestore.instance.collection('events').doc(widget.eventId).set(
+        {
+          'status': 'active_sessions',
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
       return true;
     } catch (e) {
       _showMessage('Failed to create session: $e');
@@ -455,19 +472,16 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     }
   }
 
-  Future<void> _createSessionAndGoDashboard() async {
+  Future<void> _createSessionAndRedirect() async {
     final saved = await _saveSessionToFirebase();
 
     if (!saved || !mounted) return;
 
     _showMessage('Session created successfully.');
 
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(
-        builder: (_) => const AdminDashboardScreen(),
-      ),
-      (route) => false,
-    );
+    await Future.delayed(const Duration(milliseconds: 350));
+
+    await _redirectAfterCreate();
   }
 
   Future<void> _addMoreSession() async {
@@ -559,7 +573,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Add session details and assign speaker profiles.',
+                'Add session details and assign speakers from dropdown.',
                 style: TextStyle(
                   color: _textMuted,
                   fontSize: 13.5,
@@ -596,7 +610,6 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                             maxLength: 200,
                             suffixText: '$descriptionLength/200',
                             onChanged: (_) => setState(() {}),
-                            validator: null,
                           ),
                           const SizedBox(height: 15),
                           Row(
@@ -703,50 +716,96 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
-                    _SectionCard(
-                      title: 'Speaker Profile',
-                      subtitle:
-                          'Create speaker profiles and assign them to this session.',
-                      child: Column(
-                        children: [
-                          ...List.generate(_speakers.length, (index) {
-                            return _SpeakerFormCard(
-                              index: index,
-                              speaker: _speakers[index],
-                              canRemove: _speakers.length > 1,
-                              onRemove: () => _removeSpeaker(index),
-                            );
-                          }),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            height: 44,
-                            child: OutlinedButton.icon(
-                              onPressed: _addMoreSpeaker,
-                              icon: const Icon(
-                                Icons.add_rounded,
-                                size: 18,
-                              ),
-                              label: const Text(
-                                'Add More Speaker',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: _primaryColor,
-                                side: const BorderSide(
-                                  color: _fieldBorder,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    StreamBuilder<List<_SpeakerOption>>(
+                      stream: _speakersStream(),
+                      builder: (context, snapshot) {
+                        final speakers = snapshot.data ?? [];
+
+                        return _SectionCard(
+                          title: 'Assign Speaker',
+                          subtitle:
+                              'Select speaker accounts created by admin for this event.',
+                          child: snapshot.connectionState ==
+                                  ConnectionState.waiting
+                              ? const Padding(
+                                  padding: EdgeInsets.all(18),
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      color: _primaryColor,
+                                    ),
+                                  ),
+                                )
+                              : speakers.isEmpty
+                                  ? const _NoSpeakersBox()
+                                  : Column(
+                                      children: [
+                                        ...List.generate(
+                                          _selectedSpeakerIds.length,
+                                          (index) {
+                                            return Padding(
+                                              padding: EdgeInsets.only(
+                                                bottom: index ==
+                                                        _selectedSpeakerIds
+                                                                .length -
+                                                            1
+                                                    ? 0
+                                                    : 12,
+                                              ),
+                                              child: _SpeakerDropdownField(
+                                                label: 'Speaker ${index + 1}',
+                                                value:
+                                                    _selectedSpeakerIds[index],
+                                                speakers: speakers,
+                                                onChanged: (value) {
+                                                  setState(() {
+                                                    _selectedSpeakerIds[index] =
+                                                        value;
+                                                  });
+                                                },
+                                                onRemove: () =>
+                                                    _removeSpeakerDropdown(
+                                                  index,
+                                                ),
+                                                canRemove:
+                                                    _selectedSpeakerIds.length >
+                                                        1,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          height: 44,
+                                          child: OutlinedButton.icon(
+                                            onPressed: _addSpeakerDropdown,
+                                            icon: const Icon(
+                                              Icons.add_rounded,
+                                              size: 18,
+                                            ),
+                                            label: const Text(
+                                              'Add Another Speaker',
+                                              style: TextStyle(
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: _primaryColor,
+                                              side: const BorderSide(
+                                                color: _fieldBorder,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 14),
                     _SwitchCard(
@@ -776,7 +835,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                             icon: Icons.check_rounded,
                             isPrimary: true,
                             isLoading: _isSaving,
-                            onTap: _createSessionAndGoDashboard,
+                            onTap: _createSessionAndRedirect,
                           ),
                         ),
                       ],
@@ -805,21 +864,284 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   }
 }
 
-class _SpeakerFormData {
-  final nameController = TextEditingController();
-  final emailController = TextEditingController();
-  final roleController = TextEditingController();
-  final positionController = TextEditingController();
-  final companyController = TextEditingController();
-  final bioController = TextEditingController();
+class _SpeakerOption {
+  final String id;
+  final String name;
+  final String email;
+  final String company;
 
-  void dispose() {
-    nameController.dispose();
-    emailController.dispose();
-    roleController.dispose();
-    positionController.dispose();
-    companyController.dispose();
-    bioController.dispose();
+  const _SpeakerOption({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.company,
+  });
+
+  String get displayName {
+    final cleanName = name.trim().isEmpty ? 'Unnamed Speaker' : name.trim();
+
+    if (company.trim().isNotEmpty) {
+      return '$cleanName • $company';
+    }
+
+    return cleanName;
+  }
+
+  String get subtitle {
+    if (email.trim().isNotEmpty) return email.trim();
+    return 'Speaker';
+  }
+}
+
+class _NoSpeakersBox extends StatelessWidget {
+  const _NoSpeakersBox();
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFE1DDF0),
+        ),
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.person_off_outlined,
+            color: _primaryColor,
+            size: 28,
+          ),
+          SizedBox(height: 8),
+          Text(
+            'No speaker accounts found',
+            style: TextStyle(
+              color: _primaryColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 5),
+          Text(
+            'Admin must create speaker accounts inside Create Event first.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 11.5,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpeakerDropdownField extends StatelessWidget {
+  final String label;
+  final String? value;
+  final List<_SpeakerOption> speakers;
+  final ValueChanged<String?> onChanged;
+  final VoidCallback onRemove;
+  final bool canRemove;
+
+  const _SpeakerDropdownField({
+    required this.label,
+    required this.value,
+    required this.speakers,
+    required this.onChanged,
+    required this.onRemove,
+    required this.canRemove,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    final validValue = speakers.any((speaker) => speaker.id == value)
+        ? value
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 52,
+                child: DropdownButtonFormField<String>(
+                  value: validValue,
+                  isExpanded: true,
+                  menuMaxHeight: 300,
+                  onChanged: onChanged,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Required';
+                    }
+                    return null;
+                  },
+                  selectedItemBuilder: (context) {
+                    return speakers.map((speaker) {
+                      return Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          speaker.displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF1F2937),
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      );
+                    }).toList();
+                  },
+                  icon: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: Color(0xFF454062),
+                    size: 18,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Select speaker',
+                    hintStyle: const TextStyle(
+                      color: _textMuted,
+                      fontSize: 12,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.person_outline_rounded,
+                      color: _primaryColor,
+                      size: 19,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 11,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: const BorderSide(
+                        color: _fieldBorder,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: const BorderSide(
+                        color: _primaryColor,
+                        width: 1.1,
+                      ),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: const BorderSide(
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                    focusedErrorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: const BorderSide(
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
+                  items: speakers.map((speaker) {
+                    return DropdownMenuItem<String>(
+                      value: speaker.id,
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: Row(
+                          children: [
+                            Container(
+                              height: 30,
+                              width: 30,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF4F1FF),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.person_outline_rounded,
+                                color: _primaryColor,
+                                size: 17,
+                              ),
+                            ),
+                            const SizedBox(width: 9),
+                            Expanded(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    speaker.displayName,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Color(0xFF1F2937),
+                                      fontSize: 12.2,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  Text(
+                                    speaker.subtitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: _textMuted,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: onRemove,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                height: 48,
+                width: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: _fieldBorder,
+                  ),
+                ),
+                child: Icon(
+                  canRemove
+                      ? Icons.delete_outline_rounded
+                      : Icons.close_rounded,
+                  color: canRemove ? Colors.redAccent : _primaryColor,
+                  size: 20,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 }
 
@@ -991,147 +1313,6 @@ class _ImageUploadField extends StatelessWidget {
   }
 }
 
-class _SpeakerFormCard extends StatelessWidget {
-  final int index;
-  final _SpeakerFormData speaker;
-  final bool canRemove;
-  final VoidCallback onRemove;
-
-  const _SpeakerFormCard({
-    required this.index,
-    required this.speaker,
-    required this.canRemove,
-    required this.onRemove,
-  });
-
-  static const Color _primaryColor = Color(0xFF1B0F72);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.only(bottom: index == 0 ? 0 : 14),
-      padding: EdgeInsets.only(top: index == 0 ? 0 : 14),
-      decoration: BoxDecoration(
-        border: index == 0
-            ? null
-            : const Border(
-                top: BorderSide(
-                  color: Color(0xFFE8E4F8),
-                ),
-              ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (index > 0)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Text(
-                    'Speaker ${index + 1}',
-                    style: const TextStyle(
-                      color: _primaryColor,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (canRemove)
-                    InkWell(
-                      onTap: onRemove,
-                      borderRadius: BorderRadius.circular(10),
-                      child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(
-                          Icons.close_rounded,
-                          color: Colors.red,
-                          size: 20,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          _InputField(
-            label: 'Speaker Name',
-            controller: speaker.nameController,
-            hint: 'Enter speaker name',
-            icon: Icons.person_outline_rounded,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Speaker name is required';
-              }
-              return null;
-            },
-          ),
-          const SizedBox(height: 15),
-          _InputField(
-            label: 'Speaker Email',
-            controller: speaker.emailController,
-            hint: 'Optional speaker email',
-            icon: Icons.mail_outline_rounded,
-            keyboardType: TextInputType.emailAddress,
-            validator: (value) {
-              final email = value?.trim() ?? '';
-
-              if (email.isEmpty) return null;
-
-              if (!email.contains('@')) {
-                return 'Enter valid email';
-              }
-
-              return null;
-            },
-          ),
-          const SizedBox(height: 15),
-          Row(
-            children: [
-              Expanded(
-                child: _InputField(
-                  label: 'Role',
-                  controller: speaker.roleController,
-                  hint: 'Speaker / Moderator',
-                  icon: Icons.badge_outlined,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Role is required';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _InputField(
-                  label: 'Position',
-                  controller: speaker.positionController,
-                  hint: 'Optional',
-                  icon: Icons.work_outline_rounded,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 15),
-          _InputField(
-            label: 'Company',
-            controller: speaker.companyController,
-            hint: 'Organization',
-            icon: Icons.business_outlined,
-          ),
-          const SizedBox(height: 15),
-          _InputField(
-            label: 'Bio',
-            controller: speaker.bioController,
-            hint: 'Optional short bio',
-            icon: Icons.info_outline_rounded,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SectionCard extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -1288,6 +1469,7 @@ class _PriorityField extends StatelessWidget {
           height: 48,
           child: DropdownButtonFormField<int>(
             value: value,
+            isExpanded: true,
             onChanged: (newValue) {
               if (newValue != null) onChanged(newValue);
             },
@@ -1557,6 +1739,7 @@ class _DropdownField extends StatelessWidget {
           height: 48,
           child: DropdownButtonFormField<String>(
             value: value,
+            isExpanded: true,
             onChanged: onChanged,
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
@@ -1623,6 +1806,8 @@ class _DropdownField extends StatelessWidget {
                     value: item,
                     child: Text(
                       item,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFF1F2937),
                         fontSize: 12,

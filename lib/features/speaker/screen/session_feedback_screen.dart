@@ -124,11 +124,11 @@ class SessionFeedbackScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Session Feedback',
+                          'Ratings & Reviews',
                           style:
                               Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w800,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
                                     color: AppColors.namaNavyBlue,
                                   ),
                         ),

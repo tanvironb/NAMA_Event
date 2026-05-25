@@ -18,7 +18,7 @@ dependencies:
   firebase_core: ^3.1.1
   firebase_auth: ^5.1.1
   cloud_firestore: ^5.0.2
-  firebase_storage: ^12.3.6
+  firebase_storage: ^12.4.10
 
   # State Management
   flutter_riverpod: ^2.5.1
@@ -58,11 +58,11 @@ dependencies:
   collection: ^1.17.2
 
   # For QR download functionality
-  pdf: ^3.11.1
+  pdf: ^3.12.0
   
   # For relative time formatting
   timeago: ^3.7.0
-  printing: ^5.13.4
+  printing: ^5.14.3
   share_plus: ^10.1.3
   path_provider: ^2.1.5
 
@@ -73,7 +73,7 @@ dependencies:
   shared_preferences: ^2.2.2
 
   # For image selection and cropping
-  image_picker: ^1.1.2
+  image_picker: ^1.2.2
   image_cropper: ^8.0.2
   
   # For cached network images

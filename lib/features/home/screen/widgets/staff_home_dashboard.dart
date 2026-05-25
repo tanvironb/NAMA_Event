@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:card_swiper/card_swiper.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
+
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/staff_quick_actions.dart';
@@ -102,6 +104,30 @@ class StaffHomeDashboard extends ConsumerWidget {
       orElse: () => 'Explore our events',
     );
 
+    final eventDate = eventAsync.maybeWhen(
+      data: (event) {
+        final DateTime startDate = event.startDate;
+        final DateTime endDate = event.endDate;
+
+        final bool sameDay = startDate.year == endDate.year &&
+            startDate.month == endDate.month &&
+            startDate.day == endDate.day;
+
+        if (sameDay) {
+          return DateFormat('EEEE, MMM d, yyyy').format(startDate);
+        }
+
+        final bool sameYear = startDate.year == endDate.year;
+
+        if (sameYear) {
+          return '${DateFormat('MMM d').format(startDate)} - ${DateFormat('MMM d, yyyy').format(endDate)}';
+        }
+
+        return '${DateFormat('MMM d, yyyy').format(startDate)} - ${DateFormat('MMM d, yyyy').format(endDate)}';
+      },
+      orElse: () => '',
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
       child: Column(
@@ -170,6 +196,20 @@ class StaffHomeDashboard extends ConsumerWidget {
               ),
             ),
           ),
+          if (eventDate.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                eventDate,
+                style: const TextStyle(
+                  color: Color(0xFF9CA3AF),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

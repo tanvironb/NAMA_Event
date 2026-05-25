@@ -1,11 +1,13 @@
 // lib/features/calendar/screens/my_calendar_screen.dart
 
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/features/calendar/models/calendar_entry.dart';
+import 'package:events_app_trueattempt/features/calendar/models/calendar_entry_type.dart';
 import 'package:events_app_trueattempt/features/calendar/providers/calendar_providers.dart';
 import 'package:events_app_trueattempt/features/calendar/screens/day_view_screen.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 class MyCalendarScreen extends ConsumerStatefulWidget {
@@ -19,7 +21,10 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    // Refresh when user opens calendar so active event changes are reflected.
     ref.invalidate(calendarEntriesProvider);
+    ref.invalidate(calendarEntriesByDateProvider);
   }
 
   @override
@@ -58,9 +63,21 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
                   );
                 },
                 loading: () => const Center(child: LoadingIndicator()),
-                error: (error, stack) => Center(
-                  child: Text('Error loading calendar: $error'),
-                ),
+                error: (error, stack) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Text(
+                        'Error loading calendar: $error',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          color: AppColors.namaDarkGray,
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -125,7 +142,7 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
+          const Text(
             'Bookmark sessions or schedule meetings\nto see them here',
             textAlign: TextAlign.center,
             style: TextStyle(
@@ -141,7 +158,7 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
   Widget _buildDayCard(
     BuildContext context,
     DateTime date,
-    List<dynamic> entries,
+    List<CalendarEntry> entries,
   ) {
     final isToday = _isToday(date);
     final dayName = DateFormat('EEE').format(date);
@@ -163,7 +180,10 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
           side: isToday
-              ? const BorderSide(color: AppColors.namaNavyBlue, width: 1.5)
+              ? const BorderSide(
+                  color: AppColors.namaNavyBlue,
+                  width: 1.5,
+                )
               : BorderSide.none,
         ),
         child: Padding(
@@ -189,7 +209,11 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
     );
   }
 
-  Widget _buildDateIndicator(String dayName, String dayNumber, bool isToday) {
+  Widget _buildDateIndicator(
+    String dayName,
+    String dayNumber,
+    bool isToday,
+  ) {
     return Container(
       width: 52,
       padding: const EdgeInsets.symmetric(vertical: 7),
@@ -223,7 +247,7 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
     );
   }
 
-  Widget _buildEntriesPreview(List<dynamic> entries) {
+  Widget _buildEntriesPreview(List<CalendarEntry> entries) {
     if (entries.isEmpty) {
       return const Text(
         'No entries',
@@ -245,8 +269,8 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
     );
   }
 
-  Widget _buildEntryChip(dynamic entry) {
-    final isSession = entry.type.toString().contains('session');
+  Widget _buildEntryChip(CalendarEntry entry) {
+    final isSession = entry.type == CalendarEntryType.session;
     final timeFormat = DateFormat('h:mm a');
 
     final chipColor =
@@ -297,6 +321,7 @@ class _MyCalendarScreenState extends ConsumerState<MyCalendarScreen> {
 
   bool _isToday(DateTime date) {
     final now = DateTime.now();
+
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;

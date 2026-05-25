@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/features/admin/screen/create_session_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -45,11 +47,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   String _visibility = 'Public';
 
   bool _isSaving = false;
+  bool _isLoadingExistingSpeakers = false;
 
   final List<_PartnerInput> _partners = [];
+  final List<_SpeakerInput> _speakers = [];
 
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _textMuted = Color(0xFF6B7280);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
 
   final List<String> _categories = const [
     'Conference',
@@ -69,6 +74,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     if (_partners.isEmpty) {
       _partners.add(_PartnerInput());
+    }
+
+    if (_speakers.isEmpty) {
+      _speakers.add(_SpeakerInput());
+    }
+
+    if (widget.isEditMode) {
+      _loadExistingSpeakersForEdit();
     }
   }
 
@@ -148,6 +161,54 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
   }
 
+  Future<void> _loadExistingSpeakersForEdit() async {
+    if (widget.eventId == null) return;
+
+    setState(() => _isLoadingExistingSpeakers = true);
+
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'speaker')
+          .where('eventIds', arrayContains: widget.eventId)
+          .get();
+
+      if (!mounted) return;
+
+      for (final speaker in _speakers) {
+        speaker.dispose();
+      }
+
+      _speakers.clear();
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+
+        _speakers.add(
+          _SpeakerInput(
+            existingUserId: doc.id,
+            existingAuthAccountCreated: data['authAccountCreated'] == true,
+            name: (data['name'] ?? '').toString(),
+            email: (data['email'] ?? '').toString(),
+            company: (data['company'] ?? '').toString(),
+          ),
+        );
+      }
+
+      if (_speakers.isEmpty) {
+        _speakers.add(_SpeakerInput());
+      }
+
+      setState(() {});
+    } catch (e) {
+      _showMessage('Failed to load speakers: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingExistingSpeakers = false);
+      }
+    }
+  }
+
   @override
   void dispose() {
     _eventNameController.dispose();
@@ -159,6 +220,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     for (final partner in _partners) {
       partner.dispose();
+    }
+
+    for (final speaker in _speakers) {
+      speaker.dispose();
     }
 
     super.dispose();
@@ -296,6 +361,26 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     });
   }
 
+  void _addSpeaker() {
+    setState(() {
+      _speakers.add(_SpeakerInput());
+    });
+  }
+
+  void _removeSpeaker(int index) {
+    if (_speakers.length == 1) {
+      setState(() {
+        _speakers[index].clear();
+      });
+      return;
+    }
+
+    setState(() {
+      final removedSpeaker = _speakers.removeAt(index);
+      removedSpeaker.dispose();
+    });
+  }
+
   Future<void> _pickPartnerLogo(int index) async {
     try {
       final pickedImage = await _imagePicker.pickImage(
@@ -333,6 +418,57 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
       if (!hasLogo) {
         _showMessage('Please add partner logo for $name.');
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool _validateSpeakers() {
+    final usedEmails = <String>{};
+
+    for (int i = 0; i < _speakers.length; i++) {
+      final speaker = _speakers[i];
+
+      final name = speaker.nameController.text.trim();
+      final email = speaker.emailController.text.trim().toLowerCase();
+      final company = speaker.companyController.text.trim();
+      final password = speaker.passwordController.text.trim();
+
+      final isCompletelyEmpty =
+          name.isEmpty && email.isEmpty && company.isEmpty && password.isEmpty;
+
+      if (isCompletelyEmpty) continue;
+
+      if (name.isEmpty) {
+        _showMessage('Please enter speaker name for speaker ${i + 1}.');
+        return false;
+      }
+
+      if (email.isEmpty) {
+        _showMessage('Please enter speaker email for $name.');
+        return false;
+      }
+
+      if (!email.contains('@') || !email.contains('.')) {
+        _showMessage('Please enter a valid email for $name.');
+        return false;
+      }
+
+      if (usedEmails.contains(email)) {
+        _showMessage('Duplicate speaker email: $email');
+        return false;
+      }
+
+      usedEmails.add(email);
+
+      final isNewSpeaker = speaker.existingUserId == null ||
+          speaker.existingUserId!.trim().isEmpty ||
+          speaker.existingAuthAccountCreated == false;
+
+      if (isNewSpeaker && password.length < 6) {
+        _showMessage('Password for $name must be at least 6 characters.');
         return false;
       }
     }
@@ -386,6 +522,107 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     return partnersData;
   }
 
+  Future<String> _createAuthAccountForSpeaker({
+    required String email,
+    required String password,
+  }) async {
+    FirebaseApp? secondaryApp;
+
+    try {
+      final appName =
+          'speaker_creation_${DateTime.now().millisecondsSinceEpoch}';
+
+      secondaryApp = await Firebase.initializeApp(
+        name: appName,
+        options: Firebase.app().options,
+      );
+
+      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
+
+      final credential = await secondaryAuth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      await secondaryAuth.signOut();
+
+      final uid = credential.user?.uid;
+
+      if (uid == null || uid.isEmpty) {
+        throw Exception('Speaker user ID was not created.');
+      }
+
+      return uid;
+    } finally {
+      if (secondaryApp != null) {
+        await secondaryApp.delete();
+      }
+    }
+  }
+
+  Future<void> _createOrUpdateSpeakers(String eventId) async {
+    for (final speaker in _speakers) {
+      final name = speaker.nameController.text.trim();
+      final email = speaker.emailController.text.trim().toLowerCase();
+      final company = speaker.companyController.text.trim();
+      final password = speaker.passwordController.text.trim();
+
+      final isCompletelyEmpty =
+          name.isEmpty && email.isEmpty && company.isEmpty && password.isEmpty;
+
+      if (isCompletelyEmpty) continue;
+
+      String uid = speaker.existingUserId ?? '';
+      bool authAccountCreated = speaker.existingAuthAccountCreated;
+
+      if (uid.isEmpty) {
+        final existingSpeaker = await FirebaseFirestore.instance
+            .collection('users')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+
+        if (existingSpeaker.docs.isNotEmpty) {
+          uid = existingSpeaker.docs.first.id;
+          authAccountCreated =
+              existingSpeaker.docs.first.data()['authAccountCreated'] == true;
+        }
+      }
+
+      if (uid.isEmpty) {
+        uid = await _createAuthAccountForSpeaker(
+          email: email,
+          password: password,
+        );
+        authAccountCreated = true;
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(uid).set(
+        {
+          'uid': uid,
+          'name': name,
+          'email': email,
+          'role': 'speaker',
+          'company': company,
+          'title': 'Speaker',
+          'position': '',
+          'bio': '',
+          'profileImageUrl': '',
+          'status': 'approved',
+          'points': 0,
+          'eventIds': FieldValue.arrayUnion([eventId]),
+          'profileVisibility': 'full',
+          'needsPrivacySelection': false,
+          'createdByAdmin': true,
+          'authAccountCreated': authAccountCreated,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'createdAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    }
+  }
+
   Future<String?> _saveEventToFirebase({
     required bool asDraft,
   }) async {
@@ -409,6 +646,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     if (!_validatePartners()) {
+      return null;
+    }
+
+    if (!_validateSpeakers()) {
       return null;
     }
 
@@ -468,6 +709,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
+
+      await _createOrUpdateSpeakers(docId);
 
       return docId;
     } catch (e) {
@@ -562,85 +805,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   Widget _buildPartnersSection() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE8E4F8),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.018),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
+    return _SectionContainer(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Partners',
-                      style: TextStyle(
-                        color: _primaryColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      'Add event partners and upload their logos.',
-                      style: TextStyle(
-                        color: _textMuted,
-                        fontSize: 11.8,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              InkWell(
-                onTap: _addPartner,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  height: 36,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF4F1FF),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _primaryColor,
-                    ),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.add_rounded,
-                        color: _primaryColor,
-                        size: 17,
-                      ),
-                      SizedBox(width: 5),
-                      Text(
-                        'Add',
-                        style: TextStyle(
-                          color: _primaryColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          _SectionHeader(
+            title: 'Partners',
+            subtitle: 'Add event partners and upload their logos.',
+            onAdd: _addPartner,
           ),
           const SizedBox(height: 15),
           ListView.separated(
@@ -658,6 +830,126 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 onRemove: () => _removePartner(index),
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSpeakersSection() {
+    return _SectionContainer(
+      child: _isLoadingExistingSpeakers
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(18),
+                child: CircularProgressIndicator(
+                  color: _primaryColor,
+                ),
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionHeader(
+                  title: 'Speaker Accounts',
+                  subtitle:
+                      'Admin creates speaker accounts here. Staff/admin can assign them inside Create Session.',
+                  onAdd: _addSpeaker,
+                ),
+                const SizedBox(height: 15),
+                ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: _speakers.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 13),
+                  itemBuilder: (context, index) {
+                    return _SpeakerAccountCard(
+                      index: index,
+                      speaker: _speakers[index],
+                      onRemove: () => _removeSpeaker(index),
+                    );
+                  },
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _buildQuickSetupSection() {
+    return _SectionContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Quick Setup',
+            style: TextStyle(
+              color: _primaryColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          const Text(
+            'Choose the basic event settings.',
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 11.8,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 15),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _ChipGroup(
+                  title: 'Event Format',
+                  selectedValue: _eventFormat,
+                  options: const [
+                    _SetupOption(
+                      label: 'In-person',
+                      icon: Icons.person_outline_rounded,
+                    ),
+                    _SetupOption(
+                      label: 'Online',
+                      icon: Icons.language_rounded,
+                    ),
+                    _SetupOption(
+                      label: 'Hybrid',
+                      icon: Icons.groups_2_outlined,
+                    ),
+                  ],
+                  onSelected: (value) {
+                    setState(() => _eventFormat = value);
+                  },
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 10),
+                width: 1,
+                height: 66,
+                color: const Color(0xFFE4E1EF),
+              ),
+              Expanded(
+                child: _ChipGroup(
+                  title: 'Visibility',
+                  selectedValue: _visibility,
+                  options: const [
+                    _SetupOption(
+                      label: 'Public',
+                      icon: Icons.language_rounded,
+                    ),
+                    _SetupOption(
+                      label: 'Private',
+                      icon: Icons.lock_outline_rounded,
+                    ),
+                  ],
+                  onSelected: (value) {
+                    setState(() => _visibility = value);
+                  },
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -691,8 +983,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               const SizedBox(height: 6),
               Text(
                 widget.isEditMode
-                    ? 'Update event details and continue to sessions.'
-                    : 'Set up a new event for attendees.',
+                    ? 'Update event details, speaker accounts, and continue to sessions.'
+                    : 'Set up a new event and create speaker accounts.',
                 style: const TextStyle(
                   color: _textMuted,
                   fontSize: 13.5,
@@ -702,22 +994,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               const SizedBox(height: 24),
               Form(
                 key: _formKey,
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: const Color(0xFFE8E4F8),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.018),
-                        blurRadius: 12,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
+                child: _SectionContainer(
                   child: Column(
                     children: [
                       _InputField(
@@ -865,99 +1142,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               const SizedBox(height: 14),
               _buildPartnersSection(),
               const SizedBox(height: 14),
-              Container(
-                padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: const Color(0xFFE8E4F8),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.018),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Quick Setup',
-                      style: TextStyle(
-                        color: _primaryColor,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    const Text(
-                      'Choose the basic event settings.',
-                      style: TextStyle(
-                        color: _textMuted,
-                        fontSize: 11.8,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: 15),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: _ChipGroup(
-                            title: 'Event Format',
-                            selectedValue: _eventFormat,
-                            options: const [
-                              _SetupOption(
-                                label: 'In-person',
-                                icon: Icons.person_outline_rounded,
-                              ),
-                              _SetupOption(
-                                label: 'Online',
-                                icon: Icons.language_rounded,
-                              ),
-                              _SetupOption(
-                                label: 'Hybrid',
-                                icon: Icons.groups_2_outlined,
-                              ),
-                            ],
-                            onSelected: (value) {
-                              setState(() => _eventFormat = value);
-                            },
-                          ),
-                        ),
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 10),
-                          width: 1,
-                          height: 66,
-                          color: const Color(0xFFE4E1EF),
-                        ),
-                        Expanded(
-                          child: _ChipGroup(
-                            title: 'Visibility',
-                            selectedValue: _visibility,
-                            options: const [
-                              _SetupOption(
-                                label: 'Public',
-                                icon: Icons.language_rounded,
-                              ),
-                              _SetupOption(
-                                label: 'Private',
-                                icon: Icons.lock_outline_rounded,
-                              ),
-                            ],
-                            onSelected: (value) {
-                              setState(() => _visibility = value);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              _buildSpeakersSection(),
+              const SizedBox(height: 14),
+              _buildQuickSetupSection(),
               const SizedBox(height: 22),
               Row(
                 children: [
@@ -1011,6 +1198,151 @@ class _PartnerInput {
 
   void dispose() {
     nameController.dispose();
+  }
+}
+
+class _SpeakerInput {
+  final String? existingUserId;
+  final bool existingAuthAccountCreated;
+  final TextEditingController nameController;
+  final TextEditingController emailController;
+  final TextEditingController companyController;
+  final TextEditingController passwordController;
+
+  _SpeakerInput({
+    this.existingUserId,
+    this.existingAuthAccountCreated = false,
+    String name = '',
+    String email = '',
+    String company = '',
+  })  : nameController = TextEditingController(text: name),
+        emailController = TextEditingController(text: email),
+        companyController = TextEditingController(text: company),
+        passwordController = TextEditingController();
+
+  void clear() {
+    nameController.clear();
+    emailController.clear();
+    companyController.clear();
+    passwordController.clear();
+  }
+
+  void dispose() {
+    nameController.dispose();
+    emailController.dispose();
+    companyController.dispose();
+    passwordController.dispose();
+  }
+}
+
+class _SectionContainer extends StatelessWidget {
+  final Widget child;
+
+  const _SectionContainer({
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE8E4F8),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.018),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final VoidCallback onAdd;
+
+  const _SectionHeader({
+    required this.title,
+    required this.subtitle,
+    required this.onAdd,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(
+                  color: _primaryColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  color: _textMuted,
+                  fontSize: 11.8,
+                  fontWeight: FontWeight.w500,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+        InkWell(
+          onTap: onAdd,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            height: 36,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F1FF),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _primaryColor,
+              ),
+            ),
+            child: const Row(
+              children: [
+                Icon(
+                  Icons.add_rounded,
+                  color: _primaryColor,
+                  size: 17,
+                ),
+                SizedBox(width: 5),
+                Text(
+                  'Add',
+                  style: TextStyle(
+                    color: _primaryColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -1098,8 +1430,16 @@ class _PartnerCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              const Text(
+                'Partner',
+                style: TextStyle(
+                  color: _primaryColor,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
               Text(
-                'Partner ${index + 1}',
+                ' ${index + 1}',
                 style: const TextStyle(
                   color: _primaryColor,
                   fontSize: 12.5,
@@ -1261,6 +1601,202 @@ class _PartnerNameField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SpeakerAccountCard extends StatefulWidget {
+  final int index;
+  final _SpeakerInput speaker;
+  final VoidCallback onRemove;
+
+  const _SpeakerAccountCard({
+    required this.index,
+    required this.speaker,
+    required this.onRemove,
+  });
+
+  @override
+  State<_SpeakerAccountCard> createState() => _SpeakerAccountCardState();
+}
+
+class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
+  bool _obscurePassword = true;
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    final isExisting = widget.speaker.existingUserId != null &&
+        widget.speaker.existingUserId!.isNotEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFBFF),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _fieldBorder,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Text(
+                'Speaker ${widget.index + 1}',
+                style: const TextStyle(
+                  color: _primaryColor,
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F1FF),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Text(
+                  'Role: Speaker',
+                  style: TextStyle(
+                    color: _primaryColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: widget.onRemove,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  height: 30,
+                  width: 30,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFE8E4F8),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.redAccent,
+                    size: 18,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _InputField(
+            label: 'Speaker Name',
+            controller: widget.speaker.nameController,
+            hint: 'Enter speaker name',
+            icon: Icons.person_outline_rounded,
+          ),
+          const SizedBox(height: 12),
+          _InputField(
+            label: 'Speaker Email',
+            controller: widget.speaker.emailController,
+            hint: 'Enter speaker email',
+            icon: Icons.mail_outline_rounded,
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 12),
+          _InputField(
+            label: 'Company',
+            controller: widget.speaker.companyController,
+            hint: 'Company / organization optional',
+            icon: Icons.business_outlined,
+          ),
+          const SizedBox(height: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isExisting
+                    ? 'Password (leave empty if already created)'
+                    : 'Password',
+                style: const TextStyle(
+                  color: _primaryColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 48,
+                child: TextFormField(
+                  controller: widget.speaker.passwordController,
+                  obscureText: _obscurePassword,
+                  cursorColor: _primaryColor,
+                  style: const TextStyle(
+                    color: Color(0xFF1F2937),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: isExisting
+                        ? 'Optional for existing speaker'
+                        : 'Set speaker password',
+                    hintStyle: const TextStyle(
+                      color: _textMuted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w400,
+                    ),
+                    prefixIcon: const Icon(
+                      Icons.lock_outline_rounded,
+                      color: _primaryColor,
+                      size: 19,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: _primaryColor,
+                        size: 19,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: const BorderSide(
+                        color: _fieldBorder,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(13),
+                      borderSide: const BorderSide(
+                        color: _primaryColor,
+                        width: 1.1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

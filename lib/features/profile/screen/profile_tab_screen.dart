@@ -1,16 +1,21 @@
-// lib/features/profile/screen/profile_tab_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/calendar/screens/my_calendar_screen.dart';
+import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/settings/screen/settings_screen.dart';
 
 class ProfileTabScreen extends ConsumerWidget {
-  const ProfileTabScreen({super.key});
+  final bool hideCalendarAndMeetings;
+
+  const ProfileTabScreen({
+    super.key,
+    this.hideCalendarAndMeetings = false,
+  });
 
   static const Color primaryColor = Color(0xFF24158A);
 
@@ -28,9 +33,15 @@ class ProfileTabScreen extends ConsumerWidget {
             }
 
             final profileImageUrl = appUser.profileImageUrl.trim();
+            final canGoBack = Navigator.of(context).canPop();
 
-            /// Back button only for admin interface/profile.
-            final isAdmin = appUser.role.toLowerCase() == 'admin';
+            final userRole = appUser.role.toLowerCase().trim();
+
+            // Admin and staff should NOT see My Calendar or My Meetings.
+            final shouldHideCalendarAndMeetings =
+                hideCalendarAndMeetings ||
+                userRole == 'staff' ||
+                userRole == 'admin';
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -39,7 +50,7 @@ class ProfileTabScreen extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
                   child: Row(
                     children: [
-                      if (isAdmin) ...[
+                      if (canGoBack) ...[
                         InkWell(
                           onTap: () => Navigator.of(context).pop(),
                           borderRadius: BorderRadius.circular(10),
@@ -94,7 +105,7 @@ class ProfileTabScreen extends ConsumerWidget {
                                   : null,
                               backgroundColor: AppColors.avatarPlaceholder,
                               child: profileImageUrl.isEmpty
-                                  ? Icon(
+                                  ? const Icon(
                                       Icons.person,
                                       size: 54,
                                       color: AppColors.avatarPlaceholderText,
@@ -103,9 +114,7 @@ class ProfileTabScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
-
                         const SizedBox(height: 34),
-
                         _buildMenuItem(
                           context,
                           icon: Icons.person,
@@ -121,9 +130,7 @@ class ProfileTabScreen extends ConsumerWidget {
                             );
                           },
                         ),
-
                         const SizedBox(height: 14),
-
                         _buildMenuItem(
                           context,
                           icon: Icons.notifications_outlined,
@@ -140,26 +147,42 @@ class ProfileTabScreen extends ConsumerWidget {
                           },
                         ),
 
+                        if (!shouldHideCalendarAndMeetings) ...[
+                          const SizedBox(height: 14),
+                          _buildMenuItem(
+                            context,
+                            icon: Icons.calendar_month_outlined,
+                            title: 'My Calendar',
+                            subtitle: 'View your schedule',
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const MyCalendarScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          _buildMenuItem(
+                            context,
+                            icon: Icons.groups_2_outlined,
+                            title: 'My Meetings',
+                            subtitle: 'View meeting requests and schedule',
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      const MyMeetingsScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+
                         const SizedBox(height: 14),
-
-                        _buildMenuItem(
-                          context,
-                          icon: Icons.calendar_month_outlined,
-                          title: 'My Calendar',
-                          subtitle: 'View your schedule',
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) =>
-                                    const MyCalendarScreen(),
-                              ),
-                            );
-                          },
-                        ),
-
-                        const SizedBox(height: 14),
-
                         _buildMenuItem(
                           context,
                           icon: Icons.settings_outlined,
@@ -174,7 +197,6 @@ class ProfileTabScreen extends ConsumerWidget {
                             );
                           },
                         ),
-
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -226,19 +248,23 @@ class ProfileTabScreen extends ConsumerWidget {
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
                 fontSize: 14.5,
+                color: AppColors.textPrimary,
               ),
         ),
-        subtitle: Text(
-          subtitle,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.55),
-              ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+          ),
         ),
-        trailing: Icon(
-          Icons.chevron_right,
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
           size: 22,
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.35),
+          color: AppColors.namaMediumGray,
         ),
         onTap: onTap,
       ),
@@ -246,49 +272,93 @@ class ProfileTabScreen extends ConsumerWidget {
   }
 
   void _showProfileImage(BuildContext context, String imageUrl) {
+    if (imageUrl.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No profile picture available'),
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
+      barrierColor: Colors.black.withOpacity(0.55),
       builder: (context) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final previewSize = screenWidth > 420 ? 320.0 : screenWidth * 0.78;
+
         return Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.all(24),
-          child: GestureDetector(
-            onTap: () => Navigator.pop(context),
+          elevation: 0,
+          child: Center(
             child: Container(
-              padding: const EdgeInsets.all(16),
+              width: previewSize,
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
-                borderRadius: BorderRadius.circular(20),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(22),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.18),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              child: imageUrl.isNotEmpty
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: AspectRatio(
+                      aspectRatio: 1,
                       child: Image.network(
                         imageUrl,
                         fit: BoxFit.cover,
                         loadingBuilder: (context, child, loadingProgress) {
                           if (loadingProgress == null) return child;
-                          return const SizedBox(
-                            height: 260,
-                            child: Center(child: CircularProgressIndicator()),
+
+                          return const Center(
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           );
                         },
                         errorBuilder: (context, error, stackTrace) {
-                          return const SizedBox(
-                            height: 260,
-                            child: Center(
-                              child: Icon(Icons.person, size: 120),
+                          return Container(
+                            color: AppColors.avatarPlaceholder,
+                            child: const Icon(
+                              Icons.person,
+                              size: 70,
+                              color: AppColors.avatarPlaceholderText,
                             ),
                           );
                         },
                       ),
-                    )
-                  : const SizedBox(
-                      height: 260,
-                      child: Center(
-                        child: Icon(Icons.person, size: 120),
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: InkWell(
+                      onTap: () => Navigator.of(context).pop(),
+                      borderRadius: BorderRadius.circular(50),
+                      child: Container(
+                        height: 30,
+                        width: 30,
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.45),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                       ),
                     ),
+                  ),
+                ],
+              ),
             ),
           ),
         );

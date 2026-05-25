@@ -1,19 +1,41 @@
 // lib/features/admin/screen/send_notification_screen.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class SendNotificationScreen extends ConsumerStatefulWidget {
   final String? eventId;
   final String? eventName;
 
+  final String? initialTitle;
+  final String? initialSubtitle;
+  final String? initialBody;
+  final String? initialAudience;
+  final AppNotificationType? initialType;
+
+  final String? initialQrPayload;
+  final String? initialSessionCode;
+  final String? initialSessionTitle;
+  final DateTime? initialSessionDate;
+
   const SendNotificationScreen({
     super.key,
     this.eventId,
     this.eventName,
+    this.initialTitle,
+    this.initialSubtitle,
+    this.initialBody,
+    this.initialAudience,
+    this.initialType,
+    this.initialQrPayload,
+    this.initialSessionCode,
+    this.initialSessionTitle,
+    this.initialSessionDate,
   });
 
   bool get isEventSpecific => eventId != null && eventId!.isNotEmpty;
@@ -88,7 +110,28 @@ class _SendNotificationScreenState
   @override
   void initState() {
     super.initState();
-    _selectedType = _availableTypes.first;
+
+    final availableTypes = _availableTypes;
+
+    if (widget.initialType != null &&
+        availableTypes.contains(widget.initialType)) {
+      _selectedType = widget.initialType!;
+    } else {
+      _selectedType = availableTypes.first;
+    }
+
+    _selectedAudience = _isValidAudience(widget.initialAudience)
+        ? widget.initialAudience!
+        : 'all';
+
+    _titleController.text = widget.initialTitle ?? '';
+    _subtitleController.text = widget.initialSubtitle ?? '';
+    _bodyController.text = widget.initialBody ?? '';
+  }
+
+  bool _isValidAudience(String? audience) {
+    if (audience == null || audience.trim().isEmpty) return false;
+    return _audiences.any((item) => item.value == audience);
   }
 
   @override
@@ -257,6 +300,9 @@ class _SendNotificationScreenState
         'targetRole': _selectedAudience,
         'eventId': widget.eventId ?? '',
         'eventName': widget.eventName ?? '',
+        'qrPayload': widget.initialQrPayload ?? '',
+        'sessionCode': widget.initialSessionCode ?? '',
+        'sessionTitle': widget.initialSessionTitle ?? '',
       };
 
       if (_hasTimestamp && _selectedDateTime != null) {
@@ -288,11 +334,17 @@ class _SendNotificationScreenState
             'targetRole': _selectedAudience,
             'eventId': widget.eventId ?? '',
             'eventName': widget.eventName ?? '',
+            'qrPayload': widget.initialQrPayload ?? '',
+            'sessionCode': widget.initialSessionCode ?? '',
+            'sessionTitle': widget.initialSessionTitle ?? '',
             'data': {
               'notificationId': sharedNotificationId,
               'type': 'admin_notification',
               'eventId': widget.eventId ?? '',
               'eventName': widget.eventName ?? '',
+              'qrPayload': widget.initialQrPayload ?? '',
+              'sessionCode': widget.initialSessionCode ?? '',
+              'sessionTitle': widget.initialSessionTitle ?? '',
             },
           };
 
@@ -455,9 +507,134 @@ class _SendNotificationScreenState
     setState(() => _selectedType = type);
   }
 
+  Widget _buildQrPreviewCard() {
+    final qrPayload = widget.initialQrPayload ?? '';
+    final sessionCode = widget.initialSessionCode ?? '';
+    final sessionTitle = widget.initialSessionTitle ?? widget.eventName ?? '';
+    final sessionDate = widget.initialSessionDate == null
+        ? ''
+        : DateFormat('EEEE, MMM d, yyyy').format(widget.initialSessionDate!);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F6FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: const Color(0xFFE1DDF0),
+        ),
+      ),
+      child: Column(
+        children: [
+          const Text(
+            'QR Announcement Preview',
+            style: TextStyle(
+              color: _primaryColor,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (sessionTitle.trim().isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              sessionTitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF111827),
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                height: 1.25,
+              ),
+            ),
+          ],
+          if (sessionDate.trim().isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              sessionDate,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: _textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: AppColors.namaGoldenYellow,
+                width: 1.4,
+              ),
+            ),
+            child: QrImageView(
+              data: qrPayload,
+              version: QrVersions.auto,
+              size: 150,
+              backgroundColor: Colors.white,
+              foregroundColor: AppColors.namaNavyBlue,
+            ),
+          ),
+          if (sessionCode.trim().isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Container(
+              width: 210,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 11,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1EEFB),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    'Session Code',
+                    style: TextStyle(
+                      color: _textMuted,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    sessionCode,
+                    style: const TextStyle(
+                      color: _primaryColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+          const Text(
+            'This QR preview will be included with this announcement data.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final availableTypes = _availableTypes;
+    final hasQrPreview =
+        widget.initialQrPayload != null && widget.initialQrPayload!.isNotEmpty;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -471,57 +648,56 @@ class _SendNotificationScreenState
             : Column(
                 children: [
                   Padding(
-  padding: const EdgeInsets.fromLTRB(16, 16, 18, 14),
-  child: Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () => Navigator.of(context).pop(),
-        child: const Padding(
-          padding: EdgeInsets.only(top: 3, right: 10),
-          child: Icon(
-            Icons.arrow_back,
-            color: AppColors.namaNavyBlue,
-            size: 20,
-          ),
-        ),
-      ),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Send Notifications',
-              style: TextStyle(
-                fontSize: 22,
-                height: 1.1,
-                fontWeight: FontWeight.w900,
-                color: AppColors.namaNavyBlue,
-                letterSpacing: 0.2,
-              ),
-            ),
-            if (widget.isEventSpecific) ...[
-              const SizedBox(height: 4),
-              Text(
-                widget.eventName ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 11,
-                  height: 1.1,
-                  color: _textMuted,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    ],
-  ),
-),
-
+                    padding: const EdgeInsets.fromLTRB(16, 16, 18, 14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: () => Navigator.of(context).pop(),
+                          child: const Padding(
+                            padding: EdgeInsets.only(top: 3, right: 10),
+                            child: Icon(
+                              Icons.arrow_back,
+                              color: AppColors.namaNavyBlue,
+                              size: 20,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Send Notifications',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  height: 1.1,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.namaNavyBlue,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                              if (widget.isEventSpecific) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  widget.eventName ?? '',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    height: 1.1,
+                                    color: _textMuted,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   Expanded(
                     child: SingleChildScrollView(
                       keyboardDismissBehavior:
@@ -550,7 +726,6 @@ class _SendNotificationScreenState
                               }).toList(),
                             ),
                             const SizedBox(height: 21),
-
                             _sectionLabel('Target Audience'),
                             const SizedBox(height: 9),
                             Wrap(
@@ -574,7 +749,10 @@ class _SendNotificationScreenState
                               }).toList(),
                             ),
                             const SizedBox(height: 21),
-
+                            if (hasQrPreview) ...[
+                              _buildQrPreviewCard(),
+                              const SizedBox(height: 21),
+                            ],
                             _sectionLabel('Notification Title'),
                             const SizedBox(height: 7),
                             TextFormField(
@@ -592,7 +770,6 @@ class _SendNotificationScreenState
                               },
                             ),
                             const SizedBox(height: 12),
-
                             _sectionLabel('Subtitle / Side Note (Optional)'),
                             const SizedBox(height: 7),
                             TextFormField(
@@ -601,10 +778,9 @@ class _SendNotificationScreenState
                               decoration: _inputDecoration(
                                 hintText: 'Enter subtitle or side note',
                               ),
-                              maxLength: 50,
+                              maxLength: 120,
                             ),
                             const SizedBox(height: 12),
-
                             _sectionLabel('Notification Message'),
                             const SizedBox(height: 7),
                             TextFormField(
@@ -613,8 +789,8 @@ class _SendNotificationScreenState
                               decoration: _inputDecoration(
                                 hintText: 'Enter notification message',
                               ),
-                              maxLines: 5,
-                              maxLength: 500,
+                              maxLines: 7,
+                              maxLength: 700,
                               validator: (value) {
                                 if (value == null || value.trim().isEmpty) {
                                   return 'Please enter a message';
@@ -623,7 +799,6 @@ class _SendNotificationScreenState
                               },
                             ),
                             const SizedBox(height: 8),
-
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -664,7 +839,6 @@ class _SendNotificationScreenState
                                 ],
                               ),
                             ),
-
                             if (_hasTimestamp) ...[
                               const SizedBox(height: 11),
                               Container(
@@ -745,9 +919,7 @@ class _SendNotificationScreenState
                                 ),
                               ),
                             ],
-
                             const SizedBox(height: 22),
-
                             if (_selectedType == AppNotificationType.alert) ...[
                               Container(
                                 padding: const EdgeInsets.all(12),
@@ -782,7 +954,6 @@ class _SendNotificationScreenState
                               ),
                               const SizedBox(height: 20),
                             ],
-
                             Center(
                               child: SizedBox(
                                 width: MediaQuery.of(context).size.width * 0.62,

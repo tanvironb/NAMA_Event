@@ -1,4 +1,3 @@
-// lib/features/meetings/screen/request_meeting_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -86,6 +85,8 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
     });
 
     try {
+      final activeEvent = await ref.read(activeEventFutureProvider.future);
+
       final proposedDateTime = DateTime(
         _selectedDate.year,
         _selectedDate.month,
@@ -95,6 +96,7 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
       );
 
       await ref.read(meetingRepositoryProvider).requestMeeting(
+        eventId: activeEvent.id,
         requesterId: currentUser.uid,
         recipientId: widget.recipient.uid,
         requesterInfo: {
@@ -301,8 +303,8 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: const [
+          const Row(
+            children: [
               Icon(Icons.location_on, color: AppColors.navyBlue, size: 22),
               SizedBox(width: 8),
               Text(
@@ -357,9 +359,7 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildRecipientCard(context),
-
                     const SizedBox(height: 28),
-
                     const Text(
                       'Propose a Meeting',
                       style: TextStyle(
@@ -368,9 +368,7 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
                         color: AppColors.textPrimary,
                       ),
                     ),
-
                     const SizedBox(height: 6),
-
                     Text(
                       'Choose a convenient time and place to meet.',
                       style: TextStyle(
@@ -378,18 +376,14 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
                         color: AppColors.textPrimary.withOpacity(0.6),
                       ),
                     ),
-
                     const SizedBox(height: 28),
-
                     _buildSelectionCard(
                       icon: Icons.calendar_today,
                       title: 'Date',
                       subtitle: dateFormat.format(_selectedDate),
                       onTap: _selectDate,
                     ),
-
                     const SizedBox(height: 16),
-
                     _buildSelectionCard(
                       icon: Icons.access_time,
                       title: 'Time',
@@ -404,13 +398,9 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
                       ),
                       onTap: _selectTime,
                     ),
-
                     const SizedBox(height: 16),
-
                     _buildLocationCard(),
-
                     const SizedBox(height: 38),
-
                     Center(
                       child: SizedBox(
                         width: 330,
@@ -444,9 +434,7 @@ class _RequestMeetingScreenState extends ConsumerState<RequestMeetingScreen> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 14),
-
                     Text(
                       'Note: The recipient will receive a notification and can accept or decline your meeting request.',
                       style: TextStyle(

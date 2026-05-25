@@ -1,87 +1,158 @@
 // lib/features/calendar/providers/calendar_providers.dart
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/calendar/data/calendar_repository.dart';
 import 'package:events_app_trueattempt/features/calendar/models/calendar_entry.dart';
+import 'package:events_app_trueattempt/features/calendar/models/calendar_entry_type.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// Provider for CalendarRepository
 final calendarRepositoryProvider = Provider<CalendarRepository>((ref) {
-  return CalendarRepository(ref.watch(firestoreProvider));
+  return CalendarRepository(FirebaseFirestore.instance);
 });
 
-/// Stream provider for calendar entries (bookmarked sessions + approved meetings)
-/// Watches for real-time updates to sessions and meetings
-final calendarEntriesProvider = StreamProvider.autoDispose<List<CalendarEntry>>((ref) {
-  final repository = ref.watch(calendarRepositoryProvider);
-  final userAsync = ref.watch(userAppProfileStreamProvider);
+final calendarEntriesProvider =
+    StreamProvider.autoDispose<List<CalendarEntry>>((ref) {
+  final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
   final activeEventAsync = ref.watch(activeEventFutureProvider);
+  final userProfileAsync = ref.watch(userAppProfileStreamProvider);
 
-  // Extract user and event from AsyncValue using .asData?.value pattern (existing system pattern)
-  final user = userAsync.asData?.value;
-  if (user == null) {
+  if (userId == null) {
     return Stream.value([]);
   }
 
-  final event = activeEventAsync.asData?.value;
-  if (event == null) {
+  final activeEvent = activeEventAsync.asData?.value;
+  final userProfile = userProfileAsync.asData?.value;
+
+  if (activeEvent == null || userProfile == null) {
     return Stream.value([]);
   }
-  
-  return repository.getCalendarEntriesStream(
-    userId: user.uid,
-    eventId: event.id,
-    bookmarkedSessionIds: user.bookmarkedSessions,
-  );
+
+  final role = userProfile.role.toLowerCase().trim();
+
+  final includeSessions = role != 'speaker' && role != 'admin';
+
+  final bookmarkedSessionIds = _extractBookmarkedSessionIds(userProfile);
+
+  return ref.watch(calendarRepositoryProvider).getCalendarEntriesStream(
+        userId: userId,
+        eventId: activeEvent.id,
+        bookmarkedSessionIds: bookmarkedSessionIds,
+        includeSessions: includeSessions,
+      );
 });
 
-/// Provider for entries grouped by date
-final calendarEntriesByDateProvider = Provider<Map<DateTime, List<CalendarEntry>>>((ref) {
+final calendarEntriesByDateProvider =
+    Provider.autoDispose<Map<DateTime, List<CalendarEntry>>>((ref) {
   final entriesAsync = ref.watch(calendarEntriesProvider);
 
-  return entriesAsync.when(
-    data: (entries) {
-      final Map<DateTime, List<CalendarEntry>> grouped = {};
+  final entries = entriesAsync.asData?.value ?? [];
 
-      for (final entry in entries) {
-        final date = DateTime(
-          entry.startTime.year,
-          entry.startTime.month,
-          entry.startTime.day,
-        );
+  final Map<DateTime, List<CalendarEntry>> groupedEntries = {};
 
-        if (!grouped.containsKey(date)) {
-          grouped[date] = [];
-        }
-        grouped[date]!.add(entry);
-      }
+  for (final entry in entries) {
+    final date = DateTime(
+      entry.startTime.year,
+      entry.startTime.month,
+      entry.startTime.day,
+    );
 
-      return grouped;
-    },
-    loading: () => {},
-    error: (_, __) => {},
-  );
+    groupedEntries.putIfAbsent(date, () => []);
+    groupedEntries[date]!.add(entry);
+  }
+
+  for (final dayEntries in groupedEntries.values) {
+    dayEntries.sort((a, b) => a.startTime.compareTo(b.startTime));
+  }
+
+  return groupedEntries;
 });
 
-/// Provider for entries on a specific date
-final entriesForDateProvider = Provider.autoDispose.family<AsyncValue<List<CalendarEntry>>, DateTime>((ref, date) {
-  final entriesAsync = ref.watch(calendarEntriesProvider);
-  
-  return entriesAsync.when(
-    data: (entries) {
-      final normalizedDate = DateTime(date.year, date.month, date.day);
-      final filtered = entries.where((entry) {
-        final entryDate = DateTime(
-          entry.startTime.year,
-          entry.startTime.month,
-          entry.startTime.day,
-        );
-        return entryDate == normalizedDate;
-      }).toList();
-      
-      return AsyncValue.data(filtered);
-    },
-    loading: () => const AsyncValue.loading(),
-    error: (error, stack) => AsyncValue.error(error, stack),
-  );
+final entriesForDateProvider =
+    Provider.autoDispose.family<AsyncValue<List<CalendarEntry>>, DateTime>(
+  (ref, selectedDate) {
+    final entriesAsync = ref.watch(calendarEntriesProvider);
+
+    return entriesAsync.when(
+      data: (entries) {
+        final filteredEntries = entries.where((entry) {
+          return entry.startTime.year == selectedDate.year &&
+              entry.startTime.month == selectedDate.month &&
+              entry.startTime.day == selectedDate.day;
+        }).toList();
+
+        filteredEntries.sort((a, b) => a.startTime.compareTo(b.startTime));
+
+        return AsyncValue.data(filteredEntries);
+      },
+      loading: () => const AsyncValue.loading(),
+      error: (error, stackTrace) => AsyncValue.error(error, stackTrace),
+    );
+  },
+);
+
+final selectedCalendarEntryProvider =
+    StateProvider.autoDispose<CalendarEntry?>((ref) => null);
+
+final calendarEntryNotesProvider =
+    FutureProvider.autoDispose.family<String?, CalendarEntry>((ref, entry) {
+  final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
+
+  if (userId == null) {
+    return Future.value(null);
+  }
+
+  return ref.watch(calendarRepositoryProvider).getEntryNotes(
+        userId: userId,
+        entryId: entry.id,
+        entryType: entry.type,
+      );
 });
+
+Future<void> saveCalendarEntryNotes({
+  required WidgetRef ref,
+  required CalendarEntry entry,
+  required String notes,
+}) async {
+  final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
+
+  if (userId == null) {
+    throw Exception('User not logged in');
+  }
+
+  await ref.read(calendarRepositoryProvider).saveEntryNotes(
+        userId: userId,
+        entryId: entry.id,
+        entryType: entry.type,
+        notes: notes,
+      );
+
+  ref.invalidate(calendarEntryNotesProvider(entry));
+  ref.invalidate(calendarEntriesProvider);
+  ref.invalidate(calendarEntriesByDateProvider);
+}
+
+List<String> _extractBookmarkedSessionIds(dynamic userProfile) {
+  try {
+    final bookmarkedSessions = userProfile.bookmarkedSessions;
+    if (bookmarkedSessions is List) {
+      return bookmarkedSessions.map((id) => id.toString()).toList();
+    }
+  } catch (_) {}
+
+  try {
+    final bookmarkedSessionIds = userProfile.bookmarkedSessionIds;
+    if (bookmarkedSessionIds is List) {
+      return bookmarkedSessionIds.map((id) => id.toString()).toList();
+    }
+  } catch (_) {}
+
+  try {
+    final savedSessionIds = userProfile.savedSessionIds;
+    if (savedSessionIds is List) {
+      return savedSessionIds.map((id) => id.toString()).toList();
+    }
+  } catch (_) {}
+
+  return [];
+}

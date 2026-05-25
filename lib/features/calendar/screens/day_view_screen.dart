@@ -25,6 +25,10 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   static const double _hourHeight = 72.0;
   static const double _timeColumnWidth = 58.0;
 
+  // Smaller session/meeting boxes.
+  static const double _minEntryHeight = 32.0;
+  static const double _maxEntryHeight = 64.0;
+
   @override
   void initState() {
     super.initState();
@@ -79,9 +83,13 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
               entries.isEmpty ? _buildEmptyState() : _buildDayTimeline(entries),
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (error, stack) => Center(
-            child: Text(
-              'Error loading calendar: $error',
-              style: const TextStyle(fontSize: 13),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Error loading calendar: $error',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13),
+              ),
             ),
           ),
         ),
@@ -178,6 +186,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
 
     final durationMinutes = entry.durationMinutes;
     final calculatedHeight = (durationMinutes / 60.0) * _hourHeight;
+    final entryHeight = calculatedHeight.clamp(_minEntryHeight, _maxEntryHeight);
 
     final availableWidth = MediaQuery.of(context).size.width - _timeColumnWidth;
     final leftOffset = _timeColumnWidth + (layout.leftFactor * availableWidth);
@@ -189,7 +198,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
       top: topOffset,
       left: leftOffset,
       width: width,
-      height: calculatedHeight.clamp(46, 95),
+      height: entryHeight,
       child: GestureDetector(
         onTap: () => _showEntryDetails(entry),
         child: Container(
@@ -197,64 +206,80 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
             left: layout.isOverlapping ? 6 : 2,
             right: 2,
             top: 2,
-            bottom: 3,
+            bottom: 2,
           ),
-          padding: const EdgeInsets.all(7),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           decoration: BoxDecoration(
             color: color.withOpacity(0.92),
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(7),
             border: Border.all(
               color: color,
-              width: 1.2,
+              width: 1,
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                entry.title,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 3),
-              Text(
-                DateFormat('h:mm a').format(entry.startTime),
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.white.withOpacity(0.95),
-                ),
-              ),
-              if (entry.location.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.location_on,
-                      size: 9,
-                      color: Colors.white.withOpacity(0.85),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final showTime = constraints.maxHeight >= 27;
+              final showLocation =
+                  constraints.maxHeight >= 48 && entry.location.isNotEmpty;
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    entry.title,
+                    style: const TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 1.05,
                     ),
-                    const SizedBox(width: 2),
-                    Expanded(
-                      child: Text(
-                        entry.location,
-                        style: TextStyle(
-                          fontSize: 9.5,
-                          color: Colors.white.withOpacity(0.85),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (showTime) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('h:mm a').format(entry.startTime),
+                      style: TextStyle(
+                        fontSize: 8.8,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withOpacity(0.95),
+                        height: 1,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                ),
-              ],
-            ],
+                  if (showLocation) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on,
+                          size: 8,
+                          color: Colors.white.withOpacity(0.85),
+                        ),
+                        const SizedBox(width: 2),
+                        Expanded(
+                          child: Text(
+                            entry.location,
+                            style: TextStyle(
+                              fontSize: 8.5,
+                              color: Colors.white.withOpacity(0.85),
+                              height: 1,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              );
+            },
           ),
         ),
       ),
@@ -365,6 +390,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
 
   bool _isToday(DateTime date) {
     final now = DateTime.now();
+
     return date.year == now.year &&
         date.month == now.month &&
         date.day == now.day;
