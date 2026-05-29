@@ -205,16 +205,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.only(bottom: 110),
+        padding: const EdgeInsets.only(bottom: 82),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _header(context),
-
-            const SizedBox(height: 22),
-
+            const SizedBox(height: 18),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
               child: FutureBuilder<String>(
                 future: user == null
                     ? Future.value('User')
@@ -225,7 +223,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   return Text(
                     'Hi, $name!',
                     style: const TextStyle(
-                      fontSize: 28,
+                      fontSize: 22,
                       color: primaryBlue,
                       fontWeight: FontWeight.w600,
                     ),
@@ -233,61 +231,44 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 },
               ),
             ),
-
             const SizedBox(height: 6),
-
             _activeEventInfo(),
-
             const SizedBox(height: 18),
-
             _joinSessionsCard(context),
-
             const SizedBox(height: 18),
-
             sessionsAsync.when(
               data: (s) => _filters(s),
               loading: () => _filters([]),
               error: (_, __) => _filters([]),
             ),
-
-            const SizedBox(height: 34),
-
+            const SizedBox(height: 30),
             _sectionTitle(
               context,
               'Upcoming Sessions',
               showSeeAll: true,
               onSeeAll: widget.onSeeAllUpcomingSessions,
             ),
-
             const SizedBox(height: 14),
-
             _slider(sessionsAsync),
-
-            const SizedBox(height: 34),
-
+            const SizedBox(height: 30),
             _sectionTitle(context, 'Speakers'),
-
             const SizedBox(height: 12),
-
             const SpeakerCarousel(),
-
-            const SizedBox(height: 30),
-
+            const SizedBox(height: 26),
             _sectionTitle(context, 'Venues'),
-
             const SizedBox(height: 12),
 
-            const VenueMapsCarousel(),
+            // FIXED: Added left/right padding only for attendee Venue section.
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: VenueMapsCarousel(),
+            ),
 
-            const SizedBox(height: 30),
-
+            const SizedBox(height: 26),
             _sectionTitle(context, 'Partners'),
-
-            const SizedBox(height: 14),
-
+            const SizedBox(height: 10),
             _partnersSection(),
-
-            const SizedBox(height: 30),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -296,7 +277,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   Widget _activeEventInfo() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('events')
@@ -305,34 +286,24 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Loading event...',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+            return const Text(
+              'Loading event...',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             );
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'No active event',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+            return const Text(
+              'No active event',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             );
           }
 
@@ -381,16 +352,16 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   Widget _header(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 22, 32, 0),
+      padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
       child: Row(
         children: [
           Image.asset(
             AppConstants.logoEmblemPath,
-            height: 40,
-            width: 40,
+            height: 68,
+            width: 68,
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) {
-              return const Icon(Icons.event, color: primaryBlue, size: 38);
+              return const Icon(Icons.event, color: primaryBlue, size: 46);
             },
           ),
           const Spacer(),
@@ -400,7 +371,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               MaterialPageRoute(builder: (_) => const ConversationsScreen()),
             );
           }),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           _icon(const NotificationIconWithBadge(), () {
             Navigator.push(
               context,
@@ -414,7 +385,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   Widget _joinSessionsCard(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 45),
+      padding: const EdgeInsets.symmetric(horizontal: 32),
       child: GestureDetector(
         onTap: () {
           Navigator.push(
@@ -499,8 +470,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.14),
-            blurRadius: 16,
+            color: Colors.black.withOpacity(0.12),
+            blurRadius: 14,
             offset: const Offset(0, 6),
           ),
         ],
@@ -524,9 +495,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       height: 30,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 30),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         itemCount: filters.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 18),
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
         itemBuilder: (context, index) {
           final f = filters[index];
           final selected = selectedFilter == f;
@@ -592,7 +563,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     VoidCallback? onSeeAll,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
           Text(
@@ -623,7 +594,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   Widget _slider(AsyncValue<List<Session>> sessionsAsync) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: SizedBox(
         height: 255,
         child: sessionsAsync.when(
@@ -867,7 +838,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   Widget _partnersSection() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('events')
@@ -877,14 +848,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const SizedBox(
-              height: 120,
+              height: 105,
               child: Center(child: LoadingIndicator()),
             );
           }
 
           if (snapshot.hasError) {
             return const SizedBox(
-              height: 80,
+              height: 70,
               child: Center(
                 child: Text(
                   'Failed to load partners',
@@ -909,10 +880,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   .whereType<Map>()
                   .map((item) => Map<String, dynamic>.from(item))
                   .where((item) {
-                    final name = (item['name'] ?? '').toString().trim();
-                    final logoUrl = (item['logoUrl'] ?? '').toString().trim();
-                    return name.isNotEmpty || logoUrl.isNotEmpty;
-                  }).toList()
+                  final name = (item['name'] ?? '').toString().trim();
+                  final logoUrl = (item['logoUrl'] ?? '').toString().trim();
+                  return name.isNotEmpty || logoUrl.isNotEmpty;
+                }).toList()
               : <Map<String, dynamic>>[];
 
           if (partners.isEmpty) {
@@ -922,7 +893,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           return LayoutBuilder(
             builder: (context, constraints) {
               const double spacing = 10;
-              const double runSpacing = 14;
+              const double runSpacing = 8;
               final double itemWidth =
                   (constraints.maxWidth - (spacing * 2)) / 3;
 
@@ -953,7 +924,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   Widget _emptyPartners() {
     return const SizedBox(
-      height: 70,
+      height: 45,
       child: Center(
         child: Text(
           'No partners yet',
@@ -977,15 +948,15 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          height: 72,
-          width: 72,
+          height: 66,
+          width: 66,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.white,
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 10,
+                color: Colors.black.withOpacity(0.055),
+                blurRadius: 9,
                 offset: const Offset(0, 4),
               ),
             ],
@@ -996,11 +967,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                     child: Icon(
                       Icons.handshake_outlined,
                       color: primaryBlue,
-                      size: 30,
+                      size: 28,
                     ),
                   )
                 : Padding(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(9),
                     child: Image.network(
                       cleanLogoUrl,
                       fit: BoxFit.contain,
@@ -1026,7 +997,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                           child: Icon(
                             Icons.broken_image_outlined,
                             color: primaryBlue,
-                            size: 28,
+                            size: 26,
                           ),
                         );
                       },
@@ -1034,7 +1005,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                   ),
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 5),
         Text(
           name.isEmpty ? 'Partner' : name,
           maxLines: 2,
@@ -1042,9 +1013,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           textAlign: TextAlign.center,
           style: const TextStyle(
             color: primaryBlue,
-            fontSize: 11,
+            fontSize: 10.5,
             fontWeight: FontWeight.w600,
-            height: 1.2,
+            height: 1.15,
           ),
         ),
       ],

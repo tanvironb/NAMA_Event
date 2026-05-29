@@ -43,41 +43,33 @@ class StaffHomeDashboard extends ConsumerWidget {
           children: [
             _buildTopIntro(context, userAsync, eventAsync),
             const SizedBox(height: 44),
-
             _buildSectionTitle(
               icon: Icons.bolt_rounded,
               title: 'Quick Actions',
             ),
             const SizedBox(height: 16),
             StaffQuickActions(onTabSelected: onTabSelected),
-
             const SizedBox(height: 42),
-
             _buildSectionTitle(
               icon: Icons.mic_rounded,
               title: 'Featured Speakers',
             ),
             const SizedBox(height: 16),
             _buildFeaturedSpeakers(context, speakersAsync),
-
             const SizedBox(height: 42),
-
             _buildSectionTitle(
               icon: Icons.map_outlined,
               title: 'Venue Maps',
             ),
             const SizedBox(height: 16),
             _buildVenueMaps(context, venueMapsAsync),
-
             const SizedBox(height: 42),
-
             _buildSectionTitle(
               icon: Icons.handshake_outlined,
               title: 'Our Partners',
             ),
             const SizedBox(height: 18),
             _buildPartners(context, sponsorsAsync),
-
             const SizedBox(height: 32),
           ],
         ),
@@ -136,14 +128,14 @@ class StaffHomeDashboard extends ConsumerWidget {
             children: [
               Image.asset(
                 AppConstants.logoEmblemPath,
-                height: 42,
-                width: 42,
+                height: 68,
+                width: 68,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) {
                   return const Icon(
                     Icons.circle,
                     color: _primaryColor,
-                    size: 34,
+                    size: 46,
                   );
                 },
               ),
@@ -310,7 +302,8 @@ class StaffHomeDashboard extends ConsumerWidget {
                                     child: CircularProgressIndicator(),
                                   ),
                                 ),
-                                errorWidget: (_, __, ___) => _speakerFallback(),
+                                errorWidget: (_, __, ___) =>
+                                    _speakerFallback(),
                               )
                             : _speakerFallback(),
                         Container(
@@ -395,191 +388,239 @@ class StaffHomeDashboard extends ConsumerWidget {
     BuildContext context,
     AsyncValue<List<dynamic>> venueMapsAsync,
   ) {
-    return SizedBox(
-      height: 150,
-      child: venueMapsAsync.when(
-        data: (venueMaps) {
-          final uniqueVenueImages = <Map<String, dynamic>>[];
-          final seenVenueKeys = <String>{};
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      child: SizedBox(
+        height: 150,
+        width: double.infinity,
+        child: venueMapsAsync.when(
+          data: (venueMaps) {
+            final allVenueImages = <Map<String, dynamic>>[];
+            final seenImageUrls = <String>{};
 
-          for (final venueMap in venueMaps) {
-            final venueTitle = venueMap.title.toString().trim();
-            final venueKey = venueTitle.toLowerCase();
+            for (final venueMap in venueMaps) {
+              final venueTitle = venueMap.title.toString().trim();
+              final venueDescription = venueMap.description.toString().trim();
 
-            if (venueKey.isEmpty || seenVenueKeys.contains(venueKey)) {
-              continue;
+              for (final rawImageUrl in venueMap.imageUrls) {
+                final imageUrl = rawImageUrl.toString().trim();
+
+                if (imageUrl.isEmpty) continue;
+
+                if (seenImageUrls.contains(imageUrl)) continue;
+                seenImageUrls.add(imageUrl);
+
+                allVenueImages.add({
+                  'url': imageUrl,
+                  'title': venueTitle.isEmpty ? 'Venue' : venueTitle,
+                  'description': venueDescription.isEmpty
+                      ? 'Venue details'
+                      : venueDescription,
+                });
+              }
             }
 
-            if (venueMap.imageUrls.isEmpty) continue;
-
-            final firstImageUrl = venueMap.imageUrls.first.toString().trim();
-            if (firstImageUrl.isEmpty) continue;
-
-            seenVenueKeys.add(venueKey);
-
-            uniqueVenueImages.add({
-              'url': firstImageUrl,
-              'title': venueTitle,
-              'description': venueMap.description.toString().trim(),
-            });
-          }
-
-          if (uniqueVenueImages.isEmpty) {
-            return const Center(
-              child: Text(
-                'No venue maps available.',
-                style: TextStyle(
-                  color: _textMuted,
-                  fontSize: 12,
-                ),
-              ),
-            );
-          }
-
-          return Swiper(
-            itemCount: uniqueVenueImages.length,
-            viewportFraction: uniqueVenueImages.length > 1 ? 0.86 : 0.92,
-            scale: uniqueVenueImages.length > 1 ? 0.92 : 1,
-            autoplay: uniqueVenueImages.length > 1,
-            autoplayDelay: 4200,
-            duration: 650,
-            loop: uniqueVenueImages.length > 1,
-            pagination: uniqueVenueImages.length > 1
-                ? const SwiperPagination(
-                    alignment: Alignment.bottomCenter,
-                    margin: EdgeInsets.only(bottom: 7),
-                    builder: DotSwiperPaginationBuilder(
-                      activeColor: _primaryColor,
-                      color: Color(0xFFD6D6D6),
-                      size: 5,
-                      activeSize: 6,
-                      space: 3,
-                    ),
-                  )
-                : null,
-            itemBuilder: (context, index) {
-              final mapData = uniqueVenueImages[index];
-              final description = mapData['description'].toString().isNotEmpty
-                  ? mapData['description'].toString()
-                  : 'Welcome Word';
-
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.09),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CachedNetworkImage(
-                        imageUrl: mapData['url'],
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
-                          color: const Color(0xFFF1F3F8),
-                          child: const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        errorWidget: (_, __, ___) => Container(
-                          color: const Color(0xFFF1F3F8),
-                          child: const Icon(
-                            Icons.broken_image_outlined,
-                            color: _primaryColor,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              Colors.black.withOpacity(0.58),
-                              Colors.black.withOpacity(0.18),
-                              Colors.black.withOpacity(0.50),
-                            ],
-                            stops: const [0, 0.55, 1],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 18,
-                        right: 88,
-                        bottom: 20,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              mapData['title'],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              description,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.92),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Positioned(
-                        right: 14,
-                        bottom: 18,
-                        child: Container(
-                          height: 30,
-                          padding: const EdgeInsets.symmetric(horizontal: 15),
-                          decoration: BoxDecoration(
-                            color: _primaryColor,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            'View',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+            if (allVenueImages.isEmpty) {
+              return const Center(
+                child: Text(
+                  'No venue maps available.',
+                  style: TextStyle(
+                    color: _textMuted,
+                    fontSize: 12,
                   ),
                 ),
               );
-            },
-          );
-        },
-        loading: () => const Center(child: LoadingIndicator()),
-        error: (err, stack) => Center(
-          child: Text(
-            'Error loading venue maps.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.error,
-              fontSize: 12,
+            }
+
+            return Swiper(
+              itemCount: allVenueImages.length,
+              viewportFraction: 1.0,
+              scale: 1.0,
+              autoplay: allVenueImages.length > 1,
+              autoplayDelay: 4200,
+              autoplayDisableOnInteraction: false,
+              duration: 650,
+              loop: allVenueImages.length > 1,
+              pagination: allVenueImages.length > 1
+                  ? const SwiperPagination(
+                      alignment: Alignment.bottomCenter,
+                      margin: EdgeInsets.only(bottom: 7),
+                      builder: DotSwiperPaginationBuilder(
+                        activeColor: _primaryColor,
+                        color: Color(0xFFD6D6D6),
+                        size: 5,
+                        activeSize: 6,
+                        space: 3,
+                      ),
+                    )
+                  : null,
+              itemBuilder: (context, index) {
+                final mapData = allVenueImages[index];
+
+                final imageUrl = mapData['url'].toString();
+                final title = mapData['title'].toString();
+                final description = mapData['description'].toString();
+
+                return GestureDetector(
+                  onTap: () {
+                    _openVenueImagePreview(
+                      context: context,
+                      imageUrl: imageUrl,
+                      title: title,
+                      description: description,
+                    );
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    margin: EdgeInsets.zero,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.09),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CachedNetworkImage(
+                            imageUrl: imageUrl,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            placeholder: (_, __) => Container(
+                              color: const Color(0xFFF1F3F8),
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            ),
+                            errorWidget: (_, __, ___) => Container(
+                              color: const Color(0xFFF1F3F8),
+                              child: const Icon(
+                                Icons.broken_image_outlined,
+                                color: _primaryColor,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [
+                                  Colors.black.withOpacity(0.58),
+                                  Colors.black.withOpacity(0.18),
+                                  Colors.black.withOpacity(0.50),
+                                ],
+                                stops: const [0, 0.55, 1],
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 18,
+                            right: 88,
+                            bottom: 20,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  description,
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.92),
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Positioned(
+                            right: 14,
+                            bottom: 18,
+                            child: GestureDetector(
+                              onTap: () {
+                                _openVenueImagePreview(
+                                  context: context,
+                                  imageUrl: imageUrl,
+                                  title: title,
+                                  description: description,
+                                );
+                              },
+                              child: Container(
+                                height: 30,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 15,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _primaryColor,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                alignment: Alignment.center,
+                                child: const Text(
+                                  'View',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+          loading: () => const Center(child: LoadingIndicator()),
+          error: (err, stack) => Center(
+            child: Text(
+              'Error loading venue maps.',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.error,
+                fontSize: 12,
+              ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _openVenueImagePreview({
+    required BuildContext context,
+    required String imageUrl,
+    required String title,
+    required String description,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _VenueImagePreviewScreen(
+          imageUrl: imageUrl,
+          title: title,
+          description: description,
         ),
       ),
     );
@@ -734,6 +775,99 @@ class StaffHomeDashboard extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _VenueImagePreviewScreen extends StatelessWidget {
+  final String imageUrl;
+  final String title;
+  final String description;
+
+  const _VenueImagePreviewScreen({
+    required this.imageUrl,
+    required this.title,
+    required this.description,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          title.trim().isEmpty ? 'Venue Map' : title.trim(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: InteractiveViewer(
+              minScale: 0.7,
+              maxScale: 4,
+              child: Center(
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                  errorWidget: (_, __, ___) => const Center(
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white,
+                      size: 54,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (description.trim().isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white.withOpacity(0.12),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Text(
+                description.trim(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12.5,
+                  height: 1.35,
+                ),
+              ),
+            ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.small(
+        backgroundColor: _primaryColor,
+        foregroundColor: Colors.white,
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Icon(Icons.close),
+      ),
     );
   }
 }

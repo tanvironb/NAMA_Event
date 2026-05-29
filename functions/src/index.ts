@@ -6,6 +6,7 @@
 
 import {onDocumentCreated, onDocumentWritten} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
+import * as functionsV1 from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 
@@ -1414,3 +1415,43 @@ export const manuallyVerifyEmails = onCall(
     };
   }
 );
+
+// ============================================================================
+// AUTH USER DELETE CLEANUP
+// ============================================================================
+
+/**
+ * Triggered when a Firebase Authentication user is deleted.
+ * Deletes the matching Firestore user document:
+ *
+ * users/{uid}
+ *
+ * IMPORTANT:
+ * This only deletes Firestore documents where the document ID is the same
+ * as the Firebase Auth UID.
+ */
+export const deleteAuthUserFromFirestore = functionsV1
+  .region(FUNCTION_REGION)
+  .auth
+  .user()
+  .onDelete(async (user) => {
+    const uid = user.uid;
+    const email = user.email || "";
+
+    console.log(`Auth user deleted. Cleaning Firestore user: ${uid} ${email}`);
+
+    const userRef = db.collection("users").doc(uid);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      console.log(`No Firestore user document found for UID: ${uid}`);
+      return null;
+    }
+
+    await userRef.delete();
+
+    console.log(`Deleted Firestore user document for UID: ${uid}`);
+
+    return null;
+  });
+

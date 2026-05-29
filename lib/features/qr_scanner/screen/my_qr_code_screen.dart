@@ -1,5 +1,8 @@
+// lib/features/qr_scanner/screen/my_qr_code_screen.dart
+
 import 'dart:convert';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,11 +32,27 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
   int _selectedTab = 0; // 0 = My Code, 1 = Scanner
   bool _isProcessing = false;
   String _processingMessage = 'Processing...';
+  String? _lastScannedPayload;
+
+  bool _isAdminRole(String role) {
+    return role.toLowerCase().trim() == 'admin';
+  }
+
+  bool _isStaffRole(String role) {
+    return role.toLowerCase().trim() == 'staff';
+  }
+
+  bool _isSpeakerRole(String role) {
+    return role.toLowerCase().trim() == 'speaker';
+  }
+
+  bool _isAttendeeRole(String role) {
+    final normalizedRole = role.toLowerCase().trim();
+    return normalizedRole == 'attendee' || normalizedRole == 'user';
+  }
 
   Color _getQRBackgroundColor(String role) {
     switch (role.toLowerCase()) {
-      case 'admin':
-        return AppColors.qrAdminBackground;
       case 'staff':
         return AppColors.qrStaffBackground;
       case 'speaker':
@@ -47,8 +66,6 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
 
   String _getRoleDisplayName(String role) {
     switch (role.toLowerCase()) {
-      case 'admin':
-        return 'Administrator';
       case 'staff':
         return 'Staff Member';
       case 'speaker':
@@ -63,11 +80,11 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
   String _getPrivacyAwareWarning(ProfileVisibility privacyLevel) {
     switch (privacyLevel) {
       case ProfileVisibility.anonymous:
-        return 'Sharing this QR initiates a connection. They can view your Minimal profile and later your Full profile if you change your privacy settings.';
+        return 'Sharing this QR initiates a connection. Others can view your Minimal profile and later your Full profile if you change your privacy settings.';
       case ProfileVisibility.minimal:
-        return 'Sharing this QR initiates a connection. They can view your Minimal profile (name, company, role). They can view your Full profile if you later change to Full privacy.';
+        return 'Sharing this QR initiates a connection. Others can view your Minimal profile such as name, company, and role.';
       case ProfileVisibility.full:
-        return 'Sharing this QR initiates a connection. They can view your Full profile (all information). If you later change to Anonymous, they will still be able to view your Minimal profile.';
+        return 'Sharing this QR initiates a connection. Others can view your Full profile information.';
     }
   }
 
@@ -81,22 +98,47 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
   }
 
   void _switchTab(int index) {
-    setState(() => _selectedTab = index);
+    setState(() {
+      _selectedTab = index;
+      _isProcessing = false;
+      _processingMessage = 'Processing...';
+      _lastScannedPayload = null;
+    });
 
     if (index == 1) {
-      _scannerController.start();
+      Future.delayed(const Duration(milliseconds: 300), () {
+        if (!mounted || _selectedTab != 1) return;
+
+        try {
+          _scannerController.start();
+        } catch (_) {}
+      });
     } else {
-      _scannerController.stop();
+      try {
+        _scannerController.stop();
+      } catch (_) {}
     }
   }
 
   void _handleQRCode(BarcodeCapture barcodes) {
     if (_isProcessing || barcodes.barcodes.isEmpty) return;
 
-    final barcode = barcodes.barcodes.first;
-    final rawValue = barcode.rawValue;
+    String? rawValue;
+
+    for (final barcode in barcodes.barcodes) {
+      final value = barcode.rawValue?.trim();
+
+      if (value != null && value.isNotEmpty) {
+        rawValue = value;
+        break;
+      }
+    }
 
     if (rawValue == null || rawValue.isEmpty) return;
+
+    if (_lastScannedPayload == rawValue) return;
+
+    _lastScannedPayload = rawValue;
 
     HapticFeedback.lightImpact();
 
@@ -105,8 +147,101 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
       _processingMessage = 'Validating QR code...';
     });
 
-    _scannerController.stop();
-    _processScannedPayload(rawValue);
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (!mounted) return;
+
+      try {
+        _scannerController.stop();
+      } catch (_) {}
+
+      _processScannedPayload(rawValue!);
+    });
+  }
+
+  Map<String, dynamic>? _tryDecodePayload(String payload) {
+    try {
+      final decoded = jsonDecode(payload);
+
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+
+      if (decoded is Map) {
+        return Map<String, dynamic>.from(decoded);
+      }
+
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _extractUserIdFromPayload(Map<String, dynamic> decodedPayload) {
+    final uid = decodedPayload['uid']?.toString().trim() ?? '';
+    final userId = decodedPayload['userId']?.toString().trim() ?? '';
+    final scannedUserId =
+        decodedPayload['scannedUserId']?.toString().trim() ?? '';
+
+    if (uid.isNotEmpty) return uid;
+    if (userId.isNotEmpty) return userId;
+    if (scannedUserId.isNotEmpty) return scannedUserId;
+
+    return '';
+  }
+
+  String _getReadableError(Object error) {
+    if (error is FirebaseFunctionsException) {
+      final message = error.message?.trim() ?? '';
+
+      if (message.isNotEmpty) {
+        return message;
+      }
+
+      switch (error.code) {
+        case 'not-found':
+          return 'QR code not found or expired.';
+        case 'unauthenticated':
+          return 'Please log in again to scan QR codes.';
+        case 'permission-denied':
+          return 'You do not have permission to scan this QR code.';
+        case 'failed-precondition':
+          return 'This session is not currently active.';
+        case 'invalid-argument':
+          return 'Invalid QR Code. Please scan a valid app QR code.';
+        case 'already-exists':
+          return 'This connection already exists.';
+        case 'deadline-exceeded':
+          return 'Request timed out. Please check your internet connection and try again.';
+        case 'unavailable':
+          return 'Network error. Please check your internet connection and try again.';
+        default:
+          return 'Scan failed. Please try again.';
+      }
+    }
+
+    final errorText = error.toString();
+
+    if (errorText.contains('not-found')) {
+      return 'QR code not found or expired.';
+    }
+
+    if (errorText.contains('unauthenticated')) {
+      return 'Please log in again to scan QR codes.';
+    }
+
+    if (errorText.contains('failed-precondition')) {
+      return 'This session is not currently active.';
+    }
+
+    if (errorText.contains('permission-denied')) {
+      return 'You do not have permission to scan this QR code.';
+    }
+
+    if (errorText.contains('timeout') || errorText.contains('timed out')) {
+      return 'Request timed out. Please check your internet connection and try again.';
+    }
+
+    return 'Scan failed. Please try again.';
   }
 
   Future<void> _processScannedPayload(String payload) async {
@@ -119,17 +254,48 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
       return;
     }
 
+    final currentRole = scannerProfile.role.toString().toLowerCase().trim();
+
+    if (_isAdminRole(currentRole)) {
+      _showErrorDialog('QR scanning is not available for admin accounts.');
+      return;
+    }
+
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+    if (currentUserId.isEmpty) {
+      _showErrorDialog('Please log in again to scan QR codes.');
+      return;
+    }
+
     try {
+      final decodedPayload = _tryDecodePayload(payload);
+
+      if (decodedPayload != null) {
+        final payloadType = decodedPayload['type']?.toString().trim() ?? '';
+        final scannedUserId = _extractUserIdFromPayload(decodedPayload);
+
+        if ((payloadType == 'user' || payloadType == 'user_connection') &&
+            scannedUserId.isNotEmpty) {
+          if (scannedUserId == currentUserId) {
+            _showErrorDialog('You cannot scan your own QR code.');
+            return;
+          }
+        }
+      }
+
       final functions = ref.read(firebaseFunctionsProvider);
       final callable = functions.httpsCallable('validateQrCode');
 
       final result = await callable.call({
         'payload': payload,
       }).timeout(
-        const Duration(seconds: 10),
+        const Duration(seconds: 12),
         onTimeout: () {
-          throw Exception(
-            'Request timed out. Please check your internet connection and try again.',
+          throw FirebaseFunctionsException(
+            code: 'deadline-exceeded',
+            message:
+                'Request timed out. Please check your internet connection and try again.',
           );
         },
       );
@@ -137,34 +303,59 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
       if (!mounted) return;
 
       final responseData = Map<String, dynamic>.from(result.data as Map);
-      final String type = responseData['type'] as String;
+      final String type = responseData['type']?.toString() ?? '';
       final Map<String, dynamic> data =
           Map<String, dynamic>.from(responseData['data'] as Map);
 
       if (type == 'user') {
         await _handleUserScan(scannerProfile, data);
       } else if (type == 'session') {
+        if (!_isAttendeeRole(currentRole)) {
+          _showErrorDialog(
+            'Session check-in is only required for attendees.',
+          );
+          return;
+        }
+
+        final sessionId = data['sessionId']?.toString() ?? '';
+
+        if (sessionId.isEmpty) {
+          _showErrorDialog('Invalid session QR code.');
+          return;
+        }
+
         setState(() => _processingMessage = 'Checking in to session...');
-        await _logSessionCheckIn(data['sessionId']);
+        await _logSessionCheckIn(sessionId);
       } else {
         _showErrorDialog('Unknown QR code type.');
       }
-    } catch (e) {
-      debugPrint('QR Validation Error: $e');
+    } catch (error) {
+      debugPrint('QR Validation Error: $error');
 
-      String errorMessage = 'Invalid QR Code.';
+      final decodedPayload = _tryDecodePayload(payload);
 
-      if (e.toString().contains('not-found')) {
-        errorMessage = 'QR code not found or expired.';
-      } else if (e.toString().contains('unauthenticated')) {
-        errorMessage = 'Please log in to scan QR codes.';
-      } else if (e.toString().contains('failed-precondition')) {
-        errorMessage = 'This session is not currently active.';
-      } else if (e.toString().isNotEmpty) {
-        errorMessage = 'An unexpected error occurred.';
+      if (decodedPayload != null) {
+        final payloadType = decodedPayload['type']?.toString().trim() ?? '';
+        final scannedUserId = _extractUserIdFromPayload(decodedPayload);
+
+        if ((payloadType == 'user' || payloadType == 'user_connection') &&
+            scannedUserId.isNotEmpty &&
+            scannedUserId != currentUserId) {
+          final fallbackUserData = {
+            'uid': scannedUserId,
+            'name': decodedPayload['name']?.toString() ?? 'User',
+            'email': decodedPayload['email']?.toString() ?? '',
+            'role': decodedPayload['role']?.toString() ?? 'attendee',
+            'profileImageUrl':
+                decodedPayload['profileImageUrl']?.toString() ?? '',
+          };
+
+          await _handleUserScan(scannerProfile, fallbackUserData);
+          return;
+        }
       }
 
-      _showErrorDialog(errorMessage);
+      _showErrorDialog(_getReadableError(error));
     }
   }
 
@@ -175,15 +366,32 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
     if (!mounted) return;
 
     try {
-      if (scannerProfile.role == 'admin' || scannerProfile.role == 'staff') {
-        _showAdminStaffPopup(scannedUserData);
-      } else {
+      final currentRole = scannerProfile.role.toString().toLowerCase().trim();
+
+      if (_isAdminRole(currentRole)) {
+        _showErrorDialog('QR scanning is not available for admin accounts.');
+        return;
+      }
+
+      final scannedUserId = scannedUserData['uid']?.toString() ?? '';
+
+      if (scannedUserId.isEmpty) {
+        _showErrorDialog('Invalid user QR code.');
+        return;
+      }
+
+      if (_isStaffRole(currentRole)) {
+        _showStaffPopup(scannedUserData);
+        return;
+      }
+
+      if (_isSpeakerRole(currentRole) || _isAttendeeRole(currentRole)) {
         try {
           final functions = ref.read(firebaseFunctionsProvider);
           final callable = functions.httpsCallable('addScannedConnection');
 
           await callable.call<Map<String, dynamic>>({
-            'scannedUserId': scannedUserData['uid'],
+            'scannedUserId': scannedUserId,
           });
 
           if (mounted) {
@@ -194,8 +402,17 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
               ),
             );
           }
-        } catch (e) {
-          debugPrint('Connection error: $e');
+        } catch (error) {
+          debugPrint('Connection error: $error');
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(_getReadableError(error)),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
         }
 
         if (!mounted) return;
@@ -203,13 +420,16 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (context) => UserDetailsScreen(
-              userId: scannedUserData['uid'],
+              userId: scannedUserId,
             ),
           ),
         );
 
         _resetScanner();
+        return;
       }
+
+      _showErrorDialog('Your account role cannot use this QR feature.');
     } catch (e) {
       _showErrorDialog('Failed to load user profile.');
     }
@@ -267,6 +487,8 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
         );
       }
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Checked into "${session.title}"!'),
@@ -275,29 +497,39 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
       );
 
       _resetScanner();
-    } catch (e) {
-      debugPrint('Session Check-in Error: $e');
-      _showErrorDialog('Check-in failed.');
+    } catch (error) {
+      debugPrint('Session Check-in Error: $error');
+      _showErrorDialog(_getReadableError(error));
     }
   }
 
-  void _showAdminStaffPopup(Map<String, dynamic> scannedUserData) {
+  void _showStaffPopup(Map<String, dynamic> scannedUserData) {
+    final name = scannedUserData['name']?.toString().trim() ?? 'User';
+    final role = scannedUserData['role']?.toString().trim() ?? 'Attendee';
+    final email = scannedUserData['email']?.toString().trim() ?? '';
+    final profileImageUrl =
+        scannedUserData['profileImageUrl']?.toString().trim() ?? '';
+    final scannedUserId = scannedUserData['uid']?.toString().trim() ?? '';
+
+    final canCheckInUser = _isAttendeeRole(role);
+
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         title: Row(
           children: [
             CircleAvatar(
-              backgroundImage: scannedUserData['profileImageUrl'] != null &&
-                      scannedUserData['profileImageUrl'].isNotEmpty
-                  ? NetworkImage(scannedUserData['profileImageUrl'])
-                  : null,
+              radius: 20,
+              backgroundImage:
+                  profileImageUrl.isNotEmpty ? NetworkImage(profileImageUrl) : null,
               backgroundColor: AppColors.avatarPlaceholder,
-              child: scannedUserData['profileImageUrl'] == null ||
-                      scannedUserData['profileImageUrl'].isEmpty
+              child: profileImageUrl.isEmpty
                   ? Text(
-                      scannedUserData['name'][0].toUpperCase(),
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
                       style: const TextStyle(
                         color: AppColors.avatarPlaceholderText,
                         fontWeight: FontWeight.bold,
@@ -305,10 +537,14 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
                     )
                   : null,
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Text(
-                scannedUserData['name'] ?? 'User',
+                name,
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -317,8 +553,20 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Role: ${scannedUserData['role']}'),
-            Text('Email: ${scannedUserData['email']}'),
+            Text('Role: $role'),
+            const SizedBox(height: 4),
+            Text(email.isNotEmpty ? 'Email: $email' : 'Email: Not available'),
+            if (!canCheckInUser) ...[
+              const SizedBox(height: 12),
+              Text(
+                'This user is not an attendee, so event check-in is not required.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: Colors.grey.shade700,
+                ),
+              ),
+            ],
           ],
         ),
         actions: [
@@ -326,42 +574,55 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
             child: const Text('View Profile'),
             onPressed: () {
               Navigator.of(context).pop();
+
+              if (scannedUserId.isEmpty) {
+                _showErrorDialog('Invalid user profile.');
+                return;
+              }
+
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => UserDetailsScreen(
-                    userId: scannedUserData['uid'],
+                    userId: scannedUserId,
                   ),
                 ),
               );
             },
           ),
-          ElevatedButton(
-            child: const Text('Check-in User'), 
-            onPressed: () async {
-              try {
-                final functions = ref.read(firebaseFunctionsProvider);
-                final callable = functions.httpsCallable('logEventCheckIn');
+          if (canCheckInUser)
+            ElevatedButton(
+              child: const Text('Check-in User'),
+              onPressed: () async {
+                if (scannedUserId.isEmpty) {
+                  Navigator.of(context).pop();
+                  _showErrorDialog('Invalid user QR code.');
+                  return;
+                }
 
-                await callable.call<Map<String, dynamic>>({
-                  'scannedUserId': scannedUserData['uid'],
-                });
+                try {
+                  final functions = ref.read(firebaseFunctionsProvider);
+                  final callable = functions.httpsCallable('logEventCheckIn');
 
-                if (!mounted) return;
+                  await callable.call<Map<String, dynamic>>({
+                    'scannedUserId': scannedUserId,
+                  });
 
-                Navigator.of(context).pop();
+                  if (!mounted) return;
 
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Checked in ${scannedUserData['name']}!'),
-                    backgroundColor: AppColors.successGreen,
-                  ),
-                );
-              } catch (e) {
-                Navigator.of(context).pop();
-                _showErrorDialog('Check-in failed.');
-              }
-            },
-          ),
+                  Navigator.of(context).pop();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Checked in $name!'),
+                      backgroundColor: AppColors.successGreen,
+                    ),
+                  );
+                } catch (error) {
+                  Navigator.of(context).pop();
+                  _showErrorDialog(_getReadableError(error));
+                }
+              },
+            ),
         ],
       ),
     ).then((_) => _resetScanner());
@@ -372,13 +633,35 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
-        title: const Text('Scan Error'),
-        content: Text(message),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: const Text(
+          'Scan Error',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.35,
+          ),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: const Text(
+              'OK',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: AppColors.namaNavyBlue,
+              ),
+            ),
           ),
         ],
       ),
@@ -391,10 +674,17 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
     setState(() {
       _isProcessing = false;
       _processingMessage = 'Processing...';
+      _lastScannedPayload = null;
     });
 
     if (_selectedTab == 1) {
-      _scannerController.start();
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (!mounted || _selectedTab != 1) return;
+
+        try {
+          _scannerController.start();
+        } catch (_) {}
+      });
     }
   }
 
@@ -402,133 +692,159 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
   Widget build(BuildContext context) {
     final userProfileAsync = ref.watch(userAppProfileStreamProvider);
 
-    return SafeArea(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Scan Me',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.namaNavyBlue,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                _buildSegmentedSelector(),
-              ],
+    return userProfileAsync.when(
+      data: (user) {
+        if (user == null) {
+          return const SafeArea(
+            child: _UnavailableCard(
+              title: 'Login Required',
+              message: 'Please log in again to use QR features.',
+              isError: true,
             ),
-          ),
+          );
+        }
 
-          Container(
-            height: 1,
-            color: Colors.black.withOpacity(0.45),
-          ),
+        final role = user.role.toString().toLowerCase().trim();
 
-          Expanded(
-            child: _selectedTab == 0
-                ? userProfileAsync.when(
-                    data: (user) => _buildMyCodeContent(context, user),
-                    loading: () => const Center(child: LoadingIndicator()),
-                    error: (err, stack) => const _UnavailableCard(
-                      title: 'Error Loading QR Code',
-                      message: 'Could not load your QR code. Please try again.',
-                      isError: true,
+        if (_isAdminRole(role)) {
+          try {
+            _scannerController.stop();
+          } catch (_) {}
+
+          return const SafeArea(
+            child: _AdminQrDisabledCard(),
+          );
+        }
+
+        return SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Scan Me',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.namaNavyBlue,
+                      ),
                     ),
-                  )
-                : _buildScannerContent(),
+                    const SizedBox(height: 28),
+                    _buildSegmentedSelector(),
+                  ],
+                ),
+              ),
+              Container(
+                height: 1,
+                color: Colors.black.withOpacity(0.45),
+              ),
+              Expanded(
+                child: _selectedTab == 0
+                    ? _buildMyCodeContent(context, user)
+                    : _buildScannerContent(),
+              ),
+            ],
           ),
-        ],
+        );
+      },
+      loading: () => const SafeArea(
+        child: Center(child: LoadingIndicator()),
+      ),
+      error: (err, stack) => const SafeArea(
+        child: _UnavailableCard(
+          title: 'Error Loading QR Code',
+          message: 'Could not load your QR code. Please try again.',
+          isError: true,
+        ),
       ),
     );
   }
 
   Widget _buildSegmentedSelector() {
-  return Center(
-    child: Container(
-      width: 190,
-      height: 36,
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8E6F1),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Stack(
-        children: [
-          AnimatedAlign(
-            duration: const Duration(milliseconds: 280),
-            curve: Curves.easeOutCubic,
-            alignment:
-                _selectedTab == 0 ? Alignment.centerLeft : Alignment.centerRight,
-            child: AnimatedContainer(
+    return Center(
+      child: Container(
+        width: 190,
+        height: 36,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8E6F1),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Stack(
+          children: [
+            AnimatedAlign(
               duration: const Duration(milliseconds: 280),
               curve: Curves.easeOutCubic,
-              width: 86,
-              height: 28,
-              decoration: BoxDecoration(
-                color: AppColors.namaNavyBlue.withOpacity(0.80),
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.namaNavyBlue.withOpacity(0.18),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+              alignment:
+                  _selectedTab == 0 ? Alignment.centerLeft : Alignment.centerRight,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 280),
+                curve: Curves.easeOutCubic,
+                width: 86,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: AppColors.namaNavyBlue.withOpacity(0.80),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.namaNavyBlue.withOpacity(0.18),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(22),
-                  onTap: () => _switchTab(0),
-                  child: AnimatedScale(
-                    duration: const Duration(milliseconds: 180),
-                    scale: _selectedTab == 0 ? 1.08 : 1.0,
-                    child: Center(
-                      child: Icon(
-                        AppIcons.qrCode,
-                        size: 18,
-                        color: _selectedTab == 0
-                            ? Colors.white
-                            : Colors.black87,
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: () => _switchTab(0),
+                    child: AnimatedScale(
+                      duration: const Duration(milliseconds: 180),
+                      scale: _selectedTab == 0 ? 1.08 : 1.0,
+                      child: Center(
+                        child: Icon(
+                          AppIcons.qrCode,
+                          size: 18,
+                          color: _selectedTab == 0
+                              ? Colors.white
+                              : Colors.black87,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(22),
-                  onTap: () => _switchTab(1),
-                  child: AnimatedScale(
-                    duration: const Duration(milliseconds: 180),
-                    scale: _selectedTab == 1 ? 1.08 : 1.0,
-                    child: Center(
-                      child: Icon(
-                        Icons.camera_alt_outlined,
-                        size: 20,
-                        color: _selectedTab == 1
-                            ? Colors.white
-                            : Colors.black87,
+                Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: () => _switchTab(1),
+                    child: AnimatedScale(
+                      duration: const Duration(milliseconds: 180),
+                      scale: _selectedTab == 1 ? 1.08 : 1.0,
+                      child: Center(
+                        child: Icon(
+                          Icons.camera_alt_outlined,
+                          size: 20,
+                          color: _selectedTab == 1
+                              ? Colors.white
+                              : Colors.black87,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildMyCodeContent(BuildContext context, dynamic user) {
     if (user == null) {
@@ -621,9 +937,7 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 14),
-
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -662,9 +976,7 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
               ],
             ),
           ),
-
           const SizedBox(height: 10),
-
           Text(
             'Share your QR code to connect with others',
             style: TextStyle(
@@ -673,9 +985,7 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
             ),
             textAlign: TextAlign.center,
           ),
-
           const SizedBox(height: 50),
-
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
@@ -748,9 +1058,9 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
       children: [
         MobileScanner(
           controller: _scannerController,
+          fit: BoxFit.cover,
           onDetect: _handleQRCode,
         ),
-
         Positioned(
           top: 36,
           child: Container(
@@ -769,7 +1079,6 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
             ),
           ),
         ),
-
         Container(
           width: 230,
           height: 230,
@@ -781,7 +1090,6 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-
         if (_isProcessing)
           Container(
             width: 230,
@@ -813,8 +1121,62 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
 
   @override
   void dispose() {
+    try {
+      _scannerController.stop();
+    } catch (_) {}
+
     _scannerController.dispose();
     super.dispose();
+  }
+}
+
+class _AdminQrDisabledCard extends StatelessWidget {
+  const _AdminQrDisabledCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 90, 24, 24),
+      child: Card(
+        elevation: 3,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(30),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.admin_panel_settings_rounded,
+                size: 50,
+                color: AppColors.namaNavyBlue.withOpacity(0.35),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'QR Not Required for Admin',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.namaNavyBlue,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Admin accounts do not need QR scanning or QR code sharing.',
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.35,
+                  color: Colors.grey.shade700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

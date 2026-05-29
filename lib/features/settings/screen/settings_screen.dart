@@ -54,6 +54,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         cleanRole == 'speaker';
   }
 
+  bool _canSeeHelpCentre(String? role) {
+    final cleanRole = (role ?? '').trim().toLowerCase();
+
+    // Admin should NOT see Help Centre.
+    return cleanRole != 'admin';
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -64,6 +71,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final userRole = userAsync.asData?.value?.role;
     final showCertificates = _canSeeCertificates(userRole);
     final showConnections = _canSeeConnections(userRole);
+    final showHelpCentre = _canSeeHelpCentre(userRole);
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -149,18 +157,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 },
               ),
 
-              _buildItem(
-                icon: Icons.help_outline,
-                title: 'Help Centre',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const HelpCenterScreen(),
-                    ),
-                  );
-                },
-              ),
+              if (showHelpCentre)
+                _buildItem(
+                  icon: Icons.help_outline,
+                  title: 'Help Centre',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const HelpCenterScreen(),
+                      ),
+                    );
+                  },
+                ),
 
               const Spacer(),
 

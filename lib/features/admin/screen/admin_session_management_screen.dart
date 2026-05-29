@@ -4,11 +4,7 @@ import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/features/admin/screen/admin_dashboard_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_session_detail_screen.dart';
-import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
-import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
-import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -16,13 +12,11 @@ import 'package:intl/intl.dart';
 class AdminSessionManagementScreen extends ConsumerStatefulWidget {
   final String? eventId;
   final String? eventName;
-  final bool showBottomNav;
 
   const AdminSessionManagementScreen({
     super.key,
     this.eventId,
     this.eventName,
-    this.showBottomNav = true,
   });
 
   bool get isEventSpecific => eventId != null && eventId!.isNotEmpty;
@@ -34,8 +28,6 @@ class AdminSessionManagementScreen extends ConsumerStatefulWidget {
 
 class _AdminSessionManagementScreenState
     extends ConsumerState<AdminSessionManagementScreen> {
-  int _selectedBottomIndex = 1;
-
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _softPurple = Color(0xFFF4F2FB);
   static const Color _textDark = Color(0xFF111827);
@@ -69,43 +61,13 @@ class _AdminSessionManagementScreenState
         .where('eventId', isEqualTo: widget.eventId)
         .snapshots()
         .map((snapshot) {
-      final sessions = snapshot.docs
-          .map((doc) => Session.fromFirestore(doc))
-          .toList();
+      final sessions =
+      snapshot.docs.map((doc) => Session.fromFirestore(doc)).toList();
 
       sessions.sort((a, b) => a.startTime.compareTo(b.startTime));
 
       return sessions;
     });
-  }
-
-  void _onBottomNavTapped(int index) {
-    setState(() => _selectedBottomIndex = index);
-
-    if (index == 1) return;
-
-    Widget screen;
-
-    switch (index) {
-      case 0:
-        screen = const AdminDashboardScreen();
-        break;
-      case 2:
-        screen = const DirectoriesHubScreen();
-        break;
-      case 3:
-        screen = const QRHubScreen();
-        break;
-      case 4:
-        screen = const ProfileTabScreen();
-        break;
-      default:
-        return;
-    }
-
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => screen),
-    );
   }
 
   Map<DateTime, List<Session>> _groupSessionsByDate(List<Session> sessions) {
@@ -124,7 +86,7 @@ class _AdminSessionManagementScreenState
 
     for (final date in groupedSessions.keys) {
       groupedSessions[date]!.sort(
-        (a, b) => a.startTime.compareTo(b.startTime),
+            (a, b) => a.startTime.compareTo(b.startTime),
       );
     }
 
@@ -220,10 +182,10 @@ class _AdminSessionManagementScreenState
   Future<void> _showEditSessionSheet(Session session) async {
     final titleController = TextEditingController(text: session.title);
     final descriptionController =
-        TextEditingController(text: session.description);
+    TextEditingController(text: session.description);
     final locationController = TextEditingController(text: session.location);
     final liveStreamController =
-        TextEditingController(text: session.liveStreamUrl);
+    TextEditingController(text: session.liveStreamUrl);
 
     DateTime selectedDate = DateTime(
       session.startTime.year,
@@ -235,9 +197,8 @@ class _AdminSessionManagementScreenState
     TimeOfDay endTime = TimeOfDay.fromDateTime(session.endTime);
 
     final rawCategory = session.category.trim();
-    String selectedCategory = _categories.contains(rawCategory)
-        ? rawCategory
-        : 'Other';
+    String selectedCategory =
+    _categories.contains(rawCategory) ? rawCategory : 'Other';
 
     int selectedPriority = session.priority;
     if (selectedPriority < 1 || selectedPriority > 5) {
@@ -259,8 +220,8 @@ class _AdminSessionManagementScreenState
           return Theme(
             data: Theme.of(context).copyWith(
               colorScheme: Theme.of(context).colorScheme.copyWith(
-                    primary: _primaryColor,
-                  ),
+                primary: _primaryColor,
+              ),
             ),
             child: child!,
           );
@@ -280,8 +241,8 @@ class _AdminSessionManagementScreenState
           return Theme(
             data: Theme.of(context).copyWith(
               colorScheme: Theme.of(context).colorScheme.copyWith(
-                    primary: _primaryColor,
-                  ),
+                primary: _primaryColor,
+              ),
             ),
             child: child!,
           );
@@ -301,8 +262,8 @@ class _AdminSessionManagementScreenState
           return Theme(
             data: Theme.of(context).copyWith(
               colorScheme: Theme.of(context).colorScheme.copyWith(
-                    primary: _primaryColor,
-                  ),
+                primary: _primaryColor,
+              ),
             ),
             child: child!,
           );
@@ -441,9 +402,8 @@ class _AdminSessionManagementScreenState
                           ),
                         ),
                         IconButton(
-                          onPressed: isSaving
-                              ? null
-                              : () => Navigator.of(context).pop(),
+                          onPressed:
+                          isSaving ? null : () => Navigator.of(context).pop(),
                           icon: const Icon(
                             Icons.close_rounded,
                             color: _primaryColor,
@@ -490,9 +450,8 @@ class _AdminSessionManagementScreenState
                             label: 'Date',
                             value: formatDate(selectedDate),
                             icon: Icons.calendar_today_outlined,
-                            onTap: isSaving
-                                ? null
-                                : () => pickDate(setSheetState),
+                            onTap:
+                            isSaving ? null : () => pickDate(setSheetState),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -526,9 +485,9 @@ class _AdminSessionManagementScreenState
                       onChanged: isSaving
                           ? null
                           : (value) {
-                              if (value == null) return;
-                              setSheetState(() => selectedCategory = value);
-                            },
+                        if (value == null) return;
+                        setSheetState(() => selectedCategory = value);
+                      },
                     ),
                     const SizedBox(height: 14),
                     _EditPriorityDropdown(
@@ -536,9 +495,9 @@ class _AdminSessionManagementScreenState
                       onChanged: isSaving
                           ? null
                           : (value) {
-                              if (value == null) return;
-                              setSheetState(() => selectedPriority = value);
-                            },
+                        if (value == null) return;
+                        setSheetState(() => selectedPriority = value);
+                      },
                     ),
                     const SizedBox(height: 14),
                     _EditInputField(
@@ -594,10 +553,10 @@ class _AdminSessionManagementScreenState
                             onChanged: isSaving
                                 ? null
                                 : (value) {
-                                    setSheetState(() {
-                                      isChatEnabled = value;
-                                    });
-                                  },
+                              setSheetState(() {
+                                isChatEnabled = value;
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -631,18 +590,17 @@ class _AdminSessionManagementScreenState
                         const SizedBox(width: 12),
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: isSaving
-                                ? null
-                                : () => saveSession(setSheetState),
+                            onPressed:
+                            isSaving ? null : () => saveSession(setSheetState),
                             icon: isSaving
                                 ? const SizedBox(
-                                    height: 16,
-                                    width: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
+                              height: 16,
+                              width: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
                                 : const Icon(Icons.check_rounded, size: 18),
                             label: Text(
                               isSaving ? 'Saving...' : 'Save',
@@ -880,7 +838,7 @@ class _AdminSessionManagementScreenState
           children: [
             _buildDateHeader(date, dateSessions),
             ...dateSessions.map(
-              (session) => _AdminSessionCard(
+                  (session) => _AdminSessionCard(
                 session: session,
                 onTap: () {
                   Navigator.of(context).push(
@@ -937,45 +895,6 @@ class _AdminSessionManagementScreenState
           ],
         ),
       ),
-      bottomNavigationBar: widget.showBottomNav
-          ? BottomNavigationBar(
-              type: BottomNavigationBarType.fixed,
-              currentIndex: _selectedBottomIndex,
-              selectedItemColor: const Color(0xFFF5B51B),
-              unselectedItemColor: Colors.white,
-              backgroundColor: _primaryColor,
-              selectedFontSize: 12,
-              unselectedFontSize: 12,
-              onTap: _onBottomNavTapped,
-              items: const [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.admin_panel_settings_outlined),
-                  activeIcon: Icon(Icons.admin_panel_settings),
-                  label: 'Admin',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.calendar_month_outlined),
-                  activeIcon: Icon(Icons.calendar_month),
-                  label: 'Agenda',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.people_outline),
-                  activeIcon: Icon(Icons.people),
-                  label: 'Network',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.qr_code_scanner),
-                  activeIcon: Icon(Icons.qr_code_scanner),
-                  label: 'QR',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.person_outline),
-                  activeIcon: Icon(Icons.person),
-                  label: 'Profile',
-                ),
-              ],
-            )
-          : null,
     );
   }
 }

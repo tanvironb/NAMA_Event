@@ -179,29 +179,82 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
   Widget _buildAccessDenied(BuildContext context) {
     return Scaffold(
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 64,
-              color: Theme.of(context).colorScheme.error,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Access Denied',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            const Text('Your account is not authorized for this application.'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                ref.read(authViewModelProvider.notifier).signOut();
-              },
-              child: const Text('Sign Out'),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Access Denied',
+                style: Theme.of(context).textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Your account is not authorized for this application.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  ref.read(authViewModelProvider.notifier).signOut();
+                },
+                child: const Text('Sign Out'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileError(BuildContext context, Object? error) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 64,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Error Loading Profile',
+                style: Theme.of(context).textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '$error',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {});
+                },
+                child: const Text('Retry'),
+              ),
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () {
+                  ref.read(authViewModelProvider.notifier).signOut();
+                },
+                child: const Text('Sign Out'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -273,11 +326,7 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
         }
 
         if (snapshot.hasError) {
-          return Scaffold(
-            body: Center(
-              child: Text('Error loading profile: ${snapshot.error}'),
-            ),
-          );
+          return _buildProfileError(context, snapshot.error);
         }
 
         if (!snapshot.hasData || !snapshot.data!.exists) {

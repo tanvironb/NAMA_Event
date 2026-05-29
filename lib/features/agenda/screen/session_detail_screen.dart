@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/event_photos/screen/upload_session_photo_screen.dart';
-//import 'package:events_app_trueattempt/features/event_photos/screen/upload_session_photo_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -52,7 +51,7 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
 
     for (final speakerId in widget.session.speakerIds) {
       DocumentSnapshot<Map<String, dynamic>> doc =
-          await firestore.collection('speakers').doc(speakerId).get();
+      await firestore.collection('speakers').doc(speakerId).get();
 
       if (!doc.exists) {
         doc = await firestore.collection('users').doc(speakerId).get();
@@ -164,8 +163,8 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
                   onPressed: _isJoiningSession
                       ? null
                       : () {
-                          Navigator.pop(dialogContext);
-                        },
+                    Navigator.pop(dialogContext);
+                  },
                   child: const Text(
                     'Cancel',
                     style: TextStyle(color: AppColors.namaNavyBlue),
@@ -183,47 +182,47 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
                   onPressed: _isJoiningSession
                       ? null
                       : () async {
-                          final enteredCode = codeController.text.trim();
+                    final enteredCode = codeController.text.trim();
 
-                          if (enteredCode.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Please enter session code.'),
-                              ),
-                            );
-                            return;
-                          }
+                    if (enteredCode.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Please enter session code.'),
+                        ),
+                      );
+                      return;
+                    }
 
-                          setDialogState(() {
-                            _isJoiningSession = true;
-                          });
+                    setDialogState(() {
+                      _isJoiningSession = true;
+                    });
 
-                          final success =
-                              await _joinSessionWithCode(enteredCode);
+                    final success =
+                    await _joinSessionWithCode(enteredCode);
 
-                          if (!mounted) return;
+                    if (!mounted) return;
 
-                          setDialogState(() {
-                            _isJoiningSession = false;
-                          });
+                    setDialogState(() {
+                      _isJoiningSession = false;
+                    });
 
-                          if (success) {
-                            Navigator.pop(dialogContext);
-                          }
-                        },
+                    if (success) {
+                      Navigator.pop(dialogContext);
+                    }
+                  },
                   child: _isJoiningSession
                       ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
+                    height: 18,
+                    width: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                       : const Text(
-                          'Submit',
-                          style: TextStyle(fontSize: 13),
-                        ),
+                    'Submit',
+                    style: TextStyle(fontSize: 13),
+                  ),
                 ),
               ],
             );
@@ -433,19 +432,20 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
         context: context,
         builder: (context) {
           return AlertDialog(
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
             ),
             title: const Text(
               'Feedback Already Submitted',
               style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
               ),
             ),
             content: const Text(
               'You have already submitted feedback for this session.',
-              style: TextStyle(fontSize: 14),
+              style: TextStyle(fontSize: 13),
             ),
             actions: [
               TextButton(
@@ -470,156 +470,212 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(22),
-              ),
-              title: const Text(
-                'Give Feedback',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: AppColors.namaNavyBlue,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.session.title,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'Rating',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(5, (index) {
-                        final ratingValue = index + 1;
+            final screenSize = MediaQuery.of(context).size;
 
-                        return IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 38,
-                            minHeight: 38,
+            return Dialog(
+              insetPadding: const EdgeInsets.symmetric(
+                horizontal: 28,
+                vertical: 24,
+              ),
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 310,
+                  maxHeight: screenSize.height * 0.78,
+                ),
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Give Feedback',
+                          style: TextStyle(
+                            fontSize: 20,
+                            color: AppColors.namaNavyBlue,
+                            fontWeight: FontWeight.w800,
                           ),
-                          icon: Icon(
-                            ratingValue <= selectedRating
-                                ? Icons.star
-                                : Icons.star_border,
-                            color: AppColors.namaGoldenYellow,
-                            size: 30,
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          widget.session.title,
+                          maxLines: 4,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14.5,
+                            height: 1.25,
+                            color: Color(0xFF222222),
+                            fontWeight: FontWeight.w600,
                           ),
-                          onPressed: _isSubmittingFeedback
-                              ? null
-                              : () {
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Rating',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF333333),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: List.generate(5, (index) {
+                              final ratingValue = index + 1;
+
+                              return GestureDetector(
+                                onTap: _isSubmittingFeedback
+                                    ? null
+                                    : () {
                                   setDialogState(() {
                                     selectedRating = ratingValue;
                                   });
                                 },
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 14),
-                    const Text(
-                      'Comment',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: commentController,
-                      enabled: !_isSubmittingFeedback,
-                      maxLines: 4,
-                      style: const TextStyle(fontSize: 13),
-                      decoration: InputDecoration(
-                        hintText: 'Write your feedback here...',
-                        hintStyle: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade500,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(2),
+                                  child: Icon(
+                                    ratingValue <= selectedRating
+                                        ? Icons.star
+                                        : Icons.star_border_rounded,
+                                    color: AppColors.namaGoldenYellow,
+                                    size: 27,
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
                         ),
-                        filled: true,
-                        fillColor: const Color(0xFFF5F5F5),
-                        contentPadding: const EdgeInsets.all(14),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(18),
-                          borderSide: BorderSide.none,
+                        const SizedBox(height: 20),
+                        const Text(
+                          'Comment',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF333333),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: commentController,
+                          enabled: !_isSubmittingFeedback,
+                          maxLines: 3,
+                          minLines: 3,
+                          style: const TextStyle(fontSize: 13),
+                          decoration: InputDecoration(
+                            hintText: 'Write your feedback here...',
+                            hintStyle: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey.shade500,
+                            ),
+                            filled: true,
+                            fillColor: const Color(0xFFF5F5F5),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 18),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextButton(
+                                onPressed: _isSubmittingFeedback
+                                    ? null
+                                    : () {
+                                  Navigator.pop(dialogContext);
+                                },
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.grey,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.namaNavyBlue,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                onPressed: _isSubmittingFeedback
+                                    ? null
+                                    : () async {
+                                  setDialogState(() {
+                                    _isSubmittingFeedback = true;
+                                  });
+
+                                  await _submitFeedback(
+                                    rating: selectedRating,
+                                    comment:
+                                    commentController.text.trim(),
+                                  );
+
+                                  if (!mounted) return;
+
+                                  setDialogState(() {
+                                    _isSubmittingFeedback = false;
+                                  });
+
+                                  Navigator.pop(dialogContext);
+                                },
+                                child: _isSubmittingFeedback
+                                    ? const SizedBox(
+                                  height: 17,
+                                  width: 17,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                                    : const Text(
+                                  'Submit',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              actions: [
-                TextButton(
-                  onPressed: _isSubmittingFeedback
-                      ? null
-                      : () {
-                          Navigator.pop(dialogContext);
-                        },
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.namaNavyBlue,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: _isSubmittingFeedback
-                      ? null
-                      : () async {
-                          setDialogState(() {
-                            _isSubmittingFeedback = true;
-                          });
-
-                          await _submitFeedback(
-                            rating: selectedRating,
-                            comment: commentController.text.trim(),
-                          );
-
-                          if (!mounted) return;
-
-                          setDialogState(() {
-                            _isSubmittingFeedback = false;
-                          });
-
-                          Navigator.pop(dialogContext);
-                        },
-                  child: _isSubmittingFeedback
-                      ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          'Submit',
-                          style: TextStyle(fontSize: 13),
-                        ),
-                ),
-              ],
             );
           },
         );
@@ -645,16 +701,16 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
       final userData = userDoc.data();
 
       final userName = (userData?['name'] ??
-              userData?['fullName'] ??
-              userData?['displayName'] ??
-              user.displayName ??
-              'Attendee')
+          userData?['fullName'] ??
+          userData?['displayName'] ??
+          user.displayName ??
+          'Attendee')
           .toString();
 
       final userEmail = (userData?['email'] ?? user.email ?? '').toString();
 
       final sessionRef =
-          firestore.collection('sessions').doc(widget.session.id);
+      firestore.collection('sessions').doc(widget.session.id);
 
       final feedbackRef = sessionRef.collection('feedback').doc(user.uid);
 
@@ -782,13 +838,13 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
               onPressed: _isJoiningSession ? null : _joinSession,
               icon: _isJoiningSession
                   ? const SizedBox(
-                      height: 15,
-                      width: 15,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
+                height: 15,
+                width: 15,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
                   : const Icon(Icons.login, size: 17),
               label: Text(
                 _isJoiningSession ? 'Joining...' : 'Join Event',
@@ -814,13 +870,13 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
               onPressed: _isCheckingChatAccess ? null : _openSessionChat,
               icon: _isCheckingChatAccess
                   ? const SizedBox(
-                      height: 15,
-                      width: 15,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: AppColors.namaNavyBlue,
-                      ),
-                    )
+                height: 15,
+                width: 15,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.namaNavyBlue,
+                ),
+              )
                   : const Icon(Icons.chat_bubble_outline, size: 17),
               label: Text(
                 _isCheckingChatAccess ? 'Checking...' : 'Open Chat',
@@ -905,19 +961,19 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
                       borderRadius: BorderRadius.circular(22),
                       image: widget.session.imageUrl.isNotEmpty
                           ? DecorationImage(
-                              image: NetworkImage(widget.session.imageUrl),
-                              fit: BoxFit.cover,
-                            )
+                        image: NetworkImage(widget.session.imageUrl),
+                        fit: BoxFit.cover,
+                      )
                           : null,
                     ),
                     child: widget.session.imageUrl.isEmpty
                         ? const Center(
-                            child: Icon(
-                              Icons.image_outlined,
-                              size: 45,
-                              color: Colors.grey,
-                            ),
-                          )
+                      child: Icon(
+                        Icons.image_outlined,
+                        size: 45,
+                        color: Colors.grey,
+                      ),
+                    )
                         : null,
                   ),
                   Positioned(
@@ -1128,7 +1184,7 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
             CircleAvatar(
               radius: 28,
               backgroundImage:
-                  imageUrl.toString().isNotEmpty ? NetworkImage(imageUrl) : null,
+              imageUrl.toString().isNotEmpty ? NetworkImage(imageUrl) : null,
               child: imageUrl.toString().isEmpty
                   ? const Icon(Icons.person)
                   : null,

@@ -29,7 +29,12 @@ class ProfileTabScreen extends ConsumerWidget {
         child: userProfileAsync.when(
           data: (appUser) {
             if (appUser == null) {
-              return const Center(child: Text('Profile not found'));
+              return const Center(
+                child: Text(
+                  'Profile not found',
+                  style: TextStyle(fontSize: 12.5),
+                ),
+              );
             }
 
             final profileImageUrl = appUser.profileImageUrl.trim();
@@ -74,7 +79,7 @@ class ProfileTabScreen extends ConsumerWidget {
                         'Profile',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.w700,
-                              fontSize: 22,
+                              fontSize: 19,
                               color: primaryColor,
                             ),
                       ),
@@ -207,7 +212,11 @@ class ProfileTabScreen extends ConsumerWidget {
           },
           loading: () => const LoadingIndicator(),
           error: (error, stack) => Center(
-            child: Text('Error loading profile: $error'),
+            child: Text(
+              'Error loading profile: $error',
+              style: const TextStyle(fontSize: 12.5),
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       ),
@@ -240,14 +249,14 @@ class ProfileTabScreen extends ConsumerWidget {
           child: Icon(
             icon,
             color: AppColors.navyBlue,
-            size: 21,
+            size: 20,
           ),
         ),
         title: Text(
           title,
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w600,
-                fontSize: 14.5,
+                fontSize: 13,
                 color: AppColors.textPrimary,
               ),
         ),
@@ -256,14 +265,14 @@ class ProfileTabScreen extends ConsumerWidget {
           child: Text(
             subtitle,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 12,
+                  fontSize: 10.8,
                   color: AppColors.textSecondary,
                 ),
           ),
         ),
         trailing: const Icon(
           Icons.chevron_right_rounded,
-          size: 22,
+          size: 20,
           color: AppColors.namaMediumGray,
         ),
         onTap: onTap,
@@ -275,7 +284,10 @@ class ProfileTabScreen extends ConsumerWidget {
     if (imageUrl.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No profile picture available'),
+          content: Text(
+            'No profile picture available',
+            style: TextStyle(fontSize: 12.5),
+          ),
         ),
       );
       return;

@@ -24,28 +24,65 @@ class VenueMapsCarousel extends StatelessWidget {
       for (final doc in snapshot.docs) {
         final data = doc.data();
 
-        final title = (data['title'] ?? '').toString().trim();
+        final sessionTitle = (data['title'] ?? '').toString().trim();
         final location = (data['location'] ?? '').toString().trim();
         final description = (data['description'] ?? '').toString().trim();
-        final venueImageUrl = (data['venueImageUrl'] ?? '').toString().trim();
 
-        if (venueImageUrl.isEmpty) continue;
+        final singleVenueImageUrl =
+            (data['venueImageUrl'] ?? '').toString().trim();
 
-        if (usedImages.contains(venueImageUrl)) continue;
-        usedImages.add(venueImageUrl);
+        final rawVenueImageUrls = data['venueImageUrls'];
+        final rawLocationImages = data['locationImages'];
+        final rawImageUrls = data['imageUrls'];
 
-        venues.add(
-          _VenueSessionItem(
-            id: doc.id,
-            title: location.isEmpty ? 'Venue' : location,
-            description: title.isEmpty
-                ? description.isEmpty
-                    ? 'Event venue location'
-                    : description
-                : title,
-            imageUrls: [venueImageUrl],
-          ),
-        );
+        final imageUrls = <String>[];
+
+        if (singleVenueImageUrl.isNotEmpty) {
+          imageUrls.add(singleVenueImageUrl);
+        }
+
+        if (rawVenueImageUrls is List) {
+          for (final item in rawVenueImageUrls) {
+            final url = item.toString().trim();
+            if (url.isNotEmpty) imageUrls.add(url);
+          }
+        }
+
+        if (rawLocationImages is List) {
+          for (final item in rawLocationImages) {
+            final url = item.toString().trim();
+            if (url.isNotEmpty) imageUrls.add(url);
+          }
+        }
+
+        if (rawImageUrls is List) {
+          for (final item in rawImageUrls) {
+            final url = item.toString().trim();
+            if (url.isNotEmpty) imageUrls.add(url);
+          }
+        }
+
+        for (final imageUrl in imageUrls) {
+          if (imageUrl.isEmpty) continue;
+
+          // Avoid exact duplicate image URLs only.
+          // Do NOT remove same venue/location names.
+          if (usedImages.contains(imageUrl)) continue;
+          usedImages.add(imageUrl);
+
+          venues.add(
+            _VenueSessionItem(
+              id: '${doc.id}_${venues.length}',
+              title: location.isEmpty ? 'Venue' : location,
+              description: sessionTitle.isNotEmpty
+                  ? sessionTitle
+                  : description.isNotEmpty
+                      ? description
+                      : 'Event venue location',
+              imageUrls: [imageUrl],
+            ),
+          );
+        }
       }
 
       return venues;
@@ -55,7 +92,8 @@ class VenueMapsCarousel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 135,
+      height: 150,
+      width: double.infinity,
       child: StreamBuilder<List<_VenueSessionItem>>(
         stream: _venueSessionsStream(),
         builder: (context, snapshot) {
@@ -78,24 +116,28 @@ class VenueMapsCarousel extends StatelessWidget {
           return Swiper(
             itemCount: venueMaps.length,
             autoplay: venueMaps.length > 1,
-            autoplayDelay: 5000,
+            autoplayDelay: 4200,
             autoplayDisableOnInteraction: false,
-            viewportFraction: 0.82,
-            scale: 0.9,
+            duration: 650,
+            viewportFraction: 1.0,
+            scale: 1.0,
             loop: venueMaps.length > 1,
             pagination: venueMaps.length > 1
                 ? const SwiperPagination(
-                    margin: EdgeInsets.only(bottom: 2),
+                    alignment: Alignment.bottomCenter,
+                    margin: EdgeInsets.only(bottom: 7),
                     builder: DotSwiperPaginationBuilder(
                       color: Color(0xFFD7D7D7),
                       activeColor: primaryBlue,
-                      size: 6,
-                      activeSize: 7,
+                      size: 5,
+                      activeSize: 6,
+                      space: 3,
                     ),
                   )
                 : null,
             itemBuilder: (context, index) {
               final venueMap = venueMaps[index];
+
               return _venueCard(context, venueMap);
             },
           );
@@ -106,9 +148,10 @@ class VenueMapsCarousel extends StatelessWidget {
 
   Widget _venueCard(BuildContext context, _VenueSessionItem venueMap) {
     return GestureDetector(
-      onTap: () => VenueMapsCarousel._showMapGallery(context, venueMap),
+      onTap: () => VenueMapsCarousel._openMapPreview(context, venueMap),
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 6),
+        width: double.infinity,
+        margin: EdgeInsets.zero,
         decoration: BoxDecoration(
           color: cardGrey,
           borderRadius: BorderRadius.circular(20),
@@ -127,88 +170,100 @@ class VenueMapsCarousel extends StatelessWidget {
               child: CachedNetworkImage(
                 imageUrl: venueMap.imageUrls.first,
                 fit: BoxFit.cover,
-                placeholder: (context, url) => const Center(
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                placeholder: (context, url) => Container(
+                  color: const Color(0xFFF1F3F8),
+                  child: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 ),
-                errorWidget: (context, url, error) => const Center(
-                  child: Icon(
-                    Icons.map_outlined,
-                    color: primaryBlue,
-                    size: 34,
+                errorWidget: (context, url, error) => Container(
+                  color: const Color(0xFFF1F3F8),
+                  child: const Center(
+                    child: Icon(
+                      Icons.map_outlined,
+                      color: primaryBlue,
+                      size: 34,
+                    ),
                   ),
                 ),
               ),
             ),
+
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
                     colors: [
-                      Colors.transparent,
-                      Colors.black.withOpacity(0.72),
+                      Colors.black.withOpacity(0.62),
+                      Colors.black.withOpacity(0.18),
+                      Colors.black.withOpacity(0.52),
                     ],
+                    stops: const [0, 0.56, 1],
                   ),
                 ),
               ),
             ),
+
             Positioned(
-              left: 14,
-              right: 14,
-              bottom: 14,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              left: 18,
+              right: 90,
+              bottom: 20,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          venueMap.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          venueMap.description,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    venueMap.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 5,
-                    ),
-                    decoration: BoxDecoration(
-                      color: primaryBlue,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'View',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  const SizedBox(height: 3),
+                  Text(
+                    venueMap.description,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.92),
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
+              ),
+            ),
+
+            Positioned(
+              right: 14,
+              bottom: 18,
+              child: GestureDetector(
+                onTap: () => VenueMapsCarousel._openMapPreview(
+                  context,
+                  venueMap,
+                ),
+                child: Container(
+                  height: 30,
+                  padding: const EdgeInsets.symmetric(horizontal: 15),
+                  decoration: BoxDecoration(
+                    color: primaryBlue,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    'View',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
@@ -218,107 +273,123 @@ class VenueMapsCarousel extends StatelessWidget {
   }
 
   Widget _emptyState(BuildContext context, String text) {
-    return Center(
-      child: Text(
-        text,
-        style: TextStyle(
-          color: Colors.black.withOpacity(0.55),
-          fontSize: 13,
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: cardGrey,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Center(
+        child: Text(
+          text,
+          style: TextStyle(
+            color: Colors.black.withOpacity(0.55),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
   }
 
-  static void _showMapGallery(
+  static void _openMapPreview(
     BuildContext context,
     _VenueSessionItem venueMap,
   ) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _VenueMapPreviewScreen(
+          venueMap: venueMap,
+        ),
+      ),
+    );
+  }
+}
+
+class _VenueMapPreviewScreen extends StatelessWidget {
+  final _VenueSessionItem venueMap;
+
+  const _VenueMapPreviewScreen({
+    required this.venueMap,
+  });
+
+  static const Color primaryBlue = Color(0xFF0D1496);
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl =
+        venueMap.imageUrls.isNotEmpty ? venueMap.imageUrls.first : '';
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
         backgroundColor: Colors.black,
-        insetPadding: EdgeInsets.zero,
-        child: Stack(
-          children: [
-            Center(
-              child: venueMap.imageUrls.isEmpty
-                  ? _buildPlaceholder(context, venueMap)
-                  : Swiper(
-                      itemCount: venueMap.imageUrls.length,
-                      pagination: venueMap.imageUrls.length > 1
-                          ? const SwiperPagination(
-                              builder: DotSwiperPaginationBuilder(
-                                color: Colors.white30,
-                                activeColor: AppColors.goldenYellow,
-                              ),
-                            )
-                          : null,
-                      control: venueMap.imageUrls.length > 1
-                          ? const SwiperControl(
-                              color: AppColors.goldenYellow,
-                            )
-                          : null,
-                      itemBuilder: (context, index) {
-                        return InteractiveViewer(
-                          minScale: 0.5,
-                          maxScale: 4.0,
-                          child: Center(
-                            child: CachedNetworkImage(
-                              imageUrl: venueMap.imageUrls[index],
-                              fit: BoxFit.contain,
-                              placeholder: (context, url) => const Center(
-                                child: CircularProgressIndicator(
-                                  color: AppColors.goldenYellow,
-                                ),
-                              ),
-                              errorWidget: (context, url, error) =>
-                                  _buildPlaceholder(context, venueMap),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-            ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Colors.black87, Colors.transparent],
-                  ),
-                ),
-                child: SafeArea(
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          venueMap.title,
-                          style: const TextStyle(
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          venueMap.title.trim().isEmpty ? 'Venue Map' : venueMap.title.trim(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: InteractiveViewer(
+              minScale: 0.7,
+              maxScale: 4.0,
+              child: Center(
+                child: imageUrl.isEmpty
+                    ? _buildPlaceholder(context, venueMap)
+                    : CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.contain,
+                        placeholder: (context, url) => const Center(
+                          child: CircularProgressIndicator(
                             color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            strokeWidth: 2,
                           ),
                         ),
+                        errorWidget: (context, url, error) =>
+                            _buildPlaceholder(context, venueMap),
                       ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.close,
-                          color: Colors.white,
-                        ),
-                        onPressed: () => Navigator.of(context).pop(),
-                      ),
-                    ],
+              ),
+            ),
+          ),
+          if (venueMap.description.trim().isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white.withOpacity(0.12),
+                    width: 1,
                   ),
                 ),
               ),
+              child: Text(
+                venueMap.description.trim(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12.5,
+                  height: 1.35,
+                ),
+              ),
             ),
-          ],
-        ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.small(
+        backgroundColor: primaryBlue,
+        foregroundColor: Colors.white,
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Icon(Icons.close),
       ),
     );
   }

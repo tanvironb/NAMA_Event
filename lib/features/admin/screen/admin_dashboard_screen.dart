@@ -420,7 +420,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                   _HeaderLogoRow(
                     onProfileTap: _goToProfile,
                   ),
-                  const SizedBox(height: 36),
+                  const SizedBox(height: 28),
                   RichText(
                     text: const TextSpan(
                       children: [
@@ -428,7 +428,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                           text: 'Welcome, ',
                           style: TextStyle(
                             color: textDark,
-                            fontSize: 24,
+                            fontSize: 20,
                             fontWeight: FontWeight.w400,
                             letterSpacing: 0.2,
                           ),
@@ -437,7 +437,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                           text: 'Boss!',
                           style: TextStyle(
                             color: primaryColor,
-                            fontSize: 24,
+                            fontSize: 20,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.2,
                           ),
@@ -445,20 +445,20 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 16),
                   _SearchBox(
                     controller: _searchController,
                     onChanged: (value) {
                       setState(() => _searchQuery = value);
                     },
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 20),
                   _CreateEventButton(
                     onTap: _goToCreateEvent,
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 20),
                   const _SectionTitle(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   if (snapshot.connectionState == ConnectionState.waiting)
                     const Padding(
                       padding: EdgeInsets.only(top: 50),
@@ -518,7 +518,7 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                         );
                       },
                     ),
-                  const SizedBox(height: 46),
+                  const SizedBox(height: 34),
                   const _FooterCredit(),
                 ],
               ),
@@ -544,7 +544,7 @@ class _HeaderLogoRow extends ConsumerWidget {
     final userAsync = ref.watch(userAppProfileStreamProvider);
 
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Image.asset(
           'assets/images/logo.png',
@@ -646,11 +646,11 @@ class _SearchBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 56,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      height: 46,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(26),
         border: Border.all(
           color: const Color(0xFFE4E0F2),
         ),
@@ -667,25 +667,25 @@ class _SearchBox extends StatelessWidget {
           const Icon(
             Icons.search_rounded,
             color: textMuted,
-            size: 23,
+            size: 20,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 9),
           Expanded(
             child: TextField(
               controller: controller,
               onChanged: onChanged,
               cursorColor: primaryColor,
-              cursorHeight: 18,
+              cursorHeight: 16,
               style: const TextStyle(
                 color: Color(0xFF111827),
-                fontSize: 13.5,
+                fontSize: 12,
                 fontWeight: FontWeight.w500,
               ),
               decoration: const InputDecoration(
                 hintText: 'Search events',
                 hintStyle: TextStyle(
                   color: textMuted,
-                  fontSize: 13.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.w400,
                 ),
                 border: InputBorder.none,
@@ -701,11 +701,11 @@ class _SearchBox extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 9),
           const Icon(
             Icons.search_rounded,
             color: primaryColor,
-            size: 25,
+            size: 21,
           ),
         ],
       ),
@@ -725,17 +725,17 @@ class _CreateEventButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44,
+      height: 38,
       child: OutlinedButton.icon(
         onPressed: onTap,
         icon: const Icon(
           Icons.calendar_month_outlined,
-          size: 18,
+          size: 16,
         ),
         label: const Text(
           'Create New Event',
           style: TextStyle(
-            fontSize: 12.5,
+            fontSize: 11.2,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -744,9 +744,9 @@ class _CreateEventButton extends StatelessWidget {
           side: const BorderSide(
             color: Color(0xFFE4E0F2),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
           ),
         ),
       ),
@@ -766,9 +766,9 @@ class _SectionTitle extends StatelessWidget {
         Icon(
           Icons.calendar_today_outlined,
           color: primaryColor,
-          size: 23,
+          size: 20,
         ),
-        SizedBox(width: 12),
+        SizedBox(width: 9),
         Flexible(
           child: Text(
             'Existing Events',
@@ -776,7 +776,7 @@ class _SectionTitle extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: primaryColor,
-              fontSize: 18,
+              fontSize: 15.5,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -812,10 +812,10 @@ class _EventsList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: const Color(0xFFF6F4FD),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: const Color(0xFFE8E4F8),
         ),
@@ -829,16 +829,16 @@ class _EventsList extends StatelessWidget {
 
           return Padding(
             padding: EdgeInsets.only(
-              bottom: index == events.length - 1 ? 0 : 10,
+              bottom: index == events.length - 1 ? 0 : 8,
             ),
             child: Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
+                horizontal: 10,
+                vertical: 8,
               ),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: isActive
                       ? Colors.green.withOpacity(0.65)
@@ -854,8 +854,8 @@ class _EventsList extends StatelessWidget {
                     child: Row(
                       children: [
                         Container(
-                          height: 38,
-                          width: 38,
+                          height: 34,
+                          width: 34,
                           decoration: BoxDecoration(
                             color: isActive
                                 ? Colors.green.withOpacity(0.12)
@@ -865,10 +865,10 @@ class _EventsList extends StatelessWidget {
                           child: Icon(
                             Icons.calendar_today_outlined,
                             color: isActive ? Colors.green : primaryColor,
-                            size: 19,
+                            size: 17,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 9),
                         Expanded(
                           child: Text(
                             '${index + 1}. $eventName',
@@ -876,7 +876,7 @@ class _EventsList extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: Color(0xFF111827),
-                              fontSize: 13.5,
+                              fontSize: 12,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -904,12 +904,12 @@ class _EventsList extends StatelessWidget {
                         const Icon(
                           Icons.chevron_right_rounded,
                           color: primaryColor,
-                          size: 25,
+                          size: 21,
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       _CompactEventButton(
@@ -962,18 +962,18 @@ class _CompactEventButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 30,
-      width: 74,
+      height: 27,
+      width: 68,
       child: OutlinedButton.icon(
         onPressed: onTap,
         icon: Icon(
           icon,
-          size: 13,
+          size: 12,
         ),
         label: Text(
           label,
           style: const TextStyle(
-            fontSize: 10,
+            fontSize: 9,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -983,7 +983,7 @@ class _CompactEventButton extends StatelessWidget {
             color: color.withOpacity(0.35),
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(9),
+            borderRadius: BorderRadius.circular(8),
           ),
           padding: EdgeInsets.zero,
         ),
@@ -1009,14 +1009,14 @@ class _ActiveToggleButton extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(9),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        height: 30,
-        width: 86,
+        height: 27,
+        width: 78,
         padding: const EdgeInsets.symmetric(horizontal: 7),
         decoration: BoxDecoration(
           color: isActive ? Colors.green.withOpacity(0.08) : Colors.white,
-          borderRadius: BorderRadius.circular(9),
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: activeColor.withOpacity(0.35),
           ),
@@ -1028,14 +1028,14 @@ class _ActiveToggleButton extends StatelessWidget {
               'Active',
               style: TextStyle(
                 color: activeColor,
-                fontSize: 9.8,
+                fontSize: 8.8,
                 fontWeight: FontWeight.w800,
               ),
             ),
             AnimatedContainer(
               duration: const Duration(milliseconds: 180),
-              height: 15,
-              width: 27,
+              height: 14,
+              width: 25,
               padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
                 color: isActive ? Colors.green : Colors.grey.withOpacity(0.75),
@@ -1046,8 +1046,8 @@ class _ActiveToggleButton extends StatelessWidget {
                 alignment:
                     isActive ? Alignment.centerRight : Alignment.centerLeft,
                 child: Container(
-                  height: 11,
-                  width: 11,
+                  height: 10,
+                  width: 10,
                   decoration: const BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
@@ -1080,12 +1080,12 @@ class _EmptyStateCard extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(
-        horizontal: 18,
-        vertical: 24,
+        horizontal: 16,
+        vertical: 20,
       ),
       decoration: BoxDecoration(
         color: const Color(0xFFF6F4FD),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: const Color(0xFFE8E4F8),
         ),
@@ -1095,7 +1095,7 @@ class _EmptyStateCard extends StatelessWidget {
           Icon(
             icon,
             color: primaryColor,
-            size: 32,
+            size: 28,
           ),
           const SizedBox(height: 12),
           Text(
@@ -1103,7 +1103,7 @@ class _EmptyStateCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: primaryColor,
-              fontSize: 14.5,
+              fontSize: 13,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1113,7 +1113,7 @@ class _EmptyStateCard extends StatelessWidget {
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: Color(0xFF6B7280),
-              fontSize: 11.5,
+              fontSize: 10.5,
               height: 1.35,
             ),
           ),
@@ -1147,7 +1147,7 @@ class _FooterCredit extends StatelessWidget {
                 'By: NAMA Foundation',
                 style: TextStyle(
                   color: primaryColor,
-                  fontSize: 13.5,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -1161,11 +1161,11 @@ class _FooterCredit extends StatelessWidget {
             ),
           ],
         ),
-        SizedBox(height: 8),
+        SizedBox(height: 7),
         Icon(
           Icons.circle,
           color: Color(0xFFF5B51B),
-          size: 7,
+          size: 6,
         ),
       ],
     );
@@ -1248,27 +1248,27 @@ class _AdminEventControlScreenState
       backgroundColor: softBackground,
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
           children: [
             _buildHeader(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
             _buildStatsRow(),
-            const SizedBox(height: 24),
+            const SizedBox(height: 18),
             const Text(
               'Admin Tools',
               style: TextStyle(
                 color: navyText,
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w900,
                 letterSpacing: -0.2,
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             _buildAdminTools(
               eventId: eventId,
               eventName: eventName,
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             _buildBottomCard(),
           ],
         ),
@@ -1291,32 +1291,32 @@ class _AdminEventControlScreenState
           children: [
             InkWell(
               onTap: () => Navigator.of(context).pop(),
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(13),
               child: Container(
-                width: 46,
-                height: 46,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(15),
+                  borderRadius: BorderRadius.circular(13),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 14,
-                      offset: const Offset(0, 6),
+                      color: Colors.black.withOpacity(0.035),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
                     ),
                   ],
                 ),
                 child: const Icon(
                   Icons.arrow_back_ios_new_rounded,
                   color: navyText,
-                  size: 18,
+                  size: 15,
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.only(top: 2),
+                padding: const EdgeInsets.only(top: 1),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1326,18 +1326,18 @@ class _AdminEventControlScreenState
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: navyText,
-                        fontSize: 20,
+                        fontSize: 16,
                         fontWeight: FontWeight.w900,
-                        height: 1.15,
+                        height: 1.08,
                         letterSpacing: -0.3,
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 4),
                     const Text(
                       'Admin Control Center',
                       style: TextStyle(
                         color: mutedText,
-                        fontSize: 13,
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -1345,15 +1345,15 @@ class _AdminEventControlScreenState
                 ),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Container(
-              margin: const EdgeInsets.only(top: 5),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              margin: const EdgeInsets.only(top: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               decoration: BoxDecoration(
                 color: isActive
                     ? const Color(0xFFE9FAF1)
                     : const Color(0xFFF3F4F6),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1361,16 +1361,16 @@ class _AdminEventControlScreenState
                   Icon(
                     Icons.circle,
                     color: isActive ? green : const Color(0xFF9CA3AF),
-                    size: 7,
+                    size: 6,
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Text(
                     isActive ? 'Active' : 'Inactive',
                     style: TextStyle(
                       color: isActive
                           ? const Color(0xFF088B4A)
                           : const Color(0xFF6B7280),
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -1385,7 +1385,7 @@ class _AdminEventControlScreenState
 
   Widget _buildStatsRow() {
     return SizedBox(
-      height: 118,
+      height: 98,
       child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
@@ -1395,21 +1395,21 @@ class _AdminEventControlScreenState
             icon: Icons.groups_rounded,
             stream: _usersCountStream(),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           _DashboardStatCard(
             title: 'Session\nCount',
             subtitle: 'Total Sessions',
             icon: Icons.event_note_rounded,
             stream: _sessionsCountStream(),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           _DashboardStatCard(
             title: 'App\nInstalled',
             subtitle: 'Total Installs',
             icon: Icons.phone_iphone_rounded,
             stream: _appInstalledCountStream(),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 8),
           const _DashboardStaticStatCard(
             title: 'Screen\nTime',
             value: '2h 34m',
@@ -1444,7 +1444,7 @@ class _AdminEventControlScreenState
                 },
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: _ModernAdminToolCard(
                 icon: Icons.people_alt_rounded,
@@ -1462,7 +1462,7 @@ class _AdminEventControlScreenState
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -1480,7 +1480,7 @@ class _AdminEventControlScreenState
                 },
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: _ModernAdminToolCard(
                 icon: Icons.notifications_rounded,
@@ -1498,7 +1498,7 @@ class _AdminEventControlScreenState
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -1516,7 +1516,7 @@ class _AdminEventControlScreenState
                 },
               ),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: _ModernAdminToolCard(
                 icon: Icons.image_rounded,
@@ -1534,7 +1534,7 @@ class _AdminEventControlScreenState
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         StreamBuilder<int>(
           stream: ref
               .watch(helpRepositoryProvider)
@@ -1566,7 +1566,7 @@ class _AdminEventControlScreenState
   Widget _buildBottomCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
@@ -1576,31 +1576,31 @@ class _AdminEventControlScreenState
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+            color: Colors.black.withOpacity(0.025),
+            blurRadius: 14,
+            offset: const Offset(0, 7),
           ),
         ],
       ),
       child: Row(
         children: [
           Container(
-            width: 46,
-            height: 46,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: const Color(0xFFE9E2FF),
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(13),
             ),
             child: const Icon(
               Icons.shield_rounded,
               color: primaryColor,
-              size: 24,
+              size: 21,
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 11),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1609,18 +1609,18 @@ class _AdminEventControlScreenState
                   "You're in control",
                   style: TextStyle(
                     color: navyText,
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.2,
                   ),
                 ),
-                SizedBox(height: 5),
+                SizedBox(height: 3),
                 Text(
                   'Manage every aspect of your event from one place.',
                   style: TextStyle(
                     color: mutedText,
-                    fontSize: 12,
-                    height: 1.35,
+                    fontSize: 10.5,
+                    height: 1.3,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1629,17 +1629,17 @@ class _AdminEventControlScreenState
           ),
           SizedBox(width: 8),
           SizedBox(
-            width: 74,
-            height: 58,
+            width: 56,
+            height: 44,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.all(Radius.circular(16)),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
               child: Icon(
                 Icons.analytics_rounded,
                 color: primaryColor,
-                size: 34,
+                size: 27,
               ),
             ),
           ),
@@ -1746,16 +1746,16 @@ class _BaseStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 128,
-      padding: const EdgeInsets.all(13),
+      width: 108,
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 7),
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -1763,19 +1763,19 @@ class _BaseStatCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 30,
+            height: 30,
             decoration: BoxDecoration(
               color: const Color(0xFFF0ECFF),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
               color: primaryColor,
-              size: 21,
+              size: 18,
             ),
           ),
-          const SizedBox(width: 9),
+          const SizedBox(width: 7),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1785,8 +1785,8 @@ class _BaseStatCard extends StatelessWidget {
                   maxLines: 2,
                   style: const TextStyle(
                     color: navyText,
-                    fontSize: 11,
-                    height: 1.2,
+                    fontSize: 9.8,
+                    height: 1.15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1797,19 +1797,19 @@ class _BaseStatCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: navyText,
-                    fontSize: 17,
+                    fontSize: 15,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.2,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   subtitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: mutedText,
-                    fontSize: 9.5,
+                    fontSize: 8.5,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1845,25 +1845,25 @@ class _ModernAdminToolCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: fullWidth ? 88 : 104,
+      height: fullWidth ? 72 : 84,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           hoverColor: const Color(0xFFF3F4F6),
           highlightColor: Colors.transparent,
           splashColor: Colors.transparent,
           child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 16,
-                  offset: const Offset(0, 7),
+                  color: Colors.black.withOpacity(0.035),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
@@ -1873,8 +1873,8 @@ class _ModernAdminToolCard extends StatelessWidget {
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 46,
-                      height: 46,
+                      width: 38,
+                      height: 38,
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
                           colors: [
@@ -1884,12 +1884,12 @@ class _ModernAdminToolCard extends StatelessWidget {
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
-                        borderRadius: BorderRadius.circular(14),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
                         icon,
                         color: Colors.white,
-                        size: 24,
+                        size: 20,
                       ),
                     ),
                     if (badgeCount > 0)
@@ -1903,15 +1903,15 @@ class _ModernAdminToolCard extends StatelessWidget {
                             shape: BoxShape.circle,
                           ),
                           constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
+                            minWidth: 15,
+                            minHeight: 15,
                           ),
                           child: Center(
                             child: Text(
                               badgeCount > 99 ? '99+' : badgeCount.toString(),
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 7.5,
+                                fontSize: 7,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1920,7 +1920,7 @@ class _ModernAdminToolCard extends StatelessWidget {
                       ),
                   ],
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 9),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -1932,31 +1932,32 @@ class _ModernAdminToolCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: navyText,
-                          fontSize: 13,
+                          fontSize: 11.5,
+                          height: 1.15,
                           fontWeight: FontWeight.w900,
                           letterSpacing: -0.1,
                         ),
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 4),
                       Text(
                         subtitle,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: mutedText,
-                          fontSize: 10.8,
-                          height: 1.25,
+                          fontSize: 9.5,
+                          height: 1.18,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 5),
+                const SizedBox(width: 3),
                 const Icon(
                   Icons.arrow_forward_ios_rounded,
                   color: navyText,
-                  size: 15,
+                  size: 12,
                 ),
               ],
             ),

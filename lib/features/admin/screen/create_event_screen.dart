@@ -54,7 +54,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _textMuted = Color(0xFF6B7280);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
 
   final List<String> _categories = const [
     'Conference',
@@ -191,6 +190,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             name: (data['name'] ?? '').toString(),
             email: (data['email'] ?? '').toString(),
             company: (data['company'] ?? '').toString(),
+            savedPassword: _readSavedSpeakerPassword(data),
           ),
         );
       }
@@ -339,6 +339,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
 
     return '$hour:$minute $period';
+  }
+
+  String _readSavedSpeakerPassword(Map<String, dynamic> data) {
+    final password = (data['speakerPassword'] ??
+            data['plainPassword'] ??
+            data['password'] ??
+            '')
+        .toString()
+        .trim();
+
+    return password;
   }
 
   void _addPartner() {
@@ -574,6 +585,20 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
       String uid = speaker.existingUserId ?? '';
       bool authAccountCreated = speaker.existingAuthAccountCreated;
+      Map<String, dynamic> existingSpeakerData = {};
+
+      if (uid.isNotEmpty) {
+        final currentSpeakerDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+
+        if (currentSpeakerDoc.exists) {
+          existingSpeakerData = currentSpeakerDoc.data() ?? {};
+          authAccountCreated =
+              existingSpeakerData['authAccountCreated'] == true;
+        }
+      }
 
       if (uid.isEmpty) {
         final existingSpeaker = await FirebaseFirestore.instance
@@ -584,8 +609,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
         if (existingSpeaker.docs.isNotEmpty) {
           uid = existingSpeaker.docs.first.id;
+          existingSpeakerData = existingSpeaker.docs.first.data();
           authAccountCreated =
-              existingSpeaker.docs.first.data()['authAccountCreated'] == true;
+              existingSpeakerData['authAccountCreated'] == true;
         }
       }
 
@@ -597,6 +623,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         authAccountCreated = true;
       }
 
+      final savedPassword = password.isNotEmpty
+          ? password
+          : _readSavedSpeakerPassword(existingSpeakerData);
+
       await FirebaseFirestore.instance.collection('users').doc(uid).set(
         {
           'uid': uid,
@@ -605,18 +635,22 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           'role': 'speaker',
           'company': company,
           'title': 'Speaker',
-          'position': '',
-          'bio': '',
-          'profileImageUrl': '',
+          'position': existingSpeakerData['position'] ?? '',
+          'bio': existingSpeakerData['bio'] ?? '',
+          'profileImageUrl': existingSpeakerData['profileImageUrl'] ?? '',
           'status': 'approved',
-          'points': 0,
+          'points': existingSpeakerData['points'] ?? 0,
           'eventIds': FieldValue.arrayUnion([eventId]),
-          'profileVisibility': 'full',
+          'profileVisibility':
+              existingSpeakerData['profileVisibility'] ?? 'full',
           'needsPrivacySelection': false,
           'createdByAdmin': true,
           'authAccountCreated': authAccountCreated,
+          if (savedPassword.isNotEmpty) 'speakerPassword': savedPassword,
+          if (savedPassword.isNotEmpty) 'plainPassword': savedPassword,
           'updatedAt': FieldValue.serverTimestamp(),
-          'createdAt': FieldValue.serverTimestamp(),
+          'createdAt':
+              existingSpeakerData['createdAt'] ?? FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
       );
@@ -645,13 +679,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       return null;
     }
 
-    if (!_validatePartners()) {
-      return null;
-    }
-
-    if (!_validateSpeakers()) {
-      return null;
-    }
+    if (!_validatePartners()) return null;
+    if (!_validateSpeakers()) return null;
 
     final startDate = _combineDateAndTime(_selectedDate!, _startTime!);
     final endDate = _combineDateAndTime(_selectedDate!, _endTime!);
@@ -804,6 +833,151 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     );
   }
 
+  Widget _buildDateTimeFields() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 360;
+
+        if (isSmall) {
+          return Column(
+            children: [
+              _PickerField(
+                label: 'Event Date',
+                value: _formatDate(_selectedDate),
+                icon: Icons.calendar_today_outlined,
+                onTap: _pickDate,
+              ),
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: _PickerField(
+                      label: 'Start Time',
+                      value: _startTime == null
+                          ? 'Start time'
+                          : _formatTime(_startTime),
+                      icon: Icons.access_time_rounded,
+                      onTap: _pickStartTime,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _PickerField(
+                      label: 'End Time',
+                      value: _endTime == null
+                          ? 'End time'
+                          : _formatTime(_endTime),
+                      icon: Icons.access_time_rounded,
+                      onTap: _pickEndTime,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(
+              child: _PickerField(
+                label: 'Event Date',
+                value: _formatDate(_selectedDate),
+                icon: Icons.calendar_today_outlined,
+                onTap: _pickDate,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _PickerField(
+                label: 'Start Time',
+                value:
+                    _startTime == null ? 'Start time' : _formatTime(_startTime),
+                icon: Icons.access_time_rounded,
+                onTap: _pickStartTime,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _PickerField(
+                label: 'End Time',
+                value: _endTime == null ? 'End time' : _formatTime(_endTime),
+                icon: Icons.access_time_rounded,
+                onTap: _pickEndTime,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCategoryAndLimitFields() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isSmall = constraints.maxWidth < 380;
+
+        if (isSmall) {
+          return Column(
+            children: [
+              _DropdownField(
+                label: 'Category',
+                value: _selectedCategory,
+                hint: 'Select category',
+                icon: Icons.sell_outlined,
+                items: _categories,
+                onChanged: (value) {
+                  setState(() => _selectedCategory = value);
+                },
+              ),
+              const SizedBox(height: 15),
+              _InputField(
+                label: 'Registration Limit',
+                controller: _registrationLimitController,
+                hint: 'Enter limit optional',
+                icon: Icons.people_outline_rounded,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(
+              child: _DropdownField(
+                label: 'Category',
+                value: _selectedCategory,
+                hint: 'Select category',
+                icon: Icons.sell_outlined,
+                items: _categories,
+                onChanged: (value) {
+                  setState(() => _selectedCategory = value);
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _InputField(
+                label: 'Registration Limit',
+                controller: _registrationLimitController,
+                hint: 'Enter limit',
+                icon: Icons.people_outline_rounded,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildPartnersSection() {
     return _SectionContainer(
       child: Column(
@@ -878,10 +1052,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   Widget _buildQuickSetupSection() {
     return _SectionContainer(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           const Text(
             'Quick Setup',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: _primaryColor,
               fontSize: 16,
@@ -891,65 +1066,128 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           const SizedBox(height: 3),
           const Text(
             'Choose the basic event settings.',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: _textMuted,
               fontSize: 11.8,
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 15),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _ChipGroup(
-                  title: 'Event Format',
-                  selectedValue: _eventFormat,
-                  options: const [
-                    _SetupOption(
-                      label: 'In-person',
-                      icon: Icons.person_outline_rounded,
+          const SizedBox(height: 18),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isSmall = constraints.maxWidth < 340;
+
+              if (isSmall) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Center(
+                      child: _ChipGroup(
+                        title: 'Event Format',
+                        selectedValue: _eventFormat,
+                        options: const [
+                          _SetupOption(
+                            label: 'In-person',
+                            icon: Icons.person_outline_rounded,
+                          ),
+                          _SetupOption(
+                            label: 'Online',
+                            icon: Icons.language_rounded,
+                          ),
+                          _SetupOption(
+                            label: 'Hybrid',
+                            icon: Icons.groups_2_outlined,
+                          ),
+                        ],
+                        onSelected: (value) {
+                          setState(() => _eventFormat = value);
+                        },
+                      ),
                     ),
-                    _SetupOption(
-                      label: 'Online',
-                      icon: Icons.language_rounded,
-                    ),
-                    _SetupOption(
-                      label: 'Hybrid',
-                      icon: Icons.groups_2_outlined,
+                    const SizedBox(height: 18),
+                    Center(
+                      child: _ChipGroup(
+                        title: 'Visibility',
+                        selectedValue: _visibility,
+                        options: const [
+                          _SetupOption(
+                            label: 'Public',
+                            icon: Icons.language_rounded,
+                          ),
+                          _SetupOption(
+                            label: 'Private',
+                            icon: Icons.lock_outline_rounded,
+                          ),
+                        ],
+                        onSelected: (value) {
+                          setState(() => _visibility = value);
+                        },
+                      ),
                     ),
                   ],
-                  onSelected: (value) {
-                    setState(() => _eventFormat = value);
-                  },
-                ),
-              ),
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 10),
-                width: 1,
-                height: 66,
-                color: const Color(0xFFE4E1EF),
-              ),
-              Expanded(
-                child: _ChipGroup(
-                  title: 'Visibility',
-                  selectedValue: _visibility,
-                  options: const [
-                    _SetupOption(
-                      label: 'Public',
-                      icon: Icons.language_rounded,
+                );
+              }
+
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Flexible(
+                    child: Center(
+                      child: _ChipGroup(
+                        title: 'Event Format',
+                        selectedValue: _eventFormat,
+                        options: const [
+                          _SetupOption(
+                            label: 'In-person',
+                            icon: Icons.person_outline_rounded,
+                          ),
+                          _SetupOption(
+                            label: 'Online',
+                            icon: Icons.language_rounded,
+                          ),
+                          _SetupOption(
+                            label: 'Hybrid',
+                            icon: Icons.groups_2_outlined,
+                          ),
+                        ],
+                        onSelected: (value) {
+                          setState(() => _eventFormat = value);
+                        },
+                      ),
                     ),
-                    _SetupOption(
-                      label: 'Private',
-                      icon: Icons.lock_outline_rounded,
+                  ),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    width: 1,
+                    height: 66,
+                    color: const Color(0xFFE4E1EF),
+                  ),
+                  Flexible(
+                    child: Center(
+                      child: _ChipGroup(
+                        title: 'Visibility',
+                        selectedValue: _visibility,
+                        options: const [
+                          _SetupOption(
+                            label: 'Public',
+                            icon: Icons.language_rounded,
+                          ),
+                          _SetupOption(
+                            label: 'Private',
+                            icon: Icons.lock_outline_rounded,
+                          ),
+                        ],
+                        onSelected: (value) {
+                          setState(() => _visibility = value);
+                        },
+                      ),
                     ),
-                  ],
-                  onSelected: (value) {
-                    setState(() => _visibility = value);
-                  },
-                ),
-              ),
-            ],
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -965,17 +1203,17 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildTopHeader(),
-              const SizedBox(height: 30),
+              const SizedBox(height: 26),
               Text(
                 widget.isEditMode ? 'Edit Event' : 'Create Event',
                 style: const TextStyle(
                   color: _primaryColor,
-                  fontSize: 28,
+                  fontSize: 27,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.7,
                 ),
@@ -987,11 +1225,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     : 'Set up a new event and create speaker accounts.',
                 style: const TextStyle(
                   color: _textMuted,
-                  fontSize: 13.5,
+                  fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 22),
               Form(
                 key: _formKey,
                 child: _SectionContainer(
@@ -1045,40 +1283,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         },
                       ),
                       const SizedBox(height: 15),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _PickerField(
-                              label: 'Event Date',
-                              value: _formatDate(_selectedDate),
-                              icon: Icons.calendar_today_outlined,
-                              onTap: _pickDate,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _PickerField(
-                              label: 'Start Time',
-                              value: _startTime == null
-                                  ? 'Start time'
-                                  : _formatTime(_startTime),
-                              icon: Icons.access_time_rounded,
-                              onTap: _pickStartTime,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _PickerField(
-                              label: 'End Time',
-                              value: _endTime == null
-                                  ? 'End time'
-                                  : _formatTime(_endTime),
-                              icon: Icons.access_time_rounded,
-                              onTap: _pickEndTime,
-                            ),
-                          ),
-                        ],
-                      ),
+                      _buildDateTimeFields(),
                       const SizedBox(height: 15),
                       _InputField(
                         label: 'Venue / Location',
@@ -1093,35 +1298,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                         },
                       ),
                       const SizedBox(height: 15),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _DropdownField(
-                              label: 'Category',
-                              value: _selectedCategory,
-                              hint: 'Select category',
-                              icon: Icons.sell_outlined,
-                              items: _categories,
-                              onChanged: (value) {
-                                setState(() => _selectedCategory = value);
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: _InputField(
-                              label: 'Registration Limit',
-                              controller: _registrationLimitController,
-                              hint: 'Enter limit (optional)',
-                              icon: Icons.people_outline_rounded,
-                              keyboardType: TextInputType.number,
-                              inputFormatters: [
-                                FilteringTextInputFormatter.digitsOnly,
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                      _buildCategoryAndLimitFields(),
                       const SizedBox(height: 15),
                       _InputField(
                         label: 'Organizer Contact',
@@ -1215,10 +1392,11 @@ class _SpeakerInput {
     String name = '',
     String email = '',
     String company = '',
+    String savedPassword = '',
   })  : nameController = TextEditingController(text: name),
         emailController = TextEditingController(text: email),
         companyController = TextEditingController(text: company),
-        passwordController = TextEditingController();
+        passwordController = TextEditingController(text: savedPassword);
 
   void clear() {
     nameController.clear();
@@ -1245,7 +1423,7 @@ class _SectionContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 15, 16, 16),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 15),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -1578,10 +1756,13 @@ class _PartnerNameField extends StatelessWidget {
                 color: _primaryColor,
                 size: 19,
               ),
+              prefixIconConstraints: const BoxConstraints(
+                minWidth: 40,
+              ),
               filled: true,
               fillColor: Colors.white,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
+                horizontal: 10,
                 vertical: 12,
               ),
               enabledBorder: OutlineInputBorder(
@@ -1722,9 +1903,7 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                isExisting
-                    ? 'Password (leave empty if already created)'
-                    : 'Password',
+                isExisting ? 'Password (saved for this speaker)' : 'Password',
                 style: const TextStyle(
                   color: _primaryColor,
                   fontSize: 12,
@@ -1745,7 +1924,7 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
                   ),
                   decoration: InputDecoration(
                     hintText: isExisting
-                        ? 'Optional for existing speaker'
+                        ? 'Saved speaker password'
                         : 'Set speaker password',
                     hintStyle: const TextStyle(
                       color: _textMuted,
@@ -1756,6 +1935,9 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
                       Icons.lock_outline_rounded,
                       color: _primaryColor,
                       size: 19,
+                    ),
+                    prefixIconConstraints: const BoxConstraints(
+                      minWidth: 40,
                     ),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -1774,7 +1956,7 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
                     filled: true,
                     fillColor: Colors.white,
                     contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
+                      horizontal: 10,
                       vertical: 12,
                     ),
                     enabledBorder: OutlineInputBorder(
@@ -1862,6 +2044,7 @@ class _InputField extends StatelessWidget {
             decoration: InputDecoration(
               counterText: '',
               hintText: hint,
+              hintMaxLines: isMultiLine ? 5 : 1,
               hintStyle: const TextStyle(
                 color: _textMuted,
                 fontSize: 12,
@@ -1878,7 +2061,7 @@ class _InputField extends StatelessWidget {
                 ),
               ),
               prefixIconConstraints: const BoxConstraints(
-                minWidth: 44,
+                minWidth: 40,
               ),
               suffixText: suffixText,
               suffixStyle: const TextStyle(
@@ -1888,7 +2071,7 @@ class _InputField extends StatelessWidget {
               filled: true,
               fillColor: Colors.white,
               contentPadding: EdgeInsets.symmetric(
-                horizontal: 12,
+                horizontal: 10,
                 vertical: isMultiLine ? 14 : 12,
               ),
               enabledBorder: OutlineInputBorder(
@@ -1956,7 +2139,7 @@ class _PickerField extends StatelessWidget {
           borderRadius: BorderRadius.circular(13),
           child: Container(
             height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(13),
@@ -1971,7 +2154,7 @@ class _PickerField extends StatelessWidget {
                   color: _primaryColor,
                   size: 18,
                 ),
-                const SizedBox(width: 7),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     value,
@@ -1981,7 +2164,7 @@ class _PickerField extends StatelessWidget {
                       color: isPlaceholder
                           ? _textMuted
                           : const Color(0xFF1F2937),
-                      fontSize: 11,
+                      fontSize: 10.7,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -1989,7 +2172,7 @@ class _PickerField extends StatelessWidget {
                 const Icon(
                   Icons.keyboard_arrow_down_rounded,
                   color: Color(0xFF454062),
-                  size: 18,
+                  size: 17,
                 ),
               ],
             ),
@@ -2032,6 +2215,7 @@ class _DropdownField extends StatelessWidget {
           height: 48,
           child: DropdownButtonFormField<String>(
             value: value,
+            isExpanded: true,
             onChanged: onChanged,
             validator: (value) {
               if (value == null || value.trim().isEmpty) {
@@ -2049,6 +2233,23 @@ class _DropdownField extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
+            selectedItemBuilder: (context) {
+              return items.map((item) {
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    item,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF1F2937),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                );
+              }).toList();
+            },
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: const TextStyle(
@@ -2060,10 +2261,13 @@ class _DropdownField extends StatelessWidget {
                 color: _primaryColor,
                 size: 19,
               ),
+              prefixIconConstraints: const BoxConstraints(
+                minWidth: 40,
+              ),
               filled: true,
               fillColor: Colors.white,
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 10,
+                horizontal: 8,
                 vertical: 11,
               ),
               enabledBorder: OutlineInputBorder(
@@ -2098,6 +2302,8 @@ class _DropdownField extends StatelessWidget {
                     value: item,
                     child: Text(
                       item,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFF1F2937),
                         fontSize: 12,
@@ -2123,6 +2329,8 @@ class _FieldLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: const TextStyle(
         color: Color(0xFF1B0F72),
         fontSize: 12,
@@ -2161,10 +2369,11 @@ class _ChipGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
           title,
+          textAlign: TextAlign.center,
           style: const TextStyle(
             color: _primaryColor,
             fontSize: 12,
@@ -2173,6 +2382,7 @@ class _ChipGroup extends StatelessWidget {
         ),
         const SizedBox(height: 9),
         Wrap(
+          alignment: WrapAlignment.center,
           spacing: 7,
           runSpacing: 8,
           children: options.map((option) {

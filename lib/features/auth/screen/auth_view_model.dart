@@ -1,3 +1,5 @@
+// lib/features/auth/screen/auth_view_model.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -15,16 +17,21 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
   // Handles user sign-in.
   Future<void> signIn(String email, String password) async {
     if (!mounted) return;
-    
+
     state = const AsyncValue.loading();
+
     try {
       await _authRepository.signInWithEmailAndPassword(email, password);
+
       if (mounted) {
         state = const AsyncValue.data(null);
       }
     } on FirebaseAuthException catch (e, stack) {
       if (mounted) {
-        // Pass full exception so we can check error code
+        state = AsyncValue.error(e, stack);
+      }
+    } catch (e, stack) {
+      if (mounted) {
         state = AsyncValue.error(e, stack);
       }
     }
@@ -33,16 +40,25 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
   // Handles user sign-up.
   Future<void> signUp(String email, String password, {String? name}) async {
     if (!mounted) return;
-    
+
     state = const AsyncValue.loading();
+
     try {
-      await _authRepository.createUserWithEmailAndPassword(email, password, name: name);
+      await _authRepository.createUserWithEmailAndPassword(
+        email,
+        password,
+        name: name,
+      );
+
       if (mounted) {
         state = const AsyncValue.data(null);
       }
     } on FirebaseAuthException catch (e, stack) {
       if (mounted) {
-        // Store the full exception so callers can inspect the error code if needed.
+        state = AsyncValue.error(e, stack);
+      }
+    } catch (e, stack) {
+      if (mounted) {
         state = AsyncValue.error(e, stack);
       }
     }
@@ -51,20 +67,19 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
   // Handles user sign-out.
   Future<void> signOut() async {
     if (!mounted) return;
-    // Reset state immediately so LoginScreen renders with a clean, interactive
-    // form as soon as AuthGate routes to it — avoids a loading-spinner window.
+
     state = const AsyncValue.data(null);
+
     try {
       await _authRepository.signOut();
     } on Exception catch (e) {
-      // signOut errors are not surfaced to the UI since the user is navigating
-      // away regardless. Log for debugging only.
       debugPrint('AuthViewModel: signOut error: $e');
     }
   }
 }
 
 // Riverpod provider for AuthViewModel
-final authViewModelProvider = StateNotifierProvider<AuthViewModel, AsyncValue<void>>((ref) {
+final authViewModelProvider =
+    StateNotifierProvider<AuthViewModel, AsyncValue<void>>((ref) {
   return AuthViewModel(ref.watch(authRepositoryProvider));
 });

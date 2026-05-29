@@ -23,6 +23,9 @@ class _ManageUserProfileScreenState
   final Set<String> _fieldsToRemove = {};
   final Map<String, String> _fieldValues = {};
 
+  bool _isUpdating = false;
+  bool _isLoadingDialogOpen = false;
+
   final Map<String, String> _editableFields = {
     'name': 'Name',
     'company': 'Company',
@@ -58,6 +61,61 @@ class _ManageUserProfileScreenState
     });
   }
 
+  void _showLoadingDialog() {
+    if (_isLoadingDialogOpen || !mounted) return;
+
+    _isLoadingDialogOpen = true;
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      useRootNavigator: true,
+      builder: (_) {
+        return const Center(
+          child: CircularProgressIndicator(
+            color: AppColors.namaNavyBlue,
+          ),
+        );
+      },
+    );
+  }
+
+  void _hideLoadingDialog() {
+    if (!_isLoadingDialogOpen || !mounted) return;
+
+    final navigator = Navigator.of(context, rootNavigator: true);
+
+    if (navigator.canPop()) {
+      navigator.pop();
+    }
+
+    _isLoadingDialogOpen = false;
+  }
+
+  void _showMessage(
+      String message, {
+        bool isError = false,
+      }) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? AppColors.errorRed : AppColors.successGreen,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _getFieldValue(String fieldKey) {
+    return _fieldValues[fieldKey] ?? '';
+  }
+
+  String _getFieldLabel(String fieldKey) {
+    return _editableFields[fieldKey] ?? 'Field';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -82,8 +140,14 @@ class _ManageUserProfileScreenState
                     fieldValue: fieldValue,
                     hasValue: hasValue,
                     isMarkedForRemoval: _fieldsToRemove.contains(fieldKey),
-                    onEdit: () => _showEditDialog(fieldKey, fieldLabel),
+                    isUpdating: _isUpdating,
+                    onEdit: () {
+                      if (_isUpdating) return;
+                      _showEditDialog(fieldKey, fieldLabel);
+                    },
                     onToggleRemoval: (marked) {
+                      if (_isUpdating) return;
+
                       setState(() {
                         if (marked) {
                           _fieldsToRemove.add(fieldKey);
@@ -116,7 +180,7 @@ class _ManageUserProfileScreenState
       child: Row(
         children: [
           InkWell(
-            onTap: () => Navigator.of(context).pop(),
+            onTap: _isUpdating ? null : () => Navigator.of(context).pop(),
             borderRadius: BorderRadius.circular(50),
             child: const Padding(
               padding: EdgeInsets.all(6),
@@ -135,20 +199,19 @@ class _ManageUserProfileScreenState
                 children: [
                   CircleAvatar(
                     radius: 18,
-                    backgroundColor:
-                        AppColors.namaNavyBlue.withOpacity(0.1),
+                    backgroundColor: AppColors.namaNavyBlue.withOpacity(0.1),
                     backgroundImage: profileImageUrl.isNotEmpty
                         ? NetworkImage(profileImageUrl)
                         : null,
                     child: profileImageUrl.isEmpty
                         ? Text(
-                            name.isNotEmpty ? name[0].toUpperCase() : '?',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.namaNavyBlue,
-                            ),
-                          )
+                      name.isNotEmpty ? name[0].toUpperCase() : '?',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.namaNavyBlue,
+                      ),
+                    )
                         : null,
                   ),
                   const SizedBox(width: 12),
@@ -212,7 +275,7 @@ class _ManageUserProfileScreenState
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Admin can edit or remove user profile fields. Removed fields will be cleared from the user\'s profile.',
+              'Admin & Staff can edit or remove user profile fields. Removed fields will be cleared from the user\'s profile.',
               style: TextStyle(
                 fontSize: 12.5,
                 height: 1.35,
@@ -255,17 +318,18 @@ class _ManageUserProfileScreenState
             width: 220,
             height: 42,
             child: ElevatedButton(
-              onPressed: _showRemoveConfirmationDialog,
+              onPressed: _isUpdating ? null : _showRemoveConfirmationDialog,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.errorRed,
+                disabledBackgroundColor: AppColors.errorRed.withOpacity(0.5),
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
                 ),
               ),
-              child: const Text(
-                'Update Profile',
-                style: TextStyle(
+              child: Text(
+                _isUpdating ? 'Updating...' : 'Update Profile',
+                style: const TextStyle(
                   fontSize: 13.5,
                   fontWeight: FontWeight.w700,
                   color: Colors.white,
@@ -278,21 +342,12 @@ class _ManageUserProfileScreenState
     );
   }
 
-  String _getFieldValue(String fieldKey) {
-    return _fieldValues[fieldKey] ?? '';
-  }
-
-  String _getFieldLabel(String fieldKey) {
-    return _editableFields[fieldKey] ?? 'Field';
-  }
-
   void _showEditDialog(String fieldKey, String fieldLabel) {
-    final controller = TextEditingController(
-      text: _getFieldValue(fieldKey),
-    );
+    String editedValue = _getFieldValue(fieldKey);
 
-    showDialog(
+    showDialog<void>(
       context: context,
+      useRootNavigator: true,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
@@ -305,9 +360,12 @@ class _ManageUserProfileScreenState
               fontWeight: FontWeight.w700,
             ),
           ),
-          content: TextField(
-            controller: controller,
+          content: TextFormField(
+            initialValue: editedValue,
             maxLines: fieldKey == 'bio' ? 4 : 1,
+            onChanged: (value) {
+              editedValue = value;
+            },
             decoration: InputDecoration(
               labelText: fieldLabel,
               contentPadding: const EdgeInsets.symmetric(
@@ -335,17 +393,20 @@ class _ManageUserProfileScreenState
           actions: [
             TextButton(
               onPressed: () {
-                controller.dispose();
-                Navigator.of(dialogContext).pop();
+                Navigator.of(dialogContext, rootNavigator: true).pop();
               },
               child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () {
-                final newValue = controller.text.trim();
-                controller.dispose();
-                Navigator.of(dialogContext).pop();
-                _updateSingleField(fieldKey, newValue);
+                final newValue = editedValue.trim();
+
+                Navigator.of(dialogContext, rootNavigator: true).pop();
+
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  _updateSingleField(fieldKey, newValue);
+                });
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.namaNavyBlue,
@@ -364,12 +425,12 @@ class _ManageUserProfileScreenState
   }
 
   Future<void> _updateSingleField(String fieldKey, String newValue) async {
+    if (_isUpdating) return;
+
     if (fieldKey == 'name' && newValue.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Name cannot be empty'),
-          backgroundColor: AppColors.errorRed,
-        ),
+      _showMessage(
+        'Name cannot be empty',
+        isError: true,
       );
       return;
     }
@@ -380,13 +441,10 @@ class _ManageUserProfileScreenState
       return;
     }
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
+    if (!mounted) return;
+
+    setState(() => _isUpdating = true);
+    _showLoadingDialog();
 
     try {
       await ref.read(userProfileRepositoryProvider).updateUserProfile(
@@ -398,41 +456,40 @@ class _ManageUserProfileScreenState
 
       if (!mounted) return;
 
-      Navigator.of(context).pop();
+      _hideLoadingDialog();
 
       setState(() {
         _fieldValues[fieldKey] = newValue;
         _fieldsToRemove.remove(fieldKey);
+        _isUpdating = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${_getFieldLabel(fieldKey)} updated successfully'),
-          backgroundColor: AppColors.successGreen,
-        ),
-      );
+      _showMessage('${_getFieldLabel(fieldKey)} updated successfully');
     } catch (e) {
       if (!mounted) return;
 
-      Navigator.of(context).pop();
+      _hideLoadingDialog();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update profile: $e'),
-          backgroundColor: AppColors.errorRed,
-        ),
+      setState(() => _isUpdating = false);
+
+      _showMessage(
+        'Failed to update profile: $e',
+        isError: true,
       );
     }
   }
 
   void _showRemoveConfirmationDialog() {
+    if (_isUpdating) return;
+
     final fieldNames = _fieldsToRemove
         .map((key) => _editableFields[key])
         .whereType<String>()
         .join(', ');
 
-    showDialog(
+    showDialog<void>(
       context: context,
+      useRootNavigator: true,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
@@ -493,13 +550,19 @@ class _ManageUserProfileScreenState
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
+              onPressed: () {
+                Navigator.of(dialogContext, rootNavigator: true).pop();
+              },
               child: const Text('Cancel'),
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.of(dialogContext).pop();
-                _performRemoveUpdate();
+                Navigator.of(dialogContext, rootNavigator: true).pop();
+
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) return;
+                  _performRemoveUpdate();
+                });
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.errorRed,
@@ -518,11 +581,12 @@ class _ManageUserProfileScreenState
   }
 
   Future<void> _performRemoveUpdate() async {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
+    if (_isUpdating) return;
+
+    if (_fieldsToRemove.isEmpty) return;
+
+    setState(() => _isUpdating = true);
+    _showLoadingDialog();
 
     try {
       final Map<String, dynamic> updates = {};
@@ -542,31 +606,28 @@ class _ManageUserProfileScreenState
 
       if (!mounted) return;
 
-      Navigator.of(context).pop();
+      _hideLoadingDialog();
 
       setState(() {
         for (final fieldKey in _fieldsToRemove) {
           _fieldValues[fieldKey] = fieldKey == 'name' ? 'User' : '';
         }
+
         _fieldsToRemove.clear();
+        _isUpdating = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('User profile updated successfully'),
-          backgroundColor: AppColors.successGreen,
-        ),
-      );
+      _showMessage('User profile updated successfully');
     } catch (e) {
       if (!mounted) return;
 
-      Navigator.of(context).pop();
+      _hideLoadingDialog();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update profile: $e'),
-          backgroundColor: AppColors.errorRed,
-        ),
+      setState(() => _isUpdating = false);
+
+      _showMessage(
+        'Failed to update profile: $e',
+        isError: true,
       );
     }
   }
@@ -578,6 +639,7 @@ class _ProfileFieldCard extends StatelessWidget {
   final String fieldValue;
   final bool hasValue;
   final bool isMarkedForRemoval;
+  final bool isUpdating;
   final VoidCallback onEdit;
   final Function(bool) onToggleRemoval;
 
@@ -587,6 +649,7 @@ class _ProfileFieldCard extends StatelessWidget {
     required this.fieldValue,
     required this.hasValue,
     required this.isMarkedForRemoval,
+    required this.isUpdating,
     required this.onEdit,
     required this.onToggleRemoval,
   });
@@ -605,8 +668,8 @@ class _ProfileFieldCard extends StatelessWidget {
           color: isMarkedForRemoval
               ? AppColors.errorRed
               : hasValue
-                  ? Colors.grey.shade300
-                  : Colors.grey.shade200,
+              ? Colors.grey.shade300
+              : Colors.grey.shade200,
           width: isMarkedForRemoval ? 1.5 : 1,
         ),
         boxShadow: [
@@ -642,8 +705,7 @@ class _ProfileFieldCard extends StatelessWidget {
                       color: hasValue
                           ? Colors.grey.shade700
                           : Colors.grey.shade400,
-                      fontStyle:
-                          hasValue ? FontStyle.normal : FontStyle.italic,
+                      fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -654,26 +716,31 @@ class _ProfileFieldCard extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           IconButton(
-            onPressed: onEdit,
-            icon: const Icon(
+            onPressed: isUpdating ? null : onEdit,
+            icon: Icon(
               Icons.edit_rounded,
               size: 20,
-              color: AppColors.namaNavyBlue,
+              color: isUpdating
+                  ? Colors.grey.shade300
+                  : AppColors.namaNavyBlue,
             ),
             tooltip: 'Edit',
             visualDensity: VisualDensity.compact,
           ),
           IconButton(
-            onPressed:
-                hasValue ? () => onToggleRemoval(!isMarkedForRemoval) : null,
+            onPressed: isUpdating || !hasValue
+                ? null
+                : () => onToggleRemoval(!isMarkedForRemoval),
             icon: Icon(
               isMarkedForRemoval ? Icons.undo_rounded : Icons.delete_rounded,
               size: 20,
-              color: isMarkedForRemoval
+              color: isUpdating
+                  ? Colors.grey.shade300
+                  : isMarkedForRemoval
                   ? AppColors.warningAmber
                   : hasValue
-                      ? AppColors.errorRed
-                      : Colors.grey.shade300,
+                  ? AppColors.errorRed
+                  : Colors.grey.shade300,
             ),
             tooltip: isMarkedForRemoval ? 'Undo' : 'Remove',
             visualDensity: VisualDensity.compact,

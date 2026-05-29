@@ -128,7 +128,6 @@ class StaffQuickActions extends ConsumerWidget {
                 AdminSessionManagementScreen(
                   eventId: eventId,
                   eventName: eventName,
-                  showBottomNav: false,
                 ),
               );
             },

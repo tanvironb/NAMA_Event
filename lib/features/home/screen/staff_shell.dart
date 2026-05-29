@@ -1,7 +1,10 @@
+// lib/features/home/screen/staff_shell.dart
+
 import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/features/profile/screen/profile_tab_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/staff_home_dashboard.dart';
 import 'package:events_app_trueattempt/features/home/screen/widgets/youtube_live_player.dart';
@@ -19,14 +22,12 @@ class _StaffShellState extends ConsumerState<StaffShell> {
   int _selectedIndex = 0;
   NotificationService? _notificationService;
 
-  List<Widget> _widgetOptions(String currentUserId) => <Widget>[
+  List<Widget> _widgetOptions() => <Widget>[
         StaffHomeDashboard(
           onTabSelected: _onItemTapped,
         ),
         const DirectoriesHubScreen(),
         const QRHubScreen(),
-
-        // Staff profile should NOT show My Calendar or My Meetings.
         const ProfileTabScreen(
           hideCalendarAndMeetings: true,
         ),
@@ -81,20 +82,15 @@ class _StaffShellState extends ConsumerState<StaffShell> {
 
   @override
   Widget build(BuildContext context) {
+    final pages = _widgetOptions();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          Consumer(
-            builder: (context, ref, child) {
-              final currentUserId =
-                  ref.watch(firebaseAuthProvider).currentUser?.uid ?? '';
-
-              return IndexedStack(
-                index: _selectedIndex,
-                children: _widgetOptions(currentUserId),
-              );
-            },
+          IndexedStack(
+            index: _selectedIndex,
+            children: pages,
           ),
           const Positioned(
             bottom: 0,

@@ -1,3 +1,7 @@
+// lib/features/speaker/screen/speaker_shell.dart
+
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:card_swiper/card_swiper.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +15,6 @@ import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/services/notification_services.dart';
 
-import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
@@ -21,8 +24,6 @@ import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_hub_screen.
 
 import 'package:events_app_trueattempt/features/speaker/screen/my_sessions_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/session_feedback_screen.dart';
-import 'package:events_app_trueattempt/features/speaker/screen/session_qa_screen.dart';
-import 'package:events_app_trueattempt/features/speaker/screen/session_resources_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_analytics_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_audience_screen.dart';
 
@@ -37,30 +38,31 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
   int _selectedIndex = 0;
   NotificationService? _notificationService;
 
-  late final List<Widget> _widgetOptions = <Widget>[
-    const SpeakerHomeQuickActionsPage(),
-    const AgendaScreen(),
-    const DirectoriesHubScreen(),
-    const QRHubScreen(),
-    const ProfileTabScreen(),
-  ];
+  List<Widget> _widgetOptions() => <Widget>[
+        const SpeakerHomeQuickActionsPage(),
+        const DirectoriesHubScreen(),
+        const QRHubScreen(),
+        const ProfileTabScreen(),
+      ];
 
   @override
   void initState() {
     super.initState();
-    _initializeNotifications();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeNotifications();
+    });
   }
 
   Future<void> _initializeNotifications() async {
-    await Future.delayed(Duration.zero);
-
     if (!mounted) return;
 
     final user = ref.read(firebaseAuthProvider).currentUser;
 
     if (user != null) {
-      final notificationService =
-          ref.read(notificationServiceProvider(user.uid));
+      final notificationService = ref.read(
+        notificationServiceProvider(user.uid),
+      );
 
       if (notificationService != null) {
         _notificationService = notificationService;
@@ -78,16 +80,24 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
   void _onItemTapped(int index) {
     if (!mounted) return;
 
-    setState(() => _selectedIndex = index);
+    final pages = _widgetOptions();
+
+    if (index < 0 || index >= pages.length) return;
+
+    setState(() {
+      _selectedIndex = index;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final pages = _widgetOptions();
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: IndexedStack(
         index: _selectedIndex,
-        children: _widgetOptions,
+        children: pages,
       ),
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
@@ -104,11 +114,6 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
             label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month_outlined),
-            activeIcon: Icon(Icons.calendar_month),
-            label: 'Agenda',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.people_outline),
@@ -159,20 +164,19 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top logo + message/notification icons
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Image.asset(
                   AppConstants.logoEmblemPath,
-                  height: 38,
-                  width: 38,
+                  height: 68,
+                  width: 68,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {
                     return Icon(
                       Icons.auto_awesome,
                       color: AppColors.namaNavyBlue,
-                      size: 34,
+                      size: 46,
                     );
                   },
                 ),
@@ -302,51 +306,6 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                     );
                   },
                 ),
-                _QuickActionTile(
-                  icon: Icons.question_answer_outlined,
-                  title: 'Q&A',
-                  iconColor: AppColors.namaMediumGray,
-                  backgroundColor: const Color(0xFFF3F6FA),
-                  isEnabled: false,
-                  disabledMessage: 'Q&A feature is under development',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const SessionQAScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _QuickActionTile(
-                  icon: Icons.folder_outlined,
-                  title: 'Resources',
-                  iconColor: AppColors.namaMediumGray,
-                  backgroundColor: const Color(0xFFF3F6FA),
-                  isEnabled: false,
-                  disabledMessage: 'Resource management is under development',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const SessionResourcesScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _QuickActionTile(
-                  icon: Icons.videocam_outlined,
-                  title: 'Go Live',
-                  iconColor: AppColors.namaMediumGray,
-                  backgroundColor: const Color(0xFFF3F6FA),
-                  isEnabled: false,
-                  disabledMessage: 'Live broadcast is currently disabled',
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Live broadcast is currently disabled'),
-                      ),
-                    );
-                  },
-                ),
               ],
             ),
 
@@ -413,148 +372,8 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
     BuildContext context,
     AsyncValue<List<dynamic>> speakersAsync,
   ) {
-    return SizedBox(
-      height: 235,
-      child: speakersAsync.when(
-        data: (speakers) {
-          if (speakers.isEmpty) {
-            return const Center(
-              child: Text(
-                'No featured speakers yet.',
-                style: TextStyle(
-                  color: _textMuted,
-                  fontSize: 12,
-                ),
-              ),
-            );
-          }
-
-          return Swiper(
-            itemCount: speakers.length,
-            viewportFraction: 0.54,
-            scale: 0.88,
-            autoplay: speakers.length > 1,
-            autoplayDelay: 4500,
-            duration: 650,
-            loop: speakers.length > 1,
-            itemBuilder: (context, index) {
-              final speaker = speakers[index];
-
-              return GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => UserDetailsScreen(userId: speaker.uid),
-                    ),
-                  );
-                },
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.13),
-                        blurRadius: 11,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        speaker.profileImageUrl.isNotEmpty
-                            ? CachedNetworkImage(
-                                imageUrl: speaker.profileImageUrl,
-                                fit: BoxFit.cover,
-                                placeholder: (_, __) => Container(
-                                  color: AppColors.avatarPlaceholder,
-                                  child: const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                ),
-                                errorWidget: (_, __, ___) =>
-                                    _speakerFallback(),
-                              )
-                            : _speakerFallback(),
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.transparent,
-                                Colors.black.withOpacity(0.32),
-                                Colors.black.withOpacity(0.76),
-                              ],
-                              stops: const [0.45, 0.73, 1],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 15,
-                          right: 15,
-                          bottom: 15,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                speaker.name,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 16.5,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                speaker.title,
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.9),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          );
-        },
-        loading: () => const Center(child: LoadingIndicator()),
-        error: (err, stack) => Center(
-          child: Text(
-            'Error loading speakers.',
-            style: TextStyle(
-              color: Theme.of(context).colorScheme.error,
-              fontSize: 12,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _speakerFallback() {
-    return Container(
-      color: AppColors.avatarPlaceholder,
-      child: Icon(
-        Icons.person,
-        size: 58,
-        color: AppColors.avatarPlaceholderText,
-      ),
+    return _FeaturedSpeakersAutoCarousel(
+      speakersAsync: speakersAsync,
     );
   }
 
@@ -564,34 +383,34 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
   ) {
     return SizedBox(
       height: 150,
+      width: double.infinity,
       child: venueMapsAsync.when(
         data: (venueMaps) {
-          final uniqueVenueImages = <Map<String, dynamic>>[];
-          final seenVenueKeys = <String>{};
+          final allVenueImages = <Map<String, dynamic>>[];
+          final seenImageUrls = <String>{};
 
           for (final venueMap in venueMaps) {
             final venueTitle = venueMap.title.toString().trim();
-            final venueKey = venueTitle.toLowerCase();
+            final venueDescription = venueMap.description.toString().trim();
 
-            if (venueKey.isEmpty || seenVenueKeys.contains(venueKey)) {
-              continue;
+            for (final rawImageUrl in venueMap.imageUrls) {
+              final imageUrl = rawImageUrl.toString().trim();
+
+              if (imageUrl.isEmpty) continue;
+              if (seenImageUrls.contains(imageUrl)) continue;
+
+              seenImageUrls.add(imageUrl);
+
+              allVenueImages.add({
+                'url': imageUrl,
+                'title': venueTitle.isEmpty ? 'Venue' : venueTitle,
+                'description':
+                    venueDescription.isEmpty ? 'Venue details' : venueDescription,
+              });
             }
-
-            if (venueMap.imageUrls.isEmpty) continue;
-
-            final firstImageUrl = venueMap.imageUrls.first.toString().trim();
-            if (firstImageUrl.isEmpty) continue;
-
-            seenVenueKeys.add(venueKey);
-
-            uniqueVenueImages.add({
-              'url': firstImageUrl,
-              'title': venueTitle,
-              'description': venueMap.description.toString().trim(),
-            });
           }
 
-          if (uniqueVenueImages.isEmpty) {
+          if (allVenueImages.isEmpty) {
             return const Center(
               child: Text(
                 'No venue maps available.',
@@ -604,14 +423,14 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
           }
 
           return Swiper(
-            itemCount: uniqueVenueImages.length,
-            viewportFraction: uniqueVenueImages.length > 1 ? 0.86 : 0.92,
-            scale: uniqueVenueImages.length > 1 ? 0.92 : 1,
-            autoplay: uniqueVenueImages.length > 1,
+            itemCount: allVenueImages.length,
+            viewportFraction: 1.0,
+            scale: 1.0,
+            autoplay: allVenueImages.length > 1,
             autoplayDelay: 4200,
             duration: 650,
-            loop: uniqueVenueImages.length > 1,
-            pagination: uniqueVenueImages.length > 1
+            loop: allVenueImages.length > 1,
+            pagination: allVenueImages.length > 1
                 ? const SwiperPagination(
                     alignment: Alignment.bottomCenter,
                     margin: EdgeInsets.only(bottom: 7),
@@ -625,113 +444,136 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                   )
                 : null,
             itemBuilder: (context, index) {
-              final mapData = uniqueVenueImages[index];
-              final description = mapData['description'].toString().isNotEmpty
-                  ? mapData['description'].toString()
-                  : 'Welcome Word';
+              final mapData = allVenueImages[index];
 
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.09),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CachedNetworkImage(
-                        imageUrl: mapData['url'],
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => Container(
-                          color: const Color(0xFFF1F3F8),
-                          child: const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                        errorWidget: (_, __, ___) => Container(
-                          color: const Color(0xFFF1F3F8),
-                          child: const Icon(
-                            Icons.broken_image_outlined,
-                            color: _primaryColor,
-                          ),
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              Colors.black.withOpacity(0.58),
-                              Colors.black.withOpacity(0.18),
-                              Colors.black.withOpacity(0.50),
-                            ],
-                            stops: const [0, 0.55, 1],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        left: 18,
-                        right: 88,
-                        bottom: 20,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              mapData['title'],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              description,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.92),
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      Positioned(
-                        right: 14,
-                        bottom: 18,
-                        child: Container(
-                          height: 30,
-                          padding: const EdgeInsets.symmetric(horizontal: 15),
-                          decoration: BoxDecoration(
-                            color: _primaryColor,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            'View',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
+              final imageUrl = mapData['url'].toString();
+              final title = mapData['title'].toString();
+              final description = mapData['description'].toString();
+
+              return GestureDetector(
+                onTap: () {
+                  _openVenueImagePreview(
+                    context: context,
+                    imageUrl: imageUrl,
+                    title: title,
+                    description: description,
+                  );
+                },
+                child: Container(
+                  width: double.infinity,
+                  margin: EdgeInsets.zero,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.09),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
                       ),
                     ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(
+                            color: const Color(0xFFF1F3F8),
+                            child: const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          ),
+                          errorWidget: (_, __, ___) => Container(
+                            color: const Color(0xFFF1F3F8),
+                            child: const Icon(
+                              Icons.broken_image_outlined,
+                              color: _primaryColor,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [
+                                Colors.black.withOpacity(0.58),
+                                Colors.black.withOpacity(0.18),
+                                Colors.black.withOpacity(0.50),
+                              ],
+                              stops: const [0, 0.55, 1],
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 18,
+                          right: 88,
+                          bottom: 20,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                description,
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.92),
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Positioned(
+                          right: 14,
+                          bottom: 18,
+                          child: GestureDetector(
+                            onTap: () {
+                              _openVenueImagePreview(
+                                context: context,
+                                imageUrl: imageUrl,
+                                title: title,
+                                description: description,
+                              );
+                            },
+                            child: Container(
+                              height: 30,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 15),
+                              decoration: BoxDecoration(
+                                color: _primaryColor,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              alignment: Alignment.center,
+                              child: const Text(
+                                'View',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -747,6 +589,23 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
               fontSize: 12,
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _openVenueImagePreview({
+    required BuildContext context,
+    required String imageUrl,
+    required String title,
+    required String description,
+  }) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _VenueImagePreviewScreen(
+          imageUrl: imageUrl,
+          title: title,
+          description: description,
         ),
       ),
     );
@@ -777,6 +636,7 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
           builder: (context, constraints) {
             const double spacing = 12;
             const double runSpacing = 18;
+
             final double itemWidth = (constraints.maxWidth - (spacing * 2)) / 3;
 
             return Wrap(
@@ -901,6 +761,342 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
   }
 }
 
+class _VenueImagePreviewScreen extends StatelessWidget {
+  final String imageUrl;
+  final String title;
+  final String description;
+
+  const _VenueImagePreviewScreen({
+    required this.imageUrl,
+    required this.title,
+    required this.description,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: Text(
+          title.trim().isEmpty ? 'Venue Map' : title.trim(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: InteractiveViewer(
+              minScale: 0.7,
+              maxScale: 4,
+              child: Center(
+                child: CachedNetworkImage(
+                  imageUrl: imageUrl,
+                  fit: BoxFit.contain,
+                  placeholder: (_, __) => const Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                  errorWidget: (_, __, ___) => const Center(
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: Colors.white,
+                      size: 54,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (description.trim().isNotEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+              decoration: BoxDecoration(
+                color: Colors.black,
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white.withOpacity(0.12),
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: Text(
+                description.trim(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 12.5,
+                  height: 1.35,
+                ),
+              ),
+            ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.small(
+        backgroundColor: _primaryColor,
+        foregroundColor: Colors.white,
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Icon(Icons.close),
+      ),
+    );
+  }
+}
+
+class _FeaturedSpeakersAutoCarousel extends StatefulWidget {
+  final AsyncValue<List<dynamic>> speakersAsync;
+
+  const _FeaturedSpeakersAutoCarousel({
+    required this.speakersAsync,
+  });
+
+  @override
+  State<_FeaturedSpeakersAutoCarousel> createState() =>
+      _FeaturedSpeakersAutoCarouselState();
+}
+
+class _FeaturedSpeakersAutoCarouselState
+    extends State<_FeaturedSpeakersAutoCarousel> {
+  late final PageController _pageController;
+  Timer? _autoTimer;
+
+  static const int _virtualItemCount = 100000;
+  static const int _initialVirtualPage = 50000;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _pageController = PageController(
+      viewportFraction: 0.50,
+      initialPage: _initialVirtualPage,
+    );
+  }
+
+  void _startAutoSlide(int realCount) {
+    _autoTimer?.cancel();
+    _autoTimer = null;
+
+    if (realCount <= 1) return;
+
+    _autoTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+      if (!mounted || !_pageController.hasClients) return;
+
+      final currentPage = _pageController.page?.round() ?? _initialVirtualPage;
+
+      _pageController.animateToPage(
+        currentPage + 1,
+        duration: const Duration(milliseconds: 550),
+        curve: Curves.easeInOut,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 235,
+      child: widget.speakersAsync.when(
+        data: (speakers) {
+          if (speakers.isEmpty) {
+            return const Center(
+              child: Text(
+                'No featured speakers yet.',
+                style: TextStyle(
+                  color: Color(0xFF8A8A8A),
+                  fontSize: 12,
+                ),
+              ),
+            );
+          }
+
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _startAutoSlide(speakers.length);
+          });
+
+          return PageView.builder(
+            controller: _pageController,
+            clipBehavior: Clip.none,
+            padEnds: true,
+            itemCount: speakers.length > 1 ? _virtualItemCount : speakers.length,
+            itemBuilder: (context, virtualIndex) {
+              final realIndex = virtualIndex % speakers.length;
+              final speaker = speakers[realIndex];
+
+              final imageUrl = speaker.profileImageUrl.toString().trim();
+
+              final name = speaker.name.toString().trim().isNotEmpty
+                  ? speaker.name.toString().trim()
+                  : 'Speaker';
+
+              final title = speaker.title.toString().trim().isNotEmpty
+                  ? speaker.title.toString().trim()
+                  : 'Speaker';
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: _FeaturedSpeakerImageCard(
+                  name: name,
+                  title: title,
+                  imageUrl: imageUrl,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => UserDetailsScreen(
+                          userId: speaker.uid,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: LoadingIndicator()),
+        error: (err, stack) => Center(
+          child: Text(
+            'Error loading speakers.',
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FeaturedSpeakerImageCard extends StatelessWidget {
+  final String name;
+  final String title;
+  final String imageUrl;
+  final VoidCallback onTap;
+
+  const _FeaturedSpeakerImageCard({
+    required this.name,
+    required this.title,
+    required this.imageUrl,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 225,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.13),
+                blurRadius: 11,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => _speakerFallback(),
+                        errorWidget: (_, __, ___) => _speakerFallback(),
+                      )
+                    : _speakerFallback(),
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.transparent,
+                        Colors.black.withOpacity(0.30),
+                        Colors.black.withOpacity(0.78),
+                      ],
+                      stops: const [0.45, 0.72, 1],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 13,
+                  right: 13,
+                  bottom: 15,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _speakerFallback() {
+    return Container(
+      color: AppColors.avatarPlaceholder,
+      child: Icon(
+        Icons.person,
+        size: 58,
+        color: AppColors.avatarPlaceholderText,
+      ),
+    );
+  }
+}
+
 class _TopCircleIconButton extends StatelessWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -951,15 +1147,8 @@ class _QuickActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color effectiveIconColor =
-        isEnabled ? iconColor : AppColors.namaMediumGray.withOpacity(0.45);
-
-    final Color effectiveTextColor = isEnabled
-        ? const Color(0xFF202124)
-        : AppColors.namaMediumGray.withOpacity(0.55);
-
     return Material(
-      color: isEnabled ? backgroundColor : const Color(0xFFF5F7FB),
+      color: backgroundColor,
       borderRadius: BorderRadius.circular(20),
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
@@ -968,8 +1157,9 @@ class _QuickActionTile extends StatelessWidget {
             : () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content:
-                        Text(disabledMessage ?? 'This feature is disabled'),
+                    content: Text(
+                      disabledMessage ?? 'This feature is disabled',
+                    ),
                     duration: const Duration(seconds: 2),
                   ),
                 );
@@ -980,7 +1170,7 @@ class _QuickActionTile extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                color: effectiveIconColor,
+                color: iconColor,
                 size: 21,
               ),
               const SizedBox(width: 10),
@@ -990,7 +1180,7 @@ class _QuickActionTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: effectiveTextColor,
+                        color: const Color(0xFF202124),
                         fontSize: 13.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -998,7 +1188,7 @@ class _QuickActionTile extends StatelessWidget {
               ),
               Icon(
                 Icons.chevron_right_rounded,
-                color: effectiveIconColor,
+                color: iconColor,
                 size: 20,
               ),
             ],

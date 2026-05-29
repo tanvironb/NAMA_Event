@@ -14,6 +14,8 @@ import 'package:intl/intl.dart';
 class AgendaScreen extends ConsumerWidget {
   const AgendaScreen({super.key});
 
+  static const Color _primaryColor = Color(0xFF0B0B83);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final sessionsAsyncValue = ref.watch(sessionsStreamProvider);
@@ -48,8 +50,8 @@ class AgendaScreen extends ConsumerWidget {
                 backgroundColor: Colors.white.withOpacity(0.92),
                 elevation: 0,
                 automaticallyImplyLeading: false,
-                titleSpacing: 26,
-                toolbarHeight: 70,
+                titleSpacing: 20,
+                toolbarHeight: 58,
                 flexibleSpace: ClipRect(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
@@ -61,17 +63,17 @@ class AgendaScreen extends ConsumerWidget {
                 title: const Text(
                   'Event Agenda',
                   style: TextStyle(
-                    color: Color(0xFF0B0B83),
-                    fontSize: 22,
+                    color: _primaryColor,
+                    fontSize: 20,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(26, 10, 26, 110),
+                padding: const EdgeInsets.fromLTRB(18, 8, 18, 92),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, dayIndex) {
+                        (context, dayIndex) {
                       final dayKey = groupedSessions.keys.elementAt(dayIndex);
                       final daySessions = groupedSessions[dayKey]!;
                       final dayDate = DateTime.parse(dayKey);
@@ -143,8 +145,8 @@ class _DaySection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          margin: EdgeInsets.only(bottom: 14, top: dayIndex == 0 ? 0 : 18),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          margin: EdgeInsets.only(bottom: 12, top: dayIndex == 0 ? 0 : 14),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: const Color(0xFFC3C1DF),
             borderRadius: BorderRadius.circular(16),
@@ -153,10 +155,10 @@ class _DaySection extends StatelessWidget {
             children: [
               const Icon(
                 Icons.calendar_today_outlined,
-                size: 21,
+                size: 20,
                 color: Colors.black87,
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,7 +171,7 @@ class _DaySection extends StatelessWidget {
                         color: Colors.black,
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 4),
                     Text(
                       DateFormat('EEEE').format(date),
                       style: const TextStyle(
@@ -193,7 +195,7 @@ class _DaySection extends StatelessWidget {
         Column(
           children: sessions.map((session) {
             return Padding(
-              padding: const EdgeInsets.only(bottom: 11),
+              padding: const EdgeInsets.only(bottom: 10),
               child: _AgendaSessionCard(
                 session: session,
                 isStaff: isStaff,
@@ -239,8 +241,8 @@ class _AgendaSessionCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
+            color: Colors.black.withOpacity(0.035),
+            blurRadius: 10,
             offset: const Offset(0, 5),
           ),
         ],
@@ -249,7 +251,7 @@ class _AgendaSessionCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+          padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -297,7 +299,7 @@ class _AgendaSessionCard extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 11),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
@@ -307,21 +309,21 @@ class _AgendaSessionCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: hasEnded ? Colors.grey.shade600 : _textDark,
-                        fontSize: 14.5,
+                        fontSize: 14.2,
                         fontWeight: FontWeight.w800,
-                        height: 1.25,
+                        height: 1.22,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 6),
                   Icon(
                     Icons.chevron_right_rounded,
                     color: hasEnded ? Colors.grey : _primaryColor,
-                    size: 24,
+                    size: 23,
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 7),
               Row(
                 children: [
                   Icon(
@@ -341,7 +343,7 @@ class _AgendaSessionCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Icon(
                     Icons.people_outline,
                     size: 14,

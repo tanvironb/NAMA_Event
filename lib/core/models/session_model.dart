@@ -75,17 +75,17 @@ class Session {
 
     return Session(
       id: doc.id,
-      eventId: data['eventId'] as String,
+      eventId: data['eventId'] as String? ?? '',
       title: data['title'] as String? ?? 'Untitled Session',
       description: data['description'] as String? ?? '',
-      startTime: (data['startTime'] as Timestamp).toDate(),
-      endTime: (data['endTime'] as Timestamp).toDate(),
+      startTime: _dateTimeFromValue(data['startTime']),
+      endTime: _dateTimeFromValue(data['endTime']),
       location: data['location'] as String? ?? 'Unknown Room',
       speakerIds: List<String>.from(data['speakerIds'] as List? ?? []),
       liveStreamUrl: data['liveStreamUrl'] as String? ?? '',
       qrCodePayload: data['qrCodePayload'] as String? ?? '',
       category: data['category'] as String? ?? '',
-      imageUrl: data['imageUrl'] as String? ?? '',
+      imageUrl: _readImageUrl(data),
       priority: data['priority'] as int? ?? 3,
       partnerId: data['partnerId'] as String? ?? '',
       isChatEnabled: data['isChatEnabled'] as bool? ?? true,
@@ -97,10 +97,10 @@ class Session {
           List<String>.from(data['uniqueParticipants'] as List? ?? []),
       mutedUsers: List<String>.from(data['mutedUsers'] as List? ?? []),
       firstMessageAt: data['firstMessageAt'] != null
-          ? (data['firstMessageAt'] as Timestamp).toDate()
+          ? _dateTimeFromValue(data['firstMessageAt'])
           : null,
       lastMessageAt: data['lastMessageAt'] != null
-          ? (data['lastMessageAt'] as Timestamp).toDate()
+          ? _dateTimeFromValue(data['lastMessageAt'])
           : null,
       deletedMessagesCount: data['deletedMessagesCount'] as int? ?? 0,
       messagesByRole:
@@ -111,6 +111,63 @@ class Session {
       totalRating: data['totalRating'] as int? ?? 0,
       averageRating: (data['averageRating'] as num?)?.toDouble() ?? 0.0,
     );
+  }
+
+  static DateTime _dateTimeFromValue(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+
+    if (value is String) {
+      final parsedDate = DateTime.tryParse(value);
+      if (parsedDate != null) return parsedDate;
+    }
+
+    return DateTime.now();
+  }
+
+  static String _readImageUrl(Map<String, dynamic> data) {
+    final imageUrl = (data['imageUrl'] ?? '').toString().trim();
+
+    if (_isValidImageUrl(imageUrl)) {
+      return imageUrl;
+    }
+
+    final sessionImageUrl = (data['sessionImageUrl'] ?? '').toString().trim();
+
+    if (_isValidImageUrl(sessionImageUrl)) {
+      return sessionImageUrl;
+    }
+
+    final coverImageUrl = (data['coverImageUrl'] ?? '').toString().trim();
+
+    if (_isValidImageUrl(coverImageUrl)) {
+      return coverImageUrl;
+    }
+
+    final imageUrls = data['imageUrls'];
+
+    if (imageUrls is List && imageUrls.isNotEmpty) {
+      for (final item in imageUrls) {
+        final url = item.toString().trim();
+
+        if (_isValidImageUrl(url)) {
+          return url;
+        }
+      }
+    }
+
+    return '';
+  }
+
+  static bool _isValidImageUrl(String url) {
+    if (url.isEmpty) return false;
+
+    final lowerUrl = url.toLowerCase();
+
+    if (lowerUrl.startsWith('http://')) return true;
+    if (lowerUrl.startsWith('https://')) return true;
+
+    return false;
   }
 
   bool get hasEnded => DateTime.now().isAfter(endTime);

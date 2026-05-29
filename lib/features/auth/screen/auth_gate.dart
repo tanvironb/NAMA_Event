@@ -1,18 +1,21 @@
+// lib/features/auth/screen/auth_gate.dart
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
-import 'package:events_app_trueattempt/features/auth/screen/email_verification_screen.dart';
-import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
-import 'package:events_app_trueattempt/features/main_hub/screen/main_hub_screen.dart';
-import 'package:events_app_trueattempt/features/auth/screen/pending_approval_screen.dart';
-import 'package:events_app_trueattempt/features/auth/screen/blocked_screen.dart';
-import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 
-// Session timeout: 10 days of inactivity
+import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
+import 'package:events_app_trueattempt/features/auth/screen/blocked_screen.dart';
+import 'package:events_app_trueattempt/features/auth/screen/email_verification_screen.dart';
+import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
+import 'package:events_app_trueattempt/features/auth/screen/pending_approval_screen.dart';
+import 'package:events_app_trueattempt/features/main_hub/screen/main_hub_screen.dart';
+
 const Duration _sessionTimeout = Duration(days: 10);
 
-// AuthGate handles the initial routing based on user's authentication state.
 class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});
 
@@ -21,17 +24,57 @@ class AuthGate extends ConsumerStatefulWidget {
 }
 
 class _AuthGateState extends ConsumerState<AuthGate> {
-  // Guards against scheduling multiple signOut calls while the stream keeps
-  // emitting during the async sign-out process.
   bool _sessionTimeoutTriggered = false;
+
+  Future<User?> _reloadAndGetUser(User user) async {
+    try {
+      await user.reload();
+      return FirebaseAuth.instance.currentUser;
+    } catch (e) {
+      debugPrint('AuthGate reload user error: $e');
+      return FirebaseAuth.instance.currentUser;
+    }
+  }
+
+  Future<DocumentSnapshot<Map<String, dynamic>>> _loadUserProfile(
+    String uid,
+  ) async {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get()
+        .timeout(
+          const Duration(seconds: 12),
+          onTimeout: () {
+            throw Exception(
+              'Profile loading timed out. Please check Firestore connection or users/$uid document.',
+            );
+          },
+        );
+  }
+
+  DateTime? _parseLastSeen(dynamic value) {
+    if (value == null) return null;
+
+    if (value is Timestamp) {
+      return value.toDate();
+    }
+
+    if (value is DateTime) {
+      return value;
+    }
+
+    return null;
+  }
 
   void _triggerSessionTimeout() {
     if (_sessionTimeoutTriggered) return;
+
     _sessionTimeoutTriggered = true;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        ref.read(authViewModelProvider.notifier).signOut();
-      }
+      if (!mounted) return;
+      ref.read(authViewModelProvider.notifier).signOut();
     });
   }
 
@@ -41,148 +84,262 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
     return authState.when(
       data: (user) {
-        if (user != null && user.email != null) {
-          // Check if email is verified first
-          if (!user.emailVerified) {
-            return const EmailVerificationScreen();
-          }
-          
-          // User is authenticated and verified - check their profile and status
-          final userProfileAsync = ref.watch(userAppProfileStreamProvider);
-          return userProfileAsync.when(
-            data: (appUser) {
-              if (appUser == null) {
-                // User authenticated but no profile found
-                return Scaffold(
-                  body: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
-                        const SizedBox(height: 16),
-                        Text('Profile Not Found', style: Theme.of(context).textTheme.headlineSmall),
-                        const SizedBox(height: 8),
-                        const Text('Your account profile could not be loaded.'),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () => ref.read(authViewModelProvider.notifier).signOut(),
-                          child: const Text('Sign Out'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
+        if (user == null || user.email == null) {
+          return const LoginScreen();
+        }
 
-              // Check session timeout (10 days of inactivity)
-              if (appUser.lastSeen != null) {
-                final daysSinceLastSeen = DateTime.now().difference(appUser.lastSeen!).inDays;
-                
-                if (daysSinceLastSeen >= 10) {
-                  // Session expired — trigger sign-out exactly once regardless of how
-                  // many times the stream rebuilds this widget while signing out.
-                  _triggerSessionTimeout();
-                  
+        return FutureBuilder<User?>(
+          future: _reloadAndGetUser(user),
+          builder: (context, userSnapshot) {
+            if (userSnapshot.connectionState == ConnectionState.waiting) {
+              return const Scaffold(
+                body: LoadingIndicator(),
+              );
+            }
+
+            final refreshedUser =
+                userSnapshot.data ?? FirebaseAuth.instance.currentUser;
+
+            if (refreshedUser == null || refreshedUser.email == null) {
+              return const LoginScreen();
+            }
+
+            if (!refreshedUser.emailVerified) {
+              return const EmailVerificationScreen();
+            }
+
+            return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              future: _loadUserProfile(refreshedUser.uid),
+              builder: (context, profileSnapshot) {
+                if (profileSnapshot.connectionState ==
+                    ConnectionState.waiting) {
+                  return const Scaffold(
+                    body: LoadingIndicator(),
+                  );
+                }
+
+                if (profileSnapshot.hasError) {
                   return Scaffold(
                     body: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.timer_off, size: 64, color: Theme.of(context).colorScheme.error),
-                          const SizedBox(height: 16),
-                          Text('Session Expired', style: Theme.of(context).textTheme.headlineSmall),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Your session has expired due to inactivity.\nPlease sign in again.',
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 16),
-                          const CircularProgressIndicator(),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 60,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Profile Loading Failed',
+                              style: Theme.of(context).textTheme.headlineSmall,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              '${profileSnapshot.error}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton(
+                              onPressed: () {
+                                setState(() {});
+                              },
+                              child: const Text('Retry'),
+                            ),
+                            const SizedBox(height: 10),
+                            TextButton(
+                              onPressed: () {
+                                ref
+                                    .read(authViewModelProvider.notifier)
+                                    .signOut();
+                              },
+                              child: const Text('Sign Out'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
                 }
-              }
 
-              // Check user status
-              switch (appUser.status) {
-                case 'approved':
-                  // Clear any stale timeout flag from a previous session.
-                  _sessionTimeoutTriggered = false;
-                  return const MainHubScreen();
-                case 'rejected':
+                final profileDoc = profileSnapshot.data;
+
+                if (profileDoc == null || !profileDoc.exists) {
                   return Scaffold(
                     body: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.block, size: 64, color: Theme.of(context).colorScheme.error),
-                          const SizedBox(height: 16),
-                          Text('Access Denied', style: Theme.of(context).textTheme.headlineSmall),
-                          const SizedBox(height: 8),
-                          const Text('Your account has been rejected.'),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: () => ref.read(authViewModelProvider.notifier).signOut(),
-                            child: const Text('Sign Out'),
-                          ),
-                        ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.person_off_outlined,
+                              size: 60,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Profile Not Found',
+                              style: Theme.of(context).textTheme.headlineSmall,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              'No user profile found for:\n${refreshedUser.email}',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            const SizedBox(height: 20),
+                            ElevatedButton(
+                              onPressed: () {
+                                ref
+                                    .read(authViewModelProvider.notifier)
+                                    .signOut();
+                              },
+                              child: const Text('Sign Out'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
-                case 'blocked':
-                  return const BlockedScreen();
-                case 'pending':
-                default:
-                  return const PendingApprovalScreen();
-              }
-            },
-            loading: () => const Scaffold(body: LoadingIndicator()),
-            error: (err, stack) => Scaffold(
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
-                    const SizedBox(height: 16),
-                    Text('Error', style: Theme.of(context).textTheme.headlineSmall),
-                    const SizedBox(height: 8),
-                    Text('Failed to load profile: $err'),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () => ref.read(authViewModelProvider.notifier).signOut(),
-                      child: const Text('Sign Out'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        } else {
-          // User is not authenticated - show login
-          return const LoginScreen();
-        }
+                }
+
+                final data = profileDoc.data() ?? {};
+
+                final status = (data['status'] ?? 'pending').toString();
+                final lastSeen = _parseLastSeen(data['lastSeen']);
+
+                if (lastSeen != null) {
+                  final inactiveDuration = DateTime.now().difference(lastSeen);
+
+                  if (inactiveDuration >= _sessionTimeout) {
+                    _triggerSessionTimeout();
+
+                    return Scaffold(
+                      body: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.timer_off,
+                              size: 60,
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Session Expired',
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Your session has expired due to inactivity.\nPlease sign in again.',
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            const CircularProgressIndicator(),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                }
+
+                switch (status) {
+                  case 'approved':
+                    _sessionTimeoutTriggered = false;
+                    return const MainHubScreen();
+
+                  case 'blocked':
+                    return const BlockedScreen();
+
+                  case 'rejected':
+                    return Scaffold(
+                      body: Center(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.block,
+                                size: 60,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Access Denied',
+                                style:
+                                    Theme.of(context).textTheme.headlineSmall,
+                              ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Your account has been rejected.',
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              ElevatedButton(
+                                onPressed: () {
+                                  ref
+                                      .read(authViewModelProvider.notifier)
+                                      .signOut();
+                                },
+                                child: const Text('Sign Out'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+
+                  case 'pending':
+                  default:
+                    return const PendingApprovalScreen();
+                }
+              },
+            );
+          },
+        );
       },
       loading: () => const Scaffold(
-        body: LoadingIndicator(), // Show a loading spinner while checking auth state
+        body: LoadingIndicator(),
       ),
       error: (err, stack) => Scaffold(
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 64, color: Theme.of(context).colorScheme.error),
-              const SizedBox(height: 16),
-              Text('Authentication Error', style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 8),
-              Text('$err', textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => ref.refresh(authStateChangesProvider),
-                child: const Text('Retry'),
-              ),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 60,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Authentication Error',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '$err',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    ref.refresh(authStateChangesProvider);
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

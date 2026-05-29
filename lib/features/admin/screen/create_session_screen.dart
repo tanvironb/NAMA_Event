@@ -537,6 +537,44 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     );
   }
 
+  Widget _buildSessionDateTimeFields() {
+    return Column(
+      children: [
+        _PickerField(
+          label: 'Event Date',
+          value: _formatDate(_selectedDate),
+          icon: Icons.calendar_today_outlined,
+          onTap: _pickDate,
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(
+              child: _PickerField(
+                label: 'Start Time',
+                value: _startTime == null
+                    ? 'Start time'
+                    : _formatTime(_startTime),
+                icon: Icons.access_time_rounded,
+                onTap: _pickStartTime,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _PickerField(
+                label: 'End Time',
+                value:
+                    _endTime == null ? 'End time' : _formatTime(_endTime),
+                icon: Icons.access_time_rounded,
+                onTap: _pickEndTime,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final descriptionLength = _sessionDescriptionController.text.length;
@@ -545,7 +583,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 22, 24, 24),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -566,7 +604,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 'Create Session',
                 style: TextStyle(
                   color: _primaryColor,
-                  fontSize: 28,
+                  fontSize: 27,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.7,
                 ),
@@ -576,7 +614,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                 'Add session details and assign speakers from dropdown.',
                 style: TextStyle(
                   color: _textMuted,
-                  fontSize: 13.5,
+                  fontSize: 12.5,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -612,40 +650,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                             onChanged: (_) => setState(() {}),
                           ),
                           const SizedBox(height: 15),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _PickerField(
-                                  label: 'Date',
-                                  value: _formatDate(_selectedDate),
-                                  icon: Icons.calendar_today_outlined,
-                                  onTap: _pickDate,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _PickerField(
-                                  label: 'Start',
-                                  value: _startTime == null
-                                      ? 'Start time'
-                                      : _formatTime(_startTime),
-                                  icon: Icons.access_time_rounded,
-                                  onTap: _pickStartTime,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _PickerField(
-                                  label: 'End',
-                                  value: _endTime == null
-                                      ? 'End time'
-                                      : _formatTime(_endTime),
-                                  icon: Icons.access_time_rounded,
-                                  onTap: _pickEndTime,
-                                ),
-                              ),
-                            ],
-                          ),
+                          _buildSessionDateTimeFields(),
                           const SizedBox(height: 15),
                           _InputField(
                             label: 'Venue / Location',
@@ -786,7 +791,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                                             label: const Text(
                                               'Add Another Speaker',
                                               style: TextStyle(
-                                                fontSize: 12.5,
+                                                fontSize: 12,
                                                 fontWeight: FontWeight.w800,
                                               ),
                                             ),
@@ -903,7 +908,7 @@ class _NoSpeakersBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: const Color(0xFFFAFAFF),
         borderRadius: BorderRadius.circular(14),
@@ -916,14 +921,14 @@ class _NoSpeakersBox extends StatelessWidget {
           Icon(
             Icons.person_off_outlined,
             color: _primaryColor,
-            size: 28,
+            size: 26,
           ),
           SizedBox(height: 8),
           Text(
             'No speaker accounts found',
             style: TextStyle(
               color: _primaryColor,
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -933,7 +938,7 @@ class _NoSpeakersBox extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: _textMuted,
-              fontSize: 11.5,
+              fontSize: 11,
               height: 1.35,
             ),
           ),
@@ -979,7 +984,7 @@ class _SpeakerDropdownField extends StatelessWidget {
           children: [
             Expanded(
               child: SizedBox(
-                height: 52,
+                height: 48,
                 child: DropdownButtonFormField<String>(
                   value: validValue,
                   isExpanded: true,
@@ -1001,7 +1006,7 @@ class _SpeakerDropdownField extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Color(0xFF1F2937),
-                            fontSize: 12.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -1064,8 +1069,8 @@ class _SpeakerDropdownField extends StatelessWidget {
                         child: Row(
                           children: [
                             Container(
-                              height: 30,
-                              width: 30,
+                              height: 28,
+                              width: 28,
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF4F1FF),
                                 borderRadius: BorderRadius.circular(10),
@@ -1073,10 +1078,10 @@ class _SpeakerDropdownField extends StatelessWidget {
                               child: const Icon(
                                 Icons.person_outline_rounded,
                                 color: _primaryColor,
-                                size: 17,
+                                size: 16,
                               ),
                             ),
-                            const SizedBox(width: 9),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1089,7 +1094,7 @@ class _SpeakerDropdownField extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: Color(0xFF1F2937),
-                                      fontSize: 12.2,
+                                      fontSize: 11.8,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
@@ -1100,7 +1105,7 @@ class _SpeakerDropdownField extends StatelessWidget {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: _textMuted,
-                                      fontSize: 10,
+                                      fontSize: 9.8,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
@@ -1120,8 +1125,8 @@ class _SpeakerDropdownField extends StatelessWidget {
               onTap: onRemove,
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                height: 48,
-                width: 42,
+                height: 46,
+                width: 40,
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
@@ -1134,7 +1139,7 @@ class _SpeakerDropdownField extends StatelessWidget {
                       ? Icons.delete_outline_rounded
                       : Icons.close_rounded,
                   color: canRemove ? Colors.redAccent : _primaryColor,
-                  size: 20,
+                  size: 19,
                 ),
               ),
             ),
@@ -1178,7 +1183,7 @@ class _ImageUploadField extends StatelessWidget {
           borderRadius: BorderRadius.circular(15),
           child: Container(
             width: double.infinity,
-            height: imageBytes == null ? 92 : 160,
+            height: imageBytes == null ? 82 : 132,
             decoration: BoxDecoration(
               color: const Color(0xFFFAFAFF),
               borderRadius: BorderRadius.circular(15),
@@ -1188,12 +1193,12 @@ class _ImageUploadField extends StatelessWidget {
             ),
             child: imageBytes == null
                 ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Row(
                       children: [
                         Container(
-                          height: 42,
-                          width: 42,
+                          height: 38,
+                          width: 38,
                           decoration: BoxDecoration(
                             color: const Color(0xFFF1EEFB),
                             borderRadius: BorderRadius.circular(13),
@@ -1201,10 +1206,10 @@ class _ImageUploadField extends StatelessWidget {
                           child: Icon(
                             icon,
                             color: _primaryColor,
-                            size: 22,
+                            size: 20,
                           ),
                         ),
-                        const SizedBox(width: 13),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -1214,7 +1219,7 @@ class _ImageUploadField extends StatelessWidget {
                                 'Upload $label',
                                 style: const TextStyle(
                                   color: _primaryColor,
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
@@ -1223,7 +1228,7 @@ class _ImageUploadField extends StatelessWidget {
                                 subtitle,
                                 style: const TextStyle(
                                   color: _textMuted,
-                                  fontSize: 11.3,
+                                  fontSize: 10.8,
                                   fontWeight: FontWeight.w500,
                                   height: 1.3,
                                 ),
@@ -1234,7 +1239,7 @@ class _ImageUploadField extends StatelessWidget {
                         const Icon(
                           Icons.upload_rounded,
                           color: _primaryColor,
-                          size: 21,
+                          size: 20,
                         ),
                       ],
                     ),
@@ -1256,8 +1261,8 @@ class _ImageUploadField extends StatelessWidget {
                             onTap: onRemove,
                             borderRadius: BorderRadius.circular(20),
                             child: Container(
-                              height: 30,
-                              width: 30,
+                              height: 28,
+                              width: 28,
                               decoration: BoxDecoration(
                                 color: Colors.black.withOpacity(0.55),
                                 shape: BoxShape.circle,
@@ -1265,7 +1270,7 @@ class _ImageUploadField extends StatelessWidget {
                               child: const Icon(
                                 Icons.close_rounded,
                                 color: Colors.white,
-                                size: 18,
+                                size: 17,
                               ),
                             ),
                           ),
@@ -1275,8 +1280,8 @@ class _ImageUploadField extends StatelessWidget {
                           bottom: 10,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
+                              horizontal: 9,
+                              vertical: 5,
                             ),
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(0.55),
@@ -1288,14 +1293,14 @@ class _ImageUploadField extends StatelessWidget {
                                 Icon(
                                   Icons.check_circle_rounded,
                                   color: Colors.white,
-                                  size: 15,
+                                  size: 14,
                                 ),
                                 SizedBox(width: 5),
                                 Text(
                                   'Image selected',
                                   style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 11,
+                                    fontSize: 10.5,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -1330,7 +1335,7 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 15, 16, 18),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 15),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -1352,7 +1357,7 @@ class _SectionCard extends StatelessWidget {
             title,
             style: const TextStyle(
               color: _primaryColor,
-              fontSize: 16,
+              fontSize: 15,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -1362,13 +1367,13 @@ class _SectionCard extends StatelessWidget {
               subtitle!,
               style: const TextStyle(
                 color: _textMuted,
-                fontSize: 11.8,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w500,
                 height: 1.3,
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           child,
         ],
       ),
@@ -1395,10 +1400,10 @@ class _SwitchCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+      padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: const Color(0xFFE8E4F8),
         ),
@@ -1408,9 +1413,9 @@ class _SwitchCard extends StatelessWidget {
           const Icon(
             Icons.chat_bubble_outline_rounded,
             color: _primaryColor,
-            size: 22,
+            size: 20,
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1419,7 +1424,7 @@ class _SwitchCard extends StatelessWidget {
                   title,
                   style: const TextStyle(
                     color: _primaryColor,
-                    fontSize: 13,
+                    fontSize: 12.5,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -1428,7 +1433,7 @@ class _SwitchCard extends StatelessWidget {
                   subtitle,
                   style: const TextStyle(
                     color: _textMuted,
-                    fontSize: 11.5,
+                    fontSize: 11,
                     height: 1.3,
                   ),
                 ),
@@ -1571,7 +1576,7 @@ class _InputField extends StatelessWidget {
             cursorColor: _primaryColor,
             style: const TextStyle(
               color: Color(0xFF1F2937),
-              fontSize: 12.5,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
             decoration: InputDecoration(
@@ -1862,7 +1867,7 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 48,
+      height: 46,
       child: ElevatedButton.icon(
         onPressed: isLoading ? null : onTap,
         icon: isLoading
@@ -1881,7 +1886,7 @@ class _ActionButton extends StatelessWidget {
         label: Text(
           label,
           style: const TextStyle(
-            fontSize: 13,
+            fontSize: 12.5,
             fontWeight: FontWeight.w800,
           ),
         ),

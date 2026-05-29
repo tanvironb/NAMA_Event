@@ -1,3 +1,5 @@
+// lib/features/auth/data/auth_repository.dart
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -46,27 +48,52 @@ class AuthRepository {
     String password,
   ) async {
     final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
-      email: email,
+      email: email.trim(),
       password: password,
     );
 
-    final user = userCredential.user;
+    final signedInUser = userCredential.user;
 
-    if (user == null) {
+    if (signedInUser == null) {
+      await _firebaseAuth.signOut();
+
       throw FirebaseAuthException(
         code: 'user-not-found',
         message: 'No user found.',
       );
     }
 
-    if (!user.emailVerified) {
+    /*
+      IMPORTANT FIX:
+      After email verification, Firebase can still keep the old cached user
+      where emailVerified is false.
+
+      So we MUST reload the user first, then read the refreshed user from
+      FirebaseAuth.instance.currentUser.
+    */
+    await signedInUser.reload();
+
+    final refreshedUser = _firebaseAuth.currentUser;
+
+    if (refreshedUser == null) {
+      await _firebaseAuth.signOut();
+
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No user found after refresh.',
+      );
+    }
+
+    if (!refreshedUser.emailVerified) {
+      await _firebaseAuth.signOut();
+
       throw FirebaseAuthException(
         code: 'email-not-verified',
         message: 'Your email is pending verification.',
       );
     }
 
-    final userDoc = await _firestoreService.getUserDocument(user.uid);
+    final userDoc = await _firestoreService.getUserDocument(refreshedUser.uid);
 
     if (!userDoc.exists) {
       await _firebaseAuth.signOut();
@@ -79,7 +106,7 @@ class AuthRepository {
 
     try {
       await _firestoreService.updateUserDocument(
-        user.uid,
+        refreshedUser.uid,
         {
           'lastSeen': FieldValue.serverTimestamp(),
           'isOnline': true,
@@ -88,7 +115,7 @@ class AuthRepository {
 
       // Automatically connect attendee/user to the active event on login.
       // This makes the user appear in Networking for the active event.
-      await _attachUserToActiveEvent(user.uid);
+      await _attachUserToActiveEvent(refreshedUser.uid);
     } catch (e) {
       debugPrint('Warning: Failed to update user login data: $e');
     }
@@ -103,15 +130,15 @@ class AuthRepository {
   }) async {
     try {
       final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email,
+        email: email.trim(),
         password: password,
       );
 
       final activeEventId = await _getActiveEventIdSafely();
 
       final userData = {
-        'email': email,
-        'name': name ?? email.split('@')[0],
+        'email': email.trim(),
+        'name': name ?? email.trim().split('@')[0],
         'role': 'attendee',
         'status': 'approved',
 
@@ -174,7 +201,9 @@ class AuthRepository {
           },
         );
       } catch (e) {
-        debugPrint('Warning: Failed to update user session data on sign-out: $e');
+        debugPrint(
+          'Warning: Failed to update user session data on sign-out: $e',
+        );
       }
     }
 
