@@ -534,6 +534,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   }
 
   Future<String> _createAuthAccountForSpeaker({
+    required String name,
     required String email,
     required String password,
   }) async {
@@ -555,15 +556,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         password: password,
       );
 
-      await secondaryAuth.signOut();
+      final createdUser = credential.user;
 
-      final uid = credential.user?.uid;
-
-      if (uid == null || uid.isEmpty) {
+      if (createdUser == null || createdUser.uid.isEmpty) {
         throw Exception('Speaker user ID was not created.');
       }
 
-      return uid;
+      await createdUser.updateDisplayName(name);
+      await createdUser.sendEmailVerification();
+
+      await secondaryAuth.signOut();
+
+      return createdUser.uid;
     } finally {
       if (secondaryApp != null) {
         await secondaryApp.delete();
@@ -617,6 +621,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
       if (uid.isEmpty) {
         uid = await _createAuthAccountForSpeaker(
+          name: name,
           email: email,
           password: password,
         );
@@ -626,6 +631,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       final savedPassword = password.isNotEmpty
           ? password
           : _readSavedSpeakerPassword(existingSpeakerData);
+
+      final existingEmailVerified =
+          existingSpeakerData['emailVerified'] == true;
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set(
         {
@@ -641,11 +649,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           'status': 'approved',
           'points': existingSpeakerData['points'] ?? 0,
           'eventIds': FieldValue.arrayUnion([eventId]),
+          'activeEventId': eventId,
+          'currentEventId': eventId,
           'profileVisibility':
               existingSpeakerData['profileVisibility'] ?? 'full',
           'needsPrivacySelection': false,
           'createdByAdmin': true,
           'authAccountCreated': authAccountCreated,
+          'emailVerificationRequired': true,
+          'emailVerified': existingEmailVerified,
           if (savedPassword.isNotEmpty) 'speakerPassword': savedPassword,
           if (savedPassword.isNotEmpty) 'plainPassword': savedPassword,
           'updatedAt': FieldValue.serverTimestamp(),
@@ -775,8 +787,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     _showMessage(
       widget.isEditMode
-          ? 'Event updated. Now create sessions.'
-          : 'Event saved. Now create sessions.',
+          ? 'Event updated. Verification email sent to speaker if newly created.'
+          : 'Event saved. Verification email sent to speaker if newly created.',
     );
 
     Navigator.of(context).push(
@@ -1027,7 +1039,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 _SectionHeader(
                   title: 'Speaker Accounts',
                   subtitle:
-                      'Admin creates speaker accounts here. Staff/admin can assign them inside Create Session.',
+                      'Admin creates speaker accounts here. Verification email will be sent to new speakers.',
                   onAdd: _addSpeaker,
                 ),
                 const SizedBox(height: 15),
@@ -1412,7 +1424,6 @@ class _SpeakerInput {
     passwordController.dispose();
   }
 }
-
 class _SectionContainer extends StatelessWidget {
   final Widget child;
 
@@ -1785,7 +1796,331 @@ class _PartnerNameField extends StatelessWidget {
     );
   }
 }
+class _PickerField extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final VoidCallback onTap;
 
+  const _PickerField({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.onTap,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    final isPlaceholder =
+        value == 'Select date' || value == 'Start time' || value == 'End time';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(13),
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: _fieldBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: _primaryColor, size: 18),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: isPlaceholder
+                          ? _textMuted
+                          : const Color(0xFF1F2937),
+                      fontSize: 10.7,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF454062),
+                  size: 17,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DropdownField extends StatelessWidget {
+  final String label;
+  final String? value;
+  final String hint;
+  final IconData icon;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+
+  const _DropdownField({
+    required this.label,
+    required this.value,
+    required this.hint,
+    required this.icon,
+    required this.items,
+    required this.onChanged,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 48,
+          child: DropdownButtonFormField<String>(
+            value: value,
+            isExpanded: true,
+            onChanged: onChanged,
+            validator: (value) {
+              if (value == null || value.trim().isEmpty) return 'Required';
+              return null;
+            },
+            icon: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Color(0xFF454062),
+              size: 18,
+            ),
+            style: const TextStyle(
+              color: Color(0xFF1F2937),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(color: _textMuted, fontSize: 12),
+              prefixIcon: Icon(icon, color: _primaryColor, size: 19),
+              prefixIconConstraints: const BoxConstraints(minWidth: 40),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(color: _fieldBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(13),
+                borderSide: const BorderSide(color: _primaryColor, width: 1.1),
+              ),
+            ),
+            items: items
+                .map(
+                  (item) => DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(
+                      item,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SetupOption {
+  final String label;
+  final IconData icon;
+
+  const _SetupOption({
+    required this.label,
+    required this.icon,
+  });
+}
+
+class _ChipGroup extends StatelessWidget {
+  final String title;
+  final String selectedValue;
+  final List<_SetupOption> options;
+  final ValueChanged<String> onSelected;
+
+  const _ChipGroup({
+    required this.title,
+    required this.selectedValue,
+    required this.options,
+    required this.onSelected,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: _primaryColor,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 9),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 7,
+          runSpacing: 8,
+          children: options.map((option) {
+            final isSelected = option.label == selectedValue;
+
+            return InkWell(
+              onTap: () => onSelected(option.label),
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? const Color(0xFFF4F1FF) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected ? _primaryColor : _fieldBorder,
+                    width: isSelected ? 1.1 : 1,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(option.icon, size: 15, color: _primaryColor),
+                    const SizedBox(width: 5),
+                    Text(
+                      option.label,
+                      style: const TextStyle(
+                        color: _primaryColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isPrimary;
+  final bool isLoading;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.isPrimary,
+    required this.isLoading,
+    required this.onTap,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 48,
+      child: ElevatedButton.icon(
+        onPressed: isLoading ? null : onTap,
+        icon: isLoading
+            ? SizedBox(
+                height: 15,
+                width: 15,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: isPrimary ? Colors.white : _primaryColor,
+                ),
+              )
+            : Icon(icon, size: 18),
+        label: Text(
+          label,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+        ),
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: isPrimary ? _primaryColor : Colors.white,
+          foregroundColor: isPrimary ? Colors.white : _primaryColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(
+              color: isPrimary ? _primaryColor : const Color(0xFFE1DDF0),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FooterCredit extends StatelessWidget {
+  const _FooterCredit();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: Divider(color: Color(0xFFE2DEEF), indent: 50)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'By: NAMA Foundation',
+                style: TextStyle(
+                  color: Color(0xFF1B0F72),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Color(0xFFE2DEEF), endIndent: 50)),
+          ],
+        ),
+        SizedBox(height: 8),
+        Icon(Icons.circle, color: Color(0xFFF5B51B), size: 7),
+      ],
+    );
+  }
+}
 class _SpeakerAccountCard extends StatefulWidget {
   final int index;
   final _SpeakerInput speaker;
@@ -2048,26 +2383,14 @@ class _InputField extends StatelessWidget {
               hintStyle: const TextStyle(
                 color: _textMuted,
                 fontSize: 12,
-                fontWeight: FontWeight.w400,
               ),
               prefixIcon: Padding(
-                padding: EdgeInsets.only(
-                  top: isMultiLine ? 12 : 0,
-                ),
-                child: Icon(
-                  icon,
-                  color: _primaryColor,
-                  size: 19,
-                ),
+                padding: EdgeInsets.only(top: isMultiLine ? 12 : 0),
+                child: Icon(icon, color: _primaryColor, size: 19),
               ),
-              prefixIconConstraints: const BoxConstraints(
-                minWidth: 40,
-              ),
+              prefixIconConstraints: const BoxConstraints(minWidth: 40),
               suffixText: suffixText,
-              suffixStyle: const TextStyle(
-                color: _textMuted,
-                fontSize: 11,
-              ),
+              suffixStyle: const TextStyle(color: _textMuted, fontSize: 11),
               filled: true,
               fillColor: Colors.white,
               contentPadding: EdgeInsets.symmetric(
@@ -2076,243 +2399,21 @@ class _InputField extends StatelessWidget {
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: _fieldBorder,
-                ),
+                borderSide: const BorderSide(color: _fieldBorder),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: _primaryColor,
-                  width: 1.1,
-                ),
+                borderSide: const BorderSide(color: _primaryColor, width: 1.1),
               ),
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: Colors.redAccent,
-                ),
+                borderSide: const BorderSide(color: Colors.redAccent),
               ),
               focusedErrorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: Colors.redAccent,
-                ),
+                borderSide: const BorderSide(color: Colors.redAccent),
               ),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PickerField extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const _PickerField({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.onTap,
-  });
-
-  static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
-  static const Color _textMuted = Color(0xFF6B7280);
-
-  @override
-  Widget build(BuildContext context) {
-    final isPlaceholder =
-        value == 'Select date' || value == 'Start time' || value == 'End time';
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _FieldLabel(label),
-        const SizedBox(height: 6),
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(13),
-          child: Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(13),
-              border: Border.all(
-                color: _fieldBorder,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  color: _primaryColor,
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: isPlaceholder
-                          ? _textMuted
-                          : const Color(0xFF1F2937),
-                      fontSize: 10.7,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                const Icon(
-                  Icons.keyboard_arrow_down_rounded,
-                  color: Color(0xFF454062),
-                  size: 17,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _DropdownField extends StatelessWidget {
-  final String label;
-  final String? value;
-  final String hint;
-  final IconData icon;
-  final List<String> items;
-  final ValueChanged<String?> onChanged;
-
-  const _DropdownField({
-    required this.label,
-    required this.value,
-    required this.hint,
-    required this.icon,
-    required this.items,
-    required this.onChanged,
-  });
-
-  static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
-  static const Color _textMuted = Color(0xFF6B7280);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _FieldLabel(label),
-        const SizedBox(height: 6),
-        SizedBox(
-          height: 48,
-          child: DropdownButtonFormField<String>(
-            value: value,
-            isExpanded: true,
-            onChanged: onChanged,
-            validator: (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Required';
-              }
-              return null;
-            },
-            icon: const Icon(
-              Icons.keyboard_arrow_down_rounded,
-              color: Color(0xFF454062),
-              size: 18,
-            ),
-            style: const TextStyle(
-              color: Color(0xFF1F2937),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-            selectedItemBuilder: (context) {
-              return items.map((item) {
-                return Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    item,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF1F2937),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                );
-              }).toList();
-            },
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(
-                color: _textMuted,
-                fontSize: 12,
-              ),
-              prefixIcon: Icon(
-                icon,
-                color: _primaryColor,
-                size: 19,
-              ),
-              prefixIconConstraints: const BoxConstraints(
-                minWidth: 40,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 8,
-                vertical: 11,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: _fieldBorder,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: _primaryColor,
-                  width: 1.1,
-                ),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: Colors.redAccent,
-                ),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: Colors.redAccent,
-                ),
-              ),
-            ),
-            items: items
-                .map(
-                  (item) => DropdownMenuItem<String>(
-                    value: item,
-                    child: Text(
-                      item,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFF1F2937),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
           ),
         ),
       ],
@@ -2336,211 +2437,6 @@ class _FieldLabel extends StatelessWidget {
         fontSize: 12,
         fontWeight: FontWeight.w800,
       ),
-    );
-  }
-}
-
-class _SetupOption {
-  final String label;
-  final IconData icon;
-
-  const _SetupOption({
-    required this.label,
-    required this.icon,
-  });
-}
-
-class _ChipGroup extends StatelessWidget {
-  final String title;
-  final String selectedValue;
-  final List<_SetupOption> options;
-  final ValueChanged<String> onSelected;
-
-  const _ChipGroup({
-    required this.title,
-    required this.selectedValue,
-    required this.options,
-    required this.onSelected,
-  });
-
-  static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(
-          title,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: _primaryColor,
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 9),
-        Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 7,
-          runSpacing: 8,
-          children: options.map((option) {
-            final isSelected = option.label == selectedValue;
-
-            return InkWell(
-              onTap: () => onSelected(option.label),
-              borderRadius: BorderRadius.circular(12),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFFF4F1FF) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isSelected ? _primaryColor : _fieldBorder,
-                    width: isSelected ? 1.1 : 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      option.icon,
-                      size: 15,
-                      color: _primaryColor,
-                    ),
-                    const SizedBox(width: 5),
-                    Text(
-                      option.label,
-                      style: const TextStyle(
-                        color: _primaryColor,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        ),
-      ],
-    );
-  }
-}
-
-class _ActionButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isPrimary;
-  final bool isLoading;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.label,
-    required this.icon,
-    required this.isPrimary,
-    required this.isLoading,
-    required this.onTap,
-  });
-
-  static const Color _primaryColor = Color(0xFF1B0F72);
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 48,
-      child: ElevatedButton.icon(
-        onPressed: isLoading ? null : onTap,
-        icon: isLoading
-            ? SizedBox(
-                height: 15,
-                width: 15,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: isPrimary ? Colors.white : _primaryColor,
-                ),
-              )
-            : Icon(
-                icon,
-                size: 18,
-              ),
-        label: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        style: ElevatedButton.styleFrom(
-          elevation: 0,
-          backgroundColor: isPrimary ? _primaryColor : Colors.white,
-          foregroundColor: isPrimary ? Colors.white : _primaryColor,
-          disabledBackgroundColor:
-              isPrimary ? _primaryColor.withOpacity(0.55) : Colors.white,
-          disabledForegroundColor:
-              isPrimary ? Colors.white70 : _primaryColor.withOpacity(0.5),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: BorderSide(
-              color: isPrimary ? _primaryColor : const Color(0xFFE1DDF0),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FooterCredit extends StatelessWidget {
-  const _FooterCredit();
-
-  static const Color _primaryColor = Color(0xFF1B0F72);
-
-  @override
-  Widget build(BuildContext context) {
-    return const Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Divider(
-                color: Color(0xFFE2DEEF),
-                thickness: 1,
-                indent: 50,
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Text(
-                'By: NAMA Foundation',
-                style: TextStyle(
-                  color: _primaryColor,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Divider(
-                color: Color(0xFFE2DEEF),
-                thickness: 1,
-                endIndent: 50,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: 8),
-        Icon(
-          Icons.circle,
-          color: Color(0xFFF5B51B),
-          size: 7,
-        ),
-      ],
     );
   }
 }

@@ -3,7 +3,6 @@
 import 'package:card_swiper/card_swiper.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class VenueMapsCarousel extends StatelessWidget {
@@ -12,34 +11,61 @@ class VenueMapsCarousel extends StatelessWidget {
   static const Color primaryBlue = Color(0xFF0D1496);
   static const Color cardGrey = Color(0xFFEFEFEF);
 
-  Stream<List<_VenueSessionItem>> _venueSessionsStream() {
+  DateTime? _toDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
+
+  Stream<List<_VenueSessionItem>> _venueMapsStream() {
     return FirebaseFirestore.instance
-        .collection('sessions')
-        .orderBy('startTime')
+        .collection('events')
+        .where('isActive', isEqualTo: true)
+        .limit(1)
         .snapshots()
-        .map((snapshot) {
+        .asyncMap((eventSnapshot) async {
+      if (eventSnapshot.docs.isEmpty) return <_VenueSessionItem>[];
+
+      final eventDoc = eventSnapshot.docs.first;
+      final eventData = eventDoc.data();
+      final activeEventId = eventDoc.id;
+
+      final endDate = _toDateTime(eventData['endDate']);
+
+      if (endDate != null && DateTime.now().isAfter(endDate)) {
+        return <_VenueSessionItem>[];
+      }
+
+      final sessionSnapshot = await FirebaseFirestore.instance
+          .collection('sessions')
+          .where('eventId', isEqualTo: activeEventId)
+          .orderBy('startTime')
+          .get();
+
       final venues = <_VenueSessionItem>[];
       final usedImages = <String>{};
 
-      for (final doc in snapshot.docs) {
+      for (final doc in sessionSnapshot.docs) {
         final data = doc.data();
 
         final sessionTitle = (data['title'] ?? '').toString().trim();
         final location = (data['location'] ?? '').toString().trim();
         final description = (data['description'] ?? '').toString().trim();
 
-        final singleVenueImageUrl =
+        final imageUrls = <String>[];
+
+        final venueImageUrl =
             (data['venueImageUrl'] ?? '').toString().trim();
+
+        if (venueImageUrl.isNotEmpty) {
+          imageUrls.add(venueImageUrl);
+        }
 
         final rawVenueImageUrls = data['venueImageUrls'];
         final rawLocationImages = data['locationImages'];
         final rawImageUrls = data['imageUrls'];
-
-        final imageUrls = <String>[];
-
-        if (singleVenueImageUrl.isNotEmpty) {
-          imageUrls.add(singleVenueImageUrl);
-        }
 
         if (rawVenueImageUrls is List) {
           for (final item in rawVenueImageUrls) {
@@ -63,10 +89,6 @@ class VenueMapsCarousel extends StatelessWidget {
         }
 
         for (final imageUrl in imageUrls) {
-          if (imageUrl.isEmpty) continue;
-
-          // Avoid exact duplicate image URLs only.
-          // Do NOT remove same venue/location names.
           if (usedImages.contains(imageUrl)) continue;
           usedImages.add(imageUrl);
 
@@ -95,7 +117,7 @@ class VenueMapsCarousel extends StatelessWidget {
       height: 150,
       width: double.infinity,
       child: StreamBuilder<List<_VenueSessionItem>>(
-        stream: _venueSessionsStream(),
+        stream: _venueMapsStream(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
@@ -137,7 +159,6 @@ class VenueMapsCarousel extends StatelessWidget {
                 : null,
             itemBuilder: (context, index) {
               final venueMap = venueMaps[index];
-
               return _venueCard(context, venueMap);
             },
           );
@@ -188,7 +209,6 @@ class VenueMapsCarousel extends StatelessWidget {
                 ),
               ),
             ),
-
             Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -205,7 +225,6 @@ class VenueMapsCarousel extends StatelessWidget {
                 ),
               ),
             ),
-
             Positioned(
               left: 18,
               right: 90,
@@ -238,7 +257,6 @@ class VenueMapsCarousel extends StatelessWidget {
                 ],
               ),
             ),
-
             Positioned(
               right: 14,
               bottom: 18,

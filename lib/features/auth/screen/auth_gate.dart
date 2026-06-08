@@ -53,6 +53,31 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         );
   }
 
+  Future<DocumentSnapshot<Map<String, dynamic>>>
+      _loadUserProfileAndSyncVerification(User user) async {
+    final profileDoc = await _loadUserProfile(user.uid);
+
+    if (user.emailVerified) {
+      final data = profileDoc.data();
+      final alreadySynced = data != null && data['emailVerified'] == true;
+
+      if (!alreadySynced) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+          {
+            'emailVerified': true,
+            'emailVerifiedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+
+        return _loadUserProfile(user.uid);
+      }
+    }
+
+    return profileDoc;
+  }
+
   DateTime? _parseLastSeen(dynamic value) {
     if (value == null) return null;
 
@@ -109,7 +134,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
             }
 
             return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              future: _loadUserProfile(refreshedUser.uid),
+              future: _loadUserProfileAndSyncVerification(refreshedUser),
               builder: (context, profileSnapshot) {
                 if (profileSnapshot.connectionState ==
                     ConnectionState.waiting) {
