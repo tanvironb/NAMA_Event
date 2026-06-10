@@ -105,6 +105,13 @@ class _EventReportDashboardScreenState
         .where('status', isEqualTo: 'approved')
         .get();
 
+    final registrationsSnap = await firestore
+        .collection('events')
+        .doc(widget.eventId)
+        .collection('registrations')
+        .where('includedInReport', isEqualTo: true)
+        .get();
+
     final reportNotesDoc = await firestore
         .collection('events')
         .doc(widget.eventId)
@@ -196,6 +203,20 @@ class _EventReportDashboardScreenState
         return b.uploadedAt!.compareTo(a.uploadedAt!);
       });
 
+    final registeredParticipants = registrationsSnap.docs
+        .map((doc) => _RegistrationReportItem.fromDoc(doc))
+        .toList()
+      ..sort((a, b) {
+        if (a.registeredAt == null && b.registeredAt == null) {
+          return a.name.compareTo(b.name);
+        }
+
+        if (a.registeredAt == null) return 1;
+        if (b.registeredAt == null) return -1;
+
+        return a.registeredAt!.compareTo(b.registeredAt!);
+      });
+
     final eventStartDate = _readDate(
       eventData['startDate'] ??
           eventData['startTime'] ??
@@ -261,6 +282,7 @@ class _EventReportDashboardScreenState
       sessions: sessions,
       feedbacks: feedbacks,
       approvedPhotos: photos,
+      registeredParticipants: registeredParticipants,
       totalMessages: totalMessages,
       totalSessionCheckIns: totalSessionCheckIns,
       averageOverallRating:
@@ -585,6 +607,10 @@ class _EventReportDashboardScreenState
             value: data.approvedPhotos.length.toString(),
           ),
           _MetricRow(
+            label: 'Registered Participants',
+            value: data.registeredParticipants.length.toString(),
+          ),
+          _MetricRow(
             label: 'Report Photos Limit',
             value:
                 '${data.approvedPhotos.take(maxReportPhotos).length}/$maxReportPhotos',
@@ -809,6 +835,23 @@ class _EventReportDashboardScreenState
     );
   }
 
+  Widget _registeredParticipantsSection(_EventReportDashboardData data) {
+    if (data.registeredParticipants.isEmpty) {
+      return const _EmptyCard(
+        icon: Icons.fact_check_outlined,
+        title: 'No registered participants added',
+        subtitle:
+            'Click Add to Report from Check Registration to include registered participants here and inside the PDF report.',
+      );
+    }
+
+    return Column(
+      children: data.registeredParticipants.map((participant) {
+        return _RegistrationCard(participant: participant);
+      }).toList(),
+    );
+  }
+
   Widget _systemNotes() {
     return Container(
       width: double.infinity,
@@ -995,6 +1038,10 @@ class _EventReportDashboardScreenState
                   const SizedBox(height: 10),
                   _photosSection(data),
                   const SizedBox(height: 18),
+                  const _SectionTitle('Registered Participants'),
+                  const SizedBox(height: 10),
+                  _registeredParticipantsSection(data),
+                  const SizedBox(height: 18),
                   const _SectionTitle('System Notes'),
                   const SizedBox(height: 10),
                   _systemNotes(),
@@ -1107,6 +1154,10 @@ class _EventReportPdfGenerator {
               [
                 'Report Photos Included',
                 '${limitedPhotos.length}/$maxReportPhotos',
+              ],
+              [
+                'Registered Participants',
+                data.registeredParticipants.length.toString(),
               ],
               ['Session Check-ins', data.totalSessionCheckIns.toString()],
               ['Chat Messages', data.totalMessages.toString()],
@@ -1230,6 +1281,13 @@ class _EventReportPdfGenerator {
                 );
               }),
             ],
+            pw.SizedBox(height: 18),
+            _pdfTitle('Registered Participants'),
+            pw.SizedBox(height: 8),
+            if (data.registeredParticipants.isEmpty)
+              pw.Text('No registered participants added to report yet.')
+            else
+              _pdfRegisteredParticipantsTable(data.registeredParticipants),
           ];
         },
       ),
@@ -1370,6 +1428,61 @@ class _EventReportPdfGenerator {
     );
   }
 
+  static pw.Widget _pdfRegisteredParticipantsTable(
+    List<_RegistrationReportItem> participants,
+  ) {
+    return pw.Table.fromTextArray(
+      border: pw.TableBorder.all(
+        color: PdfColors.grey300,
+        width: 0.6,
+      ),
+      cellPadding: const pw.EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: 5,
+      ),
+      columnWidths: {
+        0: const pw.FixedColumnWidth(20),
+        1: const pw.FlexColumnWidth(2.5),
+        2: const pw.FlexColumnWidth(3),
+        3: const pw.FlexColumnWidth(1.4),
+        4: const pw.FlexColumnWidth(1.8),
+      },
+      headerStyle: pw.TextStyle(
+        fontSize: 8,
+        fontWeight: pw.FontWeight.bold,
+        color: PdfColors.white,
+      ),
+      headerDecoration: const pw.BoxDecoration(
+        color: PdfColors.indigo900,
+      ),
+      cellStyle: const pw.TextStyle(
+        fontSize: 7.4,
+      ),
+      headers: [
+        '#',
+        'Name',
+        'Email',
+        'Role',
+        'Registered At',
+      ],
+      data: List.generate(participants.length, (index) {
+        final participant = participants[index];
+
+        return [
+          '${index + 1}',
+          _pdfSafe(participant.name),
+          _pdfSafe(participant.email.isEmpty ? '-' : participant.email),
+          _pdfSafe(participant.role),
+          _pdfSafe(
+            participant.registeredAt == null
+                ? '-'
+                : _formatDate(participant.registeredAt!),
+          ),
+        ];
+      }),
+    );
+  }
+
   static pw.Widget _pdfSessionTable(List<_SessionReportItem> sessions) {
     return pw.Table.fromTextArray(
       border: pw.TableBorder.all(
@@ -1484,6 +1597,7 @@ class _EventReportDashboardData {
   final List<_SessionReportItem> sessions;
   final List<_FeedbackReportItem> feedbacks;
   final List<_EventPhotoReportItem> approvedPhotos;
+  final List<_RegistrationReportItem> registeredParticipants;
   final int totalMessages;
   final int totalSessionCheckIns;
   final double averageOverallRating;
@@ -1510,6 +1624,7 @@ class _EventReportDashboardData {
     required this.sessions,
     required this.feedbacks,
     required this.approvedPhotos,
+    required this.registeredParticipants,
     required this.totalMessages,
     required this.totalSessionCheckIns,
     required this.averageOverallRating,
@@ -1566,6 +1681,7 @@ class _EventReportDashboardData {
       sessions: const [],
       feedbacks: const [],
       approvedPhotos: const [],
+      registeredParticipants: const [],
       totalMessages: 0,
       totalSessionCheckIns: 0,
       averageOverallRating: 0,
@@ -1733,6 +1849,42 @@ class _EventPhotoReportItem {
       photoUrl: (data['photoUrl'] ?? data['imageUrl'] ?? '').toString(),
       caption: (data['caption'] ?? '').toString(),
       uploadedAt: _readDate(data['uploadedAt'] ?? data['createdAt']),
+    );
+  }
+}
+
+class _RegistrationReportItem {
+  final String id;
+  final String userId;
+  final String name;
+  final String email;
+  final String role;
+  final String status;
+  final DateTime? registeredAt;
+
+  const _RegistrationReportItem({
+    required this.id,
+    required this.userId,
+    required this.name,
+    required this.email,
+    required this.role,
+    required this.status,
+    required this.registeredAt,
+  });
+
+  factory _RegistrationReportItem.fromDoc(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+
+    return _RegistrationReportItem(
+      id: doc.id,
+      userId: (data['userId'] ?? doc.id).toString(),
+      name: (data['name'] ?? 'Unknown User').toString(),
+      email: (data['email'] ?? '').toString(),
+      role: (data['role'] ?? 'user').toString(),
+      status: (data['status'] ?? 'registered').toString(),
+      registeredAt: _readDate(data['registeredAt'] ?? data['createdAt']),
     );
   }
 }
@@ -2145,6 +2297,98 @@ class _FeedbackCard extends StatelessWidget {
               text: feedback.additionalComments,
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _RegistrationCard extends StatelessWidget {
+  final _RegistrationReportItem participant;
+
+  const _RegistrationCard({
+    required this.participant,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final registeredAt = participant.registeredAt == null
+        ? '-'
+        : _formatDate(participant.registeredAt!);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: AppColors.namaNavyBlue.withOpacity(0.10),
+            child: Text(
+              participant.name.trim().isNotEmpty
+                  ? participant.name.trim()[0].toUpperCase()
+                  : '?',
+              style: const TextStyle(
+                color: AppColors.namaNavyBlue,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  participant.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.namaNavyBlue,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  participant.email.isEmpty ? '-' : participant.email,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: AppColors.namaMediumGray,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${participant.role} • $registeredAt',
+                  style: const TextStyle(
+                    color: AppColors.namaMediumGray,
+                    fontSize: 10.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 8,
+              vertical: 5,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: const Text(
+              'Registered',
+              style: TextStyle(
+                color: Colors.green,
+                fontSize: 9,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -2625,6 +2869,6 @@ String _pdfSafe(String value) {
   return value
       .replaceAll('\n', ' ')
       .replaceAll('\r', ' ')
-      .replaceAll('�', '')
+      .replaceAll(' ', '')
       .trim();
 }

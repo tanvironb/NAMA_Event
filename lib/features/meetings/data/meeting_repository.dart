@@ -43,17 +43,49 @@ class MeetingRepository {
       'memberIds': [requesterId, recipientId],
     };
 
-    await _firestoreService.createMeetingDocument(meetingData);
+    // Create meeting first
+    final meetingId = await _firestoreService.createMeetingDocumentAndReturnId(
+      meetingData,
+    );
+
+    // Create notification for recipient
+    await _firestoreService.createNotificationDocument(
+      userId: recipientId,
+      notificationData: {
+        'eventId': eventId,
+        'title': 'Meeting Request',
+        'body':
+            '${requesterInfo['name'] ?? 'Someone'} requested a meeting with you.',
+        'timestamp': FieldValue.serverTimestamp(),
+        'isRead': false,
+        'type': 'meetingRequest',
+        'targetRole': 'all',
+        'data': {
+          'meetingId': meetingId,
+          'requesterId': requesterId,
+          'recipientId': recipientId,
+          'status': 'pending',
+        },
+      },
+    );
   }
 
-  Future<void> updateMeetingStatus(String meetingId, String status) async {
-    await _firestoreService.updateMeetingDocument(meetingId, {
-      'status': status,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+  Future<void> updateMeetingStatus(
+    String meetingId,
+    String status,
+  ) async {
+    await _firestoreService.updateMeetingDocument(
+      meetingId,
+      {
+        'status': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
   }
 
   Future<void> deleteMeeting(String meetingId) {
-    throw UnimplementedError('Delete meeting not yet implemented');
+    throw UnimplementedError(
+      'Delete meeting not yet implemented',
+    );
   }
 }

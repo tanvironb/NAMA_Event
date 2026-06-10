@@ -14,7 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 class UserDetailsScreen extends ConsumerWidget {
   final String userId;
 
-  const UserDetailsScreen({super.key, required this.userId});
+const UserDetailsScreen({super.key, required this.userId});
 
   static const Color _mainColor = Color(0xFF24158A);
 
@@ -299,6 +299,26 @@ class UserDetailsScreen extends ConsumerWidget {
             ),
           ),
         ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: 240,
+          height: 40,
+          child: OutlinedButton.icon(
+            onPressed: () => _saveContact(context, appUser),
+            icon: const Icon(Icons.person_add_alt_1_outlined, size: 15),
+            label: const Text(
+              'Save Contact',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.green,
+              side: const BorderSide(color: Colors.green, width: 1.5),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
         if (appUser.role == 'speaker') ...[
           const SizedBox(height: 8),
           SizedBox(
@@ -315,6 +335,25 @@ class UserDetailsScreen extends ConsumerWidget {
     );
   }
 
+ Future<void> _saveContact(
+  BuildContext context,
+  AppUser appUser,
+) async {
+  final phone = appUser.phone.trim();
+
+  if (phone.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No phone number available to save.'),
+      ),
+    );
+    return;
+  }
+
+  final uri = Uri.parse('tel:$phone');
+
+  await _launchUriWithFallback(context, uri);
+}
   Future<void> _openDirectMessageFromNetworking({
     required BuildContext context,
     required WidgetRef ref,

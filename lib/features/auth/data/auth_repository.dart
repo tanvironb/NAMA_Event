@@ -43,6 +43,36 @@ class AuthRepository {
     );
   }
 
+  /// Creates/updates a registration record for the active event.
+  /// This is used by Admin -> Check Registration page.
+  Future<void> _registerUserForActiveEvent(String uid) async {
+    final activeEventId = await _getActiveEventIdSafely();
+
+    if (activeEventId == null || activeEventId.isEmpty) return;
+
+    final userDoc = await _firestoreService.getUserDocument(uid);
+
+    if (!userDoc.exists) return;
+
+    final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+
+    await _firestoreService.createOrUpdateEventRegistration(
+      eventId: activeEventId,
+      userId: uid,
+      registrationData: {
+        'userId': uid,
+        'name': (userData['name'] ?? '').toString(),
+        'email': (userData['email'] ?? '').toString(),
+        'role': (userData['role'] ?? '').toString(),
+        'status': 'registered',
+        'source': 'app_login',
+        'includedInReport': false,
+        'registeredAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+    );
+  }
+
   Future<UserCredential> signInWithEmailAndPassword(
     String email,
     String password,
@@ -116,6 +146,11 @@ class AuthRepository {
       // Automatically connect attendee/user to the active event on login.
       // This makes the user appear in Networking for the active event.
       await _attachUserToActiveEvent(refreshedUser.uid);
+
+      // NEW:
+      // Automatically register the user for the active event on login.
+      // This makes the user appear in Admin -> Check Registration.
+      await _registerUserForActiveEvent(refreshedUser.uid);
     } catch (e) {
       debugPrint('Warning: Failed to update user login data: $e');
     }
@@ -167,6 +202,10 @@ class AuthRepository {
         uid: userCredential.user!.uid,
         userData: userData,
       );
+
+      // NEW:
+      // Automatically register new attendee for the active event.
+      await _registerUserForActiveEvent(userCredential.user!.uid);
 
       return userCredential;
     } on FirebaseAuthException catch (e) {

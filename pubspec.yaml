@@ -20,6 +20,9 @@ dependencies:
   cloud_firestore: ^5.0.2
   firebase_storage: ^12.4.10
 
+    # For saving scanned users as phone contacts
+  flutter_contacts: ^2.1.0
+  
   # State Management
   flutter_riverpod: ^2.5.1
 
@@ -93,6 +96,8 @@ dev_dependencies:
 flutter_launcher_icons:
   android: true
   ios: true
+
+
 
   # Main icon image
   image_path: "assets/images/textlogo.png"

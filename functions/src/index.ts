@@ -6,6 +6,7 @@
 
 import {onDocumentCreated, onDocumentWritten} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
+import {onSchedule} from "firebase-functions/v2/scheduler";
 import * as functionsV1 from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
@@ -1454,4 +1455,402 @@ export const deleteAuthUserFromFirestore = functionsV1
 
     return null;
   });
+
+
+// ============================================================================
+// EVENT ARCHIVE + 15 DAY CLEANUP
+// ============================================================================
+
+async function assertAdminUser(uid: string): Promise<void> {
+  const userDoc = await db.collection("users").doc(uid).get();
+
+  if (!userDoc.exists) {
+    throw new HttpsError("permission-denied", "Admin profile not found.");
+  }
+
+  const role = (userDoc.data()?.role || "").toString().toLowerCase();
+
+  if (role !== "admin") {
+    throw new HttpsError("permission-denied", "Only admins can archive events.");
+  }
+}
+
+/**
+ * Admin callable function.
+ * Archives the event immediately and schedules attendee/speaker cleanup
+ * 15 days later.
+ */
+export const archiveEvent = onCall(
+  {
+    region: FUNCTION_REGION,
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "Please sign in first.");
+    }
+
+    await assertAdminUser(request.auth.uid);
+
+    const eventId = (request.data?.eventId || "").toString().trim();
+
+    if (!eventId) {
+      throw new HttpsError("invalid-argument", "Missing eventId.");
+    }
+
+    const eventRef = db.collection("events").doc(eventId);
+    const eventDoc = await eventRef.get();
+
+    if (!eventDoc.exists) {
+      throw new HttpsError("not-found", "Event not found.");
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    const cleanupDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
+    const cleanupScheduledAt = admin.firestore.Timestamp.fromDate(cleanupDate);
+
+    await eventRef.set(
+      {
+        isActive: false,
+        status: "archived",
+        archivedAt: now,
+        eventEndedAt: now,
+        cleanupScheduledAt,
+        cleanupStatus: "scheduled",
+        allowUploads: false,
+        allowRegistrations: false,
+        allowCheckIns: false,
+        updatedAt: now,
+      },
+      {merge: true}
+    );
+
+    return {
+      success: true,
+      eventId,
+      cleanupScheduledAt: cleanupDate.toISOString(),
+    };
+  }
+);
+
+async function deleteCollectionInBatches(
+  collectionRef: admin.firestore.CollectionReference,
+  batchSize = 300
+): Promise<number> {
+  let totalDeleted = 0;
+
+  while (totalDeleted === 0 || totalDeleted % batchSize === 0) {
+    const snapshot = await collectionRef.limit(batchSize).get();
+
+    if (snapshot.empty) break;
+
+    const batch = db.batch();
+
+    snapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref);
+    });
+
+    await batch.commit();
+
+    totalDeleted += snapshot.docs.length;
+
+    if (snapshot.docs.length < batchSize) break;
+  }
+
+  return totalDeleted;
+}
+
+async function deleteStoragePath(storagePath: string): Promise<void> {
+  const cleanPath = storagePath.trim();
+
+  if (!cleanPath) return;
+
+  try {
+    await admin.storage().bucket().file(cleanPath).delete();
+  } catch (error) {
+    console.log(`Storage delete skipped/failed for ${cleanPath}:`, error);
+  }
+}
+
+async function cleanupEventPhotos(eventId: string): Promise<number> {
+  const photosRef = db
+    .collection("events")
+    .doc(eventId)
+    .collection("eventPhotos");
+
+  // After the 15-day grace period, delete all event photos.
+  // The admin should export/download the final report before cleanup runs.
+  const photosSnap = await photosRef.get();
+
+  let deleted = 0;
+
+  for (const doc of photosSnap.docs) {
+    const data = doc.data();
+
+    await deleteStorageFilesFromDoc(data);
+    await doc.ref.delete();
+
+    deleted++;
+  }
+
+  return deleted;
+}
+
+async function deleteStorageFilesFromDoc(data: admin.firestore.DocumentData): Promise<number> {
+  const possibleFields = [
+    "storagePath",
+    "filePath",
+    "path",
+    "photoPath",
+    "imagePath",
+    "certificatePath",
+    "pdfPath",
+    "downloadPath",
+    "attachmentPath",
+    "uploadPath",
+  ];
+
+  const possibleUrlFields = [
+    "storagePaths",
+    "filePaths",
+    "photoPaths",
+    "imagePaths",
+    "certificatePaths",
+    "pdfPaths",
+    "attachmentPaths",
+    "uploadPaths",
+  ];
+
+  const paths = new Set<string>();
+
+  for (const field of possibleFields) {
+    const value = data[field];
+    if (typeof value === "string" && value.trim().length > 0) {
+      paths.add(value.trim());
+    }
+  }
+
+  for (const field of possibleUrlFields) {
+    const value = data[field];
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (typeof item === "string" && item.trim().length > 0) {
+          paths.add(item.trim());
+        }
+      });
+    }
+  }
+
+  let deleted = 0;
+
+  for (const path of paths) {
+    await deleteStoragePath(path);
+    deleted++;
+  }
+
+  return deleted;
+}
+
+async function deleteCollectionWithStorageInBatches(
+  collectionRef: admin.firestore.CollectionReference,
+  batchSize = 150
+): Promise<{docsDeleted: number; storageFilesDeleted: number}> {
+  let docsDeleted = 0;
+  let storageFilesDeleted = 0;
+
+  while (docsDeleted === 0 || docsDeleted % batchSize === 0) {
+    const snapshot = await collectionRef.limit(batchSize).get();
+
+    if (snapshot.empty) break;
+
+    const batch = db.batch();
+
+    for (const doc of snapshot.docs) {
+      storageFilesDeleted += await deleteStorageFilesFromDoc(doc.data());
+      batch.delete(doc.ref);
+    }
+
+    await batch.commit();
+
+    docsDeleted += snapshot.docs.length;
+
+    if (snapshot.docs.length < batchSize) break;
+  }
+
+  return {docsDeleted, storageFilesDeleted};
+}
+
+async function cleanupEventUsers(eventId: string): Promise<{
+  authDeleted: number;
+  firestoreDeleted: number;
+  eventLinksRemoved: number;
+}> {
+  const usersSnap = await db
+    .collection("users")
+    .where("eventIds", "array-contains", eventId)
+    .get();
+
+  let authDeleted = 0;
+  let firestoreDeleted = 0;
+  let eventLinksRemoved = 0;
+
+  for (const userDoc of usersSnap.docs) {
+    const userData = userDoc.data();
+    const role = (userData.role || "").toString().toLowerCase();
+
+    if (role !== "attendee" && role !== "speaker") continue;
+
+    const eventIds = Array.isArray(userData.eventIds) ?
+      userData.eventIds.map((item) => item.toString()) :
+      [];
+
+    const isEventOnlyUser = eventIds.length <= 1;
+    const uid = userDoc.id;
+
+    if (isEventOnlyUser) {
+      try {
+        await admin.auth().deleteUser(uid);
+        authDeleted++;
+      } catch (error) {
+        console.log(`Auth delete skipped/failed for ${uid}:`, error);
+      }
+
+      try {
+        await userDoc.ref.delete();
+        firestoreDeleted++;
+      } catch (error) {
+        console.log(`Firestore user delete skipped/failed for ${uid}:`, error);
+      }
+    } else {
+      await userDoc.ref.update({
+        eventIds: admin.firestore.FieldValue.arrayRemove(eventId),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      eventLinksRemoved++;
+    }
+  }
+
+  return {
+    authDeleted,
+    firestoreDeleted,
+    eventLinksRemoved,
+  };
+}
+
+/**
+ * Runs daily and cleans archived events whose cleanupScheduledAt is due.
+ * Keeps admin/staff accounts and keeps approved report photos.
+ */
+export const cleanupArchivedEvents = onSchedule(
+  {
+    region: FUNCTION_REGION,
+    schedule: "every 24 hours",
+    timeZone: "Asia/Kuala_Lumpur",
+  },
+  async () => {
+    const now = admin.firestore.Timestamp.now();
+
+    const eventsSnap = await db
+      .collection("events")
+      .where("status", "==", "archived")
+      .where("cleanupScheduledAt", "<=", now)
+      .get();
+
+    for (const eventDoc of eventsSnap.docs) {
+      const eventId = eventDoc.id;
+      const eventData = eventDoc.data();
+      const cleanupStatus = (eventData.cleanupStatus || "scheduled")
+        .toString()
+        .toLowerCase();
+
+      if (cleanupStatus === "completed" || cleanupStatus === "running") {
+        continue;
+      }
+
+      await eventDoc.ref.update({
+        cleanupStatus: "running",
+        cleanupStartedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      try {
+        const deletedPhotos = await cleanupEventPhotos(eventId);
+        const userCleanup = await cleanupEventUsers(eventId);
+
+        // Delete high-volume temporary/event-only subcollections.
+        const registrationsDeleted = await deleteCollectionInBatches(
+          eventDoc.ref.collection("registrations")
+        );
+
+        const screenTimeDeleted = await deleteCollectionInBatches(
+          eventDoc.ref.collection("screenTime")
+        );
+
+        const notificationsDeleted = await deleteCollectionInBatches(
+          eventDoc.ref.collection("notifications")
+        );
+
+        const attendanceDeleted = await deleteCollectionInBatches(
+          eventDoc.ref.collection("attendance")
+        );
+
+        const feedbackDeleted = await deleteCollectionInBatches(
+          eventDoc.ref.collection("feedback")
+        );
+
+        const connectionsDeleted = await deleteCollectionInBatches(
+          eventDoc.ref.collection("connections")
+        );
+
+        const checkInsDeleted = await deleteCollectionInBatches(
+          eventDoc.ref.collection("checkIns")
+        );
+
+        const sessionAttendanceDeleted = await deleteCollectionInBatches(
+          eventDoc.ref.collection("sessionAttendance")
+        );
+
+        // These may contain Storage files such as PDF certificates or uploads.
+        const certificatesCleanup = await deleteCollectionWithStorageInBatches(
+          eventDoc.ref.collection("certificates")
+        );
+
+        const sessionUploadsCleanup = await deleteCollectionWithStorageInBatches(
+          eventDoc.ref.collection("sessionUploads")
+        );
+
+        await eventDoc.ref.update({
+          cleanupStatus: "completed",
+          cleanupCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+          cleanupSummary: {
+            deletedPhotos,
+            registrationsDeleted,
+            screenTimeDeleted,
+            notificationsDeleted,
+            attendanceDeleted,
+            feedbackDeleted,
+            connectionsDeleted,
+            checkInsDeleted,
+            sessionAttendanceDeleted,
+            certificatesDeleted: certificatesCleanup.docsDeleted,
+            certificateStorageFilesDeleted: certificatesCleanup.storageFilesDeleted,
+            sessionUploadsDeleted: sessionUploadsCleanup.docsDeleted,
+            sessionUploadStorageFilesDeleted: sessionUploadsCleanup.storageFilesDeleted,
+            ...userCleanup,
+          },
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        console.log(`Cleanup completed for event ${eventId}`);
+      } catch (error) {
+        console.error(`Cleanup failed for event ${eventId}:`, error);
+
+        await eventDoc.ref.update({
+          cleanupStatus: "failed",
+          cleanupFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+          cleanupError: error instanceof Error ? error.message : String(error),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+  }
+);
 

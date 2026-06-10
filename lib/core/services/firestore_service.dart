@@ -108,18 +108,78 @@ class FirestoreService {
   }
 
   // --- Event-related operations ---
-  Future<DocumentSnapshot> getActiveEventDocument() async {
+Future<DocumentSnapshot> getActiveEventDocument() async {
+  final snapshot = await _db
+      .collection('events')
+      .where('isActive', isEqualTo: true)
+      .get();
+
+  final activeDocs = snapshot.docs.where((doc) {
+    final data = doc.data() as Map<String, dynamic>;
+
+    final status =
+        (data['status'] ?? '').toString().toLowerCase().trim();
+
+    return status != 'archived';
+  }).toList();
+
+  if (activeDocs.isEmpty) {
+    throw Exception("No active event found!");
+  }
+
+  return activeDocs.first;
+}
+
+  // --- Event registration operations ---
+  Future<void> createOrUpdateEventRegistration({
+    required String eventId,
+    required String userId,
+    required Map<String, dynamic> registrationData,
+  }) async {
+    await _db
+        .collection('events')
+        .doc(eventId)
+        .collection('registrations')
+        .doc(userId)
+        .set(registrationData, SetOptions(merge: true));
+  }
+
+  Stream<QuerySnapshot> getEventRegistrationsStream(String eventId) {
+    return _db
+        .collection('events')
+        .doc(eventId)
+        .collection('registrations')
+        .orderBy('registeredAt', descending: true)
+        .snapshots();
+  }
+
+  Future<QuerySnapshot> getEventRegistrations(String eventId) {
+    return _db
+        .collection('events')
+        .doc(eventId)
+        .collection('registrations')
+        .orderBy('registeredAt', descending: true)
+        .get();
+  }
+
+  Future<void> markEventRegistrationsIncludedInReport(String eventId) async {
     final snapshot = await _db
         .collection('events')
-        .where('isActive', isEqualTo: true)
-        .limit(1)
+        .doc(eventId)
+        .collection('registrations')
         .get();
 
-    if (snapshot.docs.isEmpty) {
-      throw Exception("No active event found!");
+    final batch = _db.batch();
+
+    for (final doc in snapshot.docs) {
+      batch.update(doc.reference, {
+        'includedInReport': true,
+        'includedInReportAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     }
 
-    return snapshot.docs.first;
+    await batch.commit();
   }
 
   // --- Session-related operations ---
@@ -225,6 +285,17 @@ class FirestoreService {
         .snapshots();
   }
 
+  Future<void> createNotificationDocument({
+    required String userId,
+    required Map<String, dynamic> notificationData,
+  }) async {
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .add(notificationData);
+  }
+
   Future<void> updateNotificationDocument(
     String userId,
     String notificationId,
@@ -236,6 +307,18 @@ class FirestoreService {
         .collection('notifications')
         .doc(notificationId)
         .update(data);
+  }
+
+  Future<void> deleteNotificationDocument({
+    required String userId,
+    required String notificationId,
+  }) async {
+    await _db
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .doc(notificationId)
+        .delete();
   }
 
   // --- Direct Messaging operations ---
@@ -365,8 +448,24 @@ class FirestoreService {
         .snapshots();
   }
 
-  Future<void> createMeetingDocument(Map<String, dynamic> data) async {
+  Future<DocumentSnapshot> getMeetingDocument(
+    String meetingId,
+  ) async {
+    return _db.collection('meetings').doc(meetingId).get();
+  }
+
+  Future<void> createMeetingDocument(
+    Map<String, dynamic> data,
+  ) async {
     await _db.collection('meetings').add(data);
+  }
+
+  Future<String> createMeetingDocumentAndReturnId(
+    Map<String, dynamic> data,
+  ) async {
+    final docRef = await _db.collection('meetings').add(data);
+
+    return docRef.id;
   }
 
   Future<void> updateMeetingDocument(

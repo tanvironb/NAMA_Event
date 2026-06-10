@@ -1,6 +1,7 @@
 // lib/features/admin/screen/admin_dashboard_screen.dart
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/help/data/help_repository.dart';
 import 'package:events_app_trueattempt/features/help/screen/admin_help_tickets_screen.dart';
@@ -9,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'admin_session_management_screen.dart';
+import 'check_registration_screen.dart';
 import 'create_event_screen.dart';
 import 'event_photos_screen.dart';
 import 'event_report_dashboard_screen.dart' as event_report;
@@ -29,6 +31,10 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
 
   String _searchQuery = '';
   bool _isUpdatingActive = false;
+  bool _isDeletingEvent = false;
+bool _isArchivingEvent = false;
+bool _isUnarchivingEvent = false;
+bool _showArchivedEvents = false;
 
   static const Color primaryColor = Color(0xFF1B0F72);
   static const Color textDark = Color(0xFF111827);
@@ -47,15 +53,27 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
         .snapshots();
   }
 
+  bool _isEventArchived(Map<String, dynamic> data) {
+    final status = (data['status'] ?? '').toString().toLowerCase().trim();
+
+    return status == 'archived' ||
+        status == 'ended' ||
+        data['isArchived'] == true ||
+        data['archivedAt'] != null;
+  }
+
   List<QueryDocumentSnapshot<Map<String, dynamic>>> _filteredEvents(
     List<QueryDocumentSnapshot<Map<String, dynamic>>> events,
   ) {
     final query = _searchQuery.trim().toLowerCase();
 
-    if (query.isEmpty) return events;
-
     return events.where((event) {
       final data = event.data();
+      final isArchived = _isEventArchived(data);
+
+      if (_showArchivedEvents != isArchived) return false;
+
+      if (query.isEmpty) return true;
 
       final name = (data['name'] ?? '').toString().toLowerCase();
       final description = (data['description'] ?? '').toString().toLowerCase();
@@ -210,6 +228,241 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+    }
+  }
+
+  Future<void> _archiveEventFromDashboard({
+    required String eventId,
+    required String eventName,
+  }) async {
+    if (_isArchivingEvent) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Archive Event?',
+            style: TextStyle(
+              color: primaryColor,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
+          ),
+          content: Text(
+            'This will move "$eventName" out of the main active list, turn off uploads/check-ins/registrations, and schedule automatic cleanup after 15 days.\n\nUse Archive for real/completed events. Use Delete only for empty/test events.',
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.35,
+              color: Color(0xFF4B5563),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.archive_rounded, size: 16),
+              label: const Text(
+                'Archive',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isArchivingEvent = true);
+
+    try {
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-southeast1',
+      ).httpsCallable('archiveEvent');
+
+      final result = await callable.call({
+        'eventId': eventId,
+      });
+
+      if (!mounted) return;
+
+      final data = result.data;
+      String cleanupText = '';
+
+      if (data is Map && data['cleanupScheduledAt'] != null) {
+        cleanupText = '\nCleanup scheduled at: ${data['cleanupScheduledAt']}';
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Event archived successfully. Cleanup is scheduled after 15 days.$cleanupText',
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green,
+        ),
+      );
+    } on FirebaseFunctionsException catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Archive failed: ${e.message ?? e.code}'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Archive failed: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isArchivingEvent = false);
+      }
+    }
+  }
+
+
+  Future<void> _unarchiveEventFromDashboard({
+    required String eventId,
+    required String eventName,
+  }) async {
+    if (_isUnarchivingEvent) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          title: const Text(
+            'Unarchive Event?',
+            style: TextStyle(
+              color: primaryColor,
+              fontWeight: FontWeight.w900,
+              fontSize: 18,
+            ),
+          ),
+          content: Text(
+            'This will move "$eventName" back to Active Events and allow admin to manage it again.\n\nCheck-ins, registrations, and uploads will be enabled again.',
+            style: const TextStyle(
+              fontSize: 13,
+              height: 1.35,
+              color: Color(0xFF4B5563),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.of(context).pop(true),
+              icon: const Icon(Icons.unarchive_rounded, size: 16),
+              label: const Text(
+                'Unarchive',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isUnarchivingEvent = true);
+
+    try {
+      final firestore = FirebaseFirestore.instance;
+
+      final eventRef = firestore.collection('events').doc(eventId);
+
+await eventRef.update({
+  'status': 'active_sessions',
+  'isArchived': false,
+  'isActive': false,
+  'archivedAt': FieldValue.delete(),
+  'cleanupScheduledAt': FieldValue.delete(),
+  'cleanupCompletedAt': FieldValue.delete(),
+  'allowCheckIns': true,
+  'allowRegistrations': true,
+  'allowUploads': true,
+  'updatedAt': FieldValue.serverTimestamp(),
+});
+
+      await firestore.collection('archived_events').doc(eventId).delete().catchError((_) {});
+
+      if (!mounted) return;
+
+      setState(() => _showArchivedEvents = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$eventName moved back to Active Events.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unarchive failed: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isUnarchivingEvent = false);
+      }
     }
   }
 
@@ -457,7 +710,16 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     onTap: _goToCreateEvent,
                   ),
                   const SizedBox(height: 20),
-                  const _SectionTitle(),
+                  _EventFilterTabs(
+                    showArchivedEvents: _showArchivedEvents,
+                    onChanged: (value) {
+                      setState(() => _showArchivedEvents = value);
+                    },
+                  ),
+                  const SizedBox(height: 18),
+                  _SectionTitle(
+                    showArchivedEvents: _showArchivedEvents,
+                  ),
                   const SizedBox(height: 12),
                   if (snapshot.connectionState == ConnectionState.waiting)
                     const Padding(
@@ -478,10 +740,14 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                     _EmptyStateCard(
                       icon: Icons.event_busy_outlined,
                       title: _searchQuery.trim().isEmpty
-                          ? 'No events found'
+                          ? _showArchivedEvents
+                              ? 'No archived events'
+                              : 'No active events'
                           : 'No matching events',
                       subtitle: _searchQuery.trim().isEmpty
-                          ? 'Create your first event using the button above.'
+                          ? _showArchivedEvents
+                              ? 'Archived events will appear here after you archive them.'
+                              : 'Create your first event using the button above.'
                           : 'Try another event name.',
                     )
                   else
@@ -500,12 +766,19 @@ class _AdminDashboardScreenState extends ConsumerState<AdminDashboardScreen> {
                           eventData: eventData,
                         );
                       },
-                      onDelete: (eventId, eventName) {
-                        _confirmDeleteEvent(
+                      onArchive: (eventId, eventName) {
+                        _archiveEventFromDashboard(
                           eventId: eventId,
                           eventName: eventName,
                         );
                       },
+                      onUnarchive: (eventId, eventName) {
+                        _unarchiveEventFromDashboard(
+                          eventId: eventId,
+                          eventName: eventName,
+                        );
+                      },
+                      showArchivedEvents: _showArchivedEvents,
                       onActiveToggle: ({
                         required eventId,
                         required eventName,
@@ -754,27 +1027,145 @@ class _CreateEventButton extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle();
+class _EventFilterTabs extends StatelessWidget {
+  final bool showArchivedEvents;
+  final ValueChanged<bool> onChanged;
+
+  const _EventFilterTabs({
+    required this.showArchivedEvents,
+    required this.onChanged,
+  });
 
   static const Color primaryColor = Color(0xFF1B0F72);
 
   @override
   Widget build(BuildContext context) {
-    return const Row(
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1EEF9),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE4E0F2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _EventFilterTabButton(
+              label: 'Active Events',
+              icon: Icons.event_available_rounded,
+              selected: !showArchivedEvents,
+              onTap: () => onChanged(false),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _EventFilterTabButton(
+              label: 'Archived Events',
+              icon: Icons.archive_rounded,
+              selected: showArchivedEvents,
+              onTap: () => onChanged(true),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EventFilterTabButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _EventFilterTabButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  static const Color primaryColor = Color(0xFF1B0F72);
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(13),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(13),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: selected ? primaryColor : const Color(0xFF6B7280),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: selected ? primaryColor : const Color(0xFF6B7280),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  final bool showArchivedEvents;
+
+  const _SectionTitle({
+    required this.showArchivedEvents,
+  });
+
+  static const Color primaryColor = Color(0xFF1B0F72);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
       children: [
         Icon(
-          Icons.calendar_today_outlined,
+          showArchivedEvents
+              ? Icons.archive_outlined
+              : Icons.calendar_today_outlined,
           color: primaryColor,
           size: 20,
         ),
-        SizedBox(width: 9),
+        const SizedBox(width: 9),
         Flexible(
           child: Text(
-            'Existing Events',
+            showArchivedEvents ? 'Archived Events' : 'Existing Events',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
+            style: const TextStyle(
               color: primaryColor,
               fontSize: 15.5,
               fontWeight: FontWeight.w800,
@@ -791,7 +1182,9 @@ class _EventsList extends StatelessWidget {
   final String Function(Map<String, dynamic> data) getEventName;
   final void Function(String eventId, String eventName) onOpen;
   final void Function(String eventId, Map<String, dynamic> eventData) onEdit;
-  final void Function(String eventId, String eventName) onDelete;
+  final void Function(String eventId, String eventName) onArchive;
+  final void Function(String eventId, String eventName) onUnarchive;
+  final bool showArchivedEvents;
   final void Function({
     required String eventId,
     required String eventName,
@@ -803,7 +1196,9 @@ class _EventsList extends StatelessWidget {
     required this.getEventName,
     required this.onOpen,
     required this.onEdit,
-    required this.onDelete,
+    required this.onArchive,
+    required this.onUnarchive,
+    required this.showArchivedEvents,
     required this.onActiveToggle,
   });
 
@@ -919,21 +1314,30 @@ class _EventsList extends StatelessWidget {
                         onTap: () => onEdit(doc.id, data),
                       ),
                       const SizedBox(width: 7),
-                      _CompactEventButton(
-                        label: 'Delete',
-                        icon: Icons.delete_outline_rounded,
-                        color: Colors.red,
-                        onTap: () => onDelete(doc.id, eventName),
-                      ),
-                      const Spacer(),
-                      _ActiveToggleButton(
-                        isActive: isActive,
-                        onTap: () => onActiveToggle(
-                          eventId: doc.id,
-                          eventName: eventName,
-                          currentlyActive: isActive,
+                      if (!showArchivedEvents)
+                        _CompactEventButton(
+                          label: 'Archive',
+                          icon: Icons.archive_rounded,
+                          color: Colors.red,
+                          onTap: () => onArchive(doc.id, eventName),
+                        )
+                      else
+                        _CompactEventButton(
+                          label: 'Unarchive',
+                          icon: Icons.unarchive_rounded,
+                          color: Colors.green,
+                          onTap: () => onUnarchive(doc.id, eventName),
                         ),
-                      ),
+                      const Spacer(),
+                      if (!showArchivedEvents)
+                        _ActiveToggleButton(
+                          isActive: isActive,
+                          onTap: () => onActiveToggle(
+                            eventId: doc.id,
+                            eventName: eventName,
+                            currentlyActive: isActive,
+                          ),
+                        ),
                     ],
                   ),
                 ],
@@ -963,7 +1367,7 @@ class _CompactEventButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 27,
-      width: 68,
+      width: 78,
       child: OutlinedButton.icon(
         onPressed: onTap,
         icon: Icon(
@@ -1195,20 +1599,250 @@ class _AdminEventControlScreenState
   static const Color softBackground = Color(0xFFFAFAFD);
   static const Color green = Color(0xFF0ABF63);
 
+  bool _isDeletingEvent = false;
+
   void _openScreen(Widget screen) {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => screen),
     );
   }
 
-  Stream<int> _usersCountStream() {
-    return FirebaseFirestore.instance
+  Future<bool> _eventHasRealData() async {
+    final firestore = FirebaseFirestore.instance;
+
+    final registrations = await firestore
         .collection('events')
         .doc(widget.eventId)
-        .collection('users')
-        .snapshots()
-        .map((snapshot) => snapshot.docs.length);
+        .collection('registrations')
+        .limit(1)
+        .get();
+
+    final eventPhotos = await firestore
+        .collection('events')
+        .doc(widget.eventId)
+        .collection('eventPhotos')
+        .limit(1)
+        .get();
+
+    final sessions = await firestore
+        .collection('sessions')
+        .where('eventId', isEqualTo: widget.eventId)
+        .limit(1)
+        .get();
+
+    return registrations.docs.isNotEmpty ||
+        eventPhotos.docs.isNotEmpty ||
+        sessions.docs.isNotEmpty;
   }
+
+  Future<void> _confirmDeleteEventFromTools() async {
+    if (_isDeletingEvent) return;
+
+    setState(() => _isDeletingEvent = true);
+
+    try {
+      final hasRealData = await _eventHasRealData();
+
+      if (!mounted) return;
+
+      setState(() => _isDeletingEvent = false);
+
+      if (hasRealData) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: const Text(
+                'Delete Blocked',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 18,
+                ),
+              ),
+              content: Text(
+                '"${widget.eventName}" already has event data.\n\nPlease use Archive Event instead. Delete is only allowed for empty/test events.',
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.35,
+                  color: Color(0xFF4B5563),
+                ),
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'OK',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+        return;
+      }
+
+      final shouldDelete = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: const Text(
+              'Delete Test Event?',
+              style: TextStyle(
+                color: Colors.red,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            content: Text(
+              'This will permanently delete "${widget.eventName}".\n\nOnly use this for empty/test events. This action cannot be undone.',
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.35,
+                color: Color(0xFF4B5563),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pop(true),
+                icon: const Icon(Icons.delete_forever_rounded, size: 16),
+                label: const Text(
+                  'Delete',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldDelete == true) {
+        await _deleteCurrentEvent();
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isDeletingEvent = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Delete check failed: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteCurrentEvent() async {
+    setState(() => _isDeletingEvent = true);
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('events')
+          .doc(widget.eventId)
+          .delete();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${widget.eventName} deleted successfully.'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete event: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isDeletingEvent = false);
+      }
+    }
+  }
+
+
+Stream<int> _usersCountStream() {
+  return FirebaseFirestore.instance
+      .collection('events')
+      .doc(widget.eventId)
+      .collection('registrations')
+      .snapshots()
+      .map((snapshot) => snapshot.docs.length);
+}
+
+Stream<String> _averageScreenTimeStream() {
+  return FirebaseFirestore.instance
+      .collection('events')
+      .doc(widget.eventId)
+      .collection('screenTime')
+      .snapshots()
+      .map((snapshot) {
+    if (snapshot.docs.isEmpty) return '0m';
+
+    int totalSeconds = 0;
+
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      totalSeconds += (data['totalSeconds'] as num?)?.toInt() ?? 0;
+    }
+
+    final averageSeconds = totalSeconds ~/ snapshot.docs.length;
+
+    final hours = averageSeconds ~/ 3600;
+    final minutes = (averageSeconds % 3600) ~/ 60;
+
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    }
+
+    return '${minutes}m';
+  });
+}
 
   Stream<int> _sessionsCountStream() {
     return FirebaseFirestore.instance
@@ -1383,185 +2017,217 @@ class _AdminEventControlScreenState
     );
   }
 
-  Widget _buildStatsRow() {
-    return SizedBox(
-      height: 98,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
+Widget _buildStatsRow() {
+  return SizedBox(
+    height: 98,
+    child: Center(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           _DashboardStatCard(
             title: 'User\nCount',
-            subtitle: 'Total Users',
+            subtitle: 'Registered Users',
             icon: Icons.groups_rounded,
             stream: _usersCountStream(),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           _DashboardStatCard(
             title: 'Session\nCount',
             subtitle: 'Total Sessions',
             icon: Icons.event_note_rounded,
             stream: _sessionsCountStream(),
           ),
-          const SizedBox(width: 8),
-          _DashboardStatCard(
-            title: 'App\nInstalled',
-            subtitle: 'Total Installs',
-            icon: Icons.phone_iphone_rounded,
-            stream: _appInstalledCountStream(),
-          ),
-          const SizedBox(width: 8),
-          const _DashboardStaticStatCard(
+          const SizedBox(width: 10),
+          _DashboardStringStatCard(
             title: 'Screen\nTime',
-            value: '2h 34m',
             subtitle: 'Avg. per User',
             icon: Icons.access_time_filled_rounded,
+            stream: _averageScreenTimeStream(),
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildAdminTools({
-    required String eventId,
-    required String eventName,
-  }) {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _ModernAdminToolCard(
-                icon: Icons.event_note_rounded,
-                title: 'Manage Session',
-                subtitle: 'Manage sessions',
-                onTap: () {
-                  _openScreen(
-                    AdminSessionManagementScreen(
-                      eventId: eventId,
-                      eventName: eventName,
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ModernAdminToolCard(
-                icon: Icons.people_alt_rounded,
-                title: 'Manage User',
-                subtitle: 'Manage users',
-                onTap: () {
-                  _openScreen(
-                    UserManagementScreen(
-                      eventId: eventId,
-                      eventName: eventName,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _ModernAdminToolCard(
-                icon: Icons.send_rounded,
-                title: 'Push Notification',
-                subtitle: 'Send messages',
-                onTap: () {
-                  _openScreen(
-                    SendNotificationScreen(
-                      eventId: eventId,
-                      eventName: eventName,
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ModernAdminToolCard(
-                icon: Icons.notifications_rounded,
-                title: 'Notifications',
-                subtitle: 'Edit notifications',
-                onTap: () {
-                  _openScreen(
-                    NotificationManagementScreen(
-                      eventId: eventId,
-                      eventName: eventName,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: _ModernAdminToolCard(
-                icon: Icons.description_rounded,
-                title: 'Event Report',
-                subtitle: 'Reports & analytics',
-                onTap: () {
-                  _openScreen(
-                    event_report.EventReportDashboardScreen(
-                      eventId: eventId,
-                      eventName: eventName,
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ModernAdminToolCard(
-                icon: Icons.image_rounded,
-                title: 'Event Photos',
-                subtitle: 'Manage photos',
-                onTap: () {
-                  _openScreen(
-                    EventPhotosScreen(
-                      eventId: eventId,
-                      eventName: eventName,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        StreamBuilder<int>(
-          stream: ref
-              .watch(helpRepositoryProvider)
-              .getPendingTicketsCountStream(eventId: eventId),
-          builder: (context, snapshot) {
-            final pendingCount = snapshot.data ?? 0;
 
-            return _ModernAdminToolCard(
-              icon: Icons.help_rounded,
-              title: 'Help Tickets',
-              subtitle: 'Support requests',
-              fullWidth: true,
-              badgeCount: pendingCount,
+Widget _buildAdminTools({
+  required String eventId,
+  required String eventName,
+}) {
+  return Column(
+    children: [
+      Row(
+        children: [
+          Expanded(
+            child: _ModernAdminToolCard(
+              icon: Icons.event_note_rounded,
+              title: 'Manage Session',
+              subtitle: 'Manage sessions',
               onTap: () {
                 _openScreen(
-                  AdminHelpTicketsScreen(
+                  AdminSessionManagementScreen(
                     eventId: eventId,
                     eventName: eventName,
                   ),
                 );
               },
-            );
-          },
-        ),
-      ],
-    );
-  }
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _ModernAdminToolCard(
+              icon: Icons.people_alt_rounded,
+              title: 'Manage User',
+              subtitle: 'Manage users',
+              onTap: () {
+                _openScreen(
+                  UserManagementScreen(
+                    eventId: eventId,
+                    eventName: eventName,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: _ModernAdminToolCard(
+              icon: Icons.send_rounded,
+              title: 'Push Notification',
+              subtitle: 'Send messages',
+              onTap: () {
+                _openScreen(
+                  SendNotificationScreen(
+                    eventId: eventId,
+                    eventName: eventName,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _ModernAdminToolCard(
+              icon: Icons.notifications_rounded,
+              title: 'Notifications',
+              subtitle: 'Edit notifications',
+              onTap: () {
+                _openScreen(
+                  NotificationManagementScreen(
+                    eventId: eventId,
+                    eventName: eventName,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: _ModernAdminToolCard(
+              icon: Icons.description_rounded,
+              title: 'Event Report',
+              subtitle: 'Reports & analytics',
+              onTap: () {
+                _openScreen(
+                  event_report.EventReportDashboardScreen(
+                    eventId: eventId,
+                    eventName: eventName,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _ModernAdminToolCard(
+              icon: Icons.image_rounded,
+              title: 'Event Photos',
+              subtitle: 'Manage photos',
+              onTap: () {
+                _openScreen(
+                  EventPhotosScreen(
+                    eventId: eventId,
+                    eventName: eventName,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: _ModernAdminToolCard(
+              icon: Icons.fact_check_rounded,
+              title: 'Check Registration',
+              subtitle: 'View registered users',
+              onTap: () {
+                _openScreen(
+                  CheckRegistrationScreen(
+                    eventId: eventId,
+                    eventName: eventName,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: StreamBuilder<int>(
+              stream: ref
+                  .watch(helpRepositoryProvider)
+                  .getPendingTicketsCountStream(eventId: eventId),
+              builder: (context, snapshot) {
+                final pendingCount = snapshot.data ?? 0;
+
+                return _ModernAdminToolCard(
+                  icon: Icons.help_rounded,
+                  title: 'Help Tickets',
+                  subtitle: 'Support requests',
+                  badgeCount: pendingCount,
+                  onTap: () {
+                    _openScreen(
+                      AdminHelpTicketsScreen(
+                        eventId: eventId,
+                        eventName: eventName,
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          Expanded(
+            child: _ModernAdminToolCard(
+              icon: Icons.delete_forever_rounded,
+              title: _isDeletingEvent ? 'Checking...' : 'Delete Event',
+              subtitle: 'Only for empty/test events',
+              fullWidth: true,
+              danger: true,
+              onTap: _isDeletingEvent ? () {} : _confirmDeleteEventFromTools,
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
+}
 
   Widget _buildBottomCard() {
     return Container(
@@ -1726,6 +2392,41 @@ class _DashboardStaticStatCard extends StatelessWidget {
   }
 }
 
+class _DashboardStringStatCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Stream<String> stream;
+
+  const _DashboardStringStatCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.stream,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<String>(
+      stream: stream,
+      builder: (context, snapshot) {
+        final value = snapshot.hasError
+            ? '0m'
+            : snapshot.connectionState == ConnectionState.waiting
+                ? '...'
+                : snapshot.data ?? '0m';
+
+        return _BaseStatCard(
+          title: title,
+          value: value,
+          subtitle: subtitle,
+          icon: icon,
+        );
+      },
+    );
+  }
+}
+
 class _BaseStatCard extends StatelessWidget {
   final String title;
   final String value;
@@ -1829,6 +2530,7 @@ class _ModernAdminToolCard extends StatelessWidget {
   final VoidCallback onTap;
   final bool fullWidth;
   final int badgeCount;
+  final bool danger;
 
   const _ModernAdminToolCard({
     required this.icon,
@@ -1837,6 +2539,7 @@ class _ModernAdminToolCard extends StatelessWidget {
     required this.onTap,
     this.fullWidth = false,
     this.badgeCount = 0,
+    this.danger = false,
   });
 
   static const Color navyText = Color(0xFF050A35);
@@ -1844,6 +2547,24 @@ class _ModernAdminToolCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final iconGradient = danger
+        ? const LinearGradient(
+            colors: [
+              Color(0xFFE53935),
+              Color(0xFFB71C1C),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          )
+        : const LinearGradient(
+            colors: [
+              Color(0xFF3923B7),
+              Color(0xFF18077D),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          );
+
     return SizedBox(
       height: fullWidth ? 72 : 84,
       child: Material(
@@ -1859,6 +2580,11 @@ class _ModernAdminToolCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
+              border: danger
+                  ? Border.all(
+                      color: Colors.red.withOpacity(0.22),
+                    )
+                  : null,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.035),
@@ -1876,14 +2602,7 @@ class _ModernAdminToolCard extends StatelessWidget {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [
-                            Color(0xFF3923B7),
-                            Color(0xFF18077D),
-                          ],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
+                        gradient: iconGradient,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -1930,8 +2649,8 @@ class _ModernAdminToolCard extends StatelessWidget {
                         title,
                         maxLines: fullWidth ? 1 : 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: navyText,
+                        style: TextStyle(
+                          color: danger ? Colors.red : navyText,
                           fontSize: 11.5,
                           height: 1.15,
                           fontWeight: FontWeight.w900,
@@ -1954,9 +2673,9 @@ class _ModernAdminToolCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 3),
-                const Icon(
+                Icon(
                   Icons.arrow_forward_ios_rounded,
-                  color: navyText,
+                  color: danger ? Colors.red : navyText,
                   size: 12,
                 ),
               ],

@@ -1,87 +1,93 @@
-// lib/core/services/app_usage_tracking_service.dart
-
-import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 class AppUsageTrackingService {
-  AppUsageTrackingService({
-    FirebaseFirestore? firestore,
-    FirebaseAuth? auth,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _auth = auth ?? FirebaseAuth.instance;
+  DateTime? _sessionStartTime;
+  bool _isTimerRunning = false;
 
-  final FirebaseFirestore _firestore;
-  final FirebaseAuth _auth;
-
-  DateTime? _screenStartTime;
-
-  Future<void> trackAppDownloadOrOpen({
-    required String eventId,
-  }) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    final docRef = _firestore
-        .collection('events')
-        .doc(eventId)
-        .collection('appInstalls')
-        .doc(user.uid);
-
-    final doc = await docRef.get();
-
-    if (doc.exists) {
-      await docRef.set({
-        'lastOpenedAt': FieldValue.serverTimestamp(),
-        'openCount': FieldValue.increment(1),
-      }, SetOptions(merge: true));
-      return;
-    }
-
-    await docRef.set({
-      'userId': user.uid,
-      'eventId': eventId,
-      'platform': kIsWeb ? 'web' : Platform.operatingSystem,
-      'installedAt': FieldValue.serverTimestamp(),
-      'lastOpenedAt': FieldValue.serverTimestamp(),
-      'openCount': 1,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   void startScreenTimer() {
-    _screenStartTime = DateTime.now();
+    if (_isTimerRunning) return;
+
+    _sessionStartTime = DateTime.now();
+    _isTimerRunning = true;
+
+    debugPrint('AppUsageTrackingService: Screen timer started.');
   }
 
   Future<void> stopScreenTimerAndSave({
     required String eventId,
   }) async {
     final user = _auth.currentUser;
-    if (user == null) return;
-    if (_screenStartTime == null) return;
 
-    final now = DateTime.now();
-    final seconds = now.difference(_screenStartTime!).inSeconds;
-    _screenStartTime = null;
+    if (user == null) return;
+    if (!_isTimerRunning || _sessionStartTime == null) return;
+
+    final endTime = DateTime.now();
+    final duration = endTime.difference(_sessionStartTime!);
+    final seconds = duration.inSeconds;
+
+    _sessionStartTime = null;
+    _isTimerRunning = false;
 
     if (seconds <= 0) return;
 
-    final minutes = seconds / 60;
+    try {
+      final ref = _firestore
+          .collection('events')
+          .doc(eventId)
+          .collection('screenTime')
+          .doc(user.uid);
 
-    final docRef = _firestore
-        .collection('events')
-        .doc(eventId)
-        .collection('screenTime')
-        .doc(user.uid);
+      await ref.set(
+        {
+          'userId': user.uid,
+          'email': user.email ?? '',
+          'totalSeconds': FieldValue.increment(seconds),
+          'lastSessionSeconds': seconds,
+          'lastSessionEndedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
 
-    await docRef.set({
-      'userId': user.uid,
-      'eventId': eventId,
-      'seconds': FieldValue.increment(seconds),
-      'minutes': FieldValue.increment(minutes),
-      'lastUpdatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+      debugPrint(
+        'AppUsageTrackingService: Saved $seconds seconds for event $eventId.',
+      );
+    } catch (e) {
+      debugPrint('AppUsageTrackingService: Failed to save screen time: $e');
+    }
+  }
+
+  Future<void> trackAppDownloadOrOpen({
+    required String eventId,
+  }) async {
+    final user = _auth.currentUser;
+
+    if (user == null) return;
+
+    try {
+      await _firestore
+          .collection('events')
+          .doc(eventId)
+          .collection('registrations')
+          .doc(user.uid)
+          .set(
+        {
+          'userId': user.uid,
+          'email': user.email ?? '',
+          'appOpened': true,
+          'lastOpenedAt': FieldValue.serverTimestamp(),
+          'openCount': FieldValue.increment(1),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('AppUsageTrackingService: Failed to track app open: $e');
+    }
   }
 }

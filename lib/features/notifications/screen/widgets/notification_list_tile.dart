@@ -1,6 +1,6 @@
+import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
@@ -40,6 +40,91 @@ class NotificationListTile extends ConsumerWidget {
     }
   }
 
+  bool _isMeetingRequestNotification() {
+    final typeName = notification.type.toString().split('.').last;
+    final dataType = (notification.data['type'] ?? '').toString();
+
+    return typeName == 'meetingRequest' ||
+        dataType == 'meetingRequest' ||
+        dataType == 'meeting';
+  }
+
+  bool _canRespondToMeeting(WidgetRef ref) {
+    if (!_isMeetingRequestNotification()) return false;
+
+    final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid;
+    if (currentUserId == null) return false;
+
+    final recipientId = (notification.data['recipientId'] ?? '').toString();
+    final status = (notification.data['status'] ?? 'pending').toString();
+
+    return recipientId == currentUserId && status == 'pending';
+  }
+
+  Future<void> _respondToMeetingRequest({
+    required BuildContext context,
+    required WidgetRef ref,
+    required String responseStatus,
+  }) async {
+    final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid;
+
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to identify current user.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final meetingId = (notification.data['meetingId'] ?? '').toString();
+
+    if (meetingId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Meeting request data is missing.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    try {
+      await ref.read(notificationRepositoryProvider).respondToMeetingRequest(
+            currentUserId: currentUserId,
+            notificationId: notification.id,
+            meetingId: meetingId,
+            responseStatus: responseStatus,
+          );
+
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            responseStatus == 'accepted'
+                ? 'Meeting request accepted.'
+                : 'Meeting request rejected.',
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor:
+              responseStatus == 'accepted' ? Colors.green : Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to respond to meeting request: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Future<void> _handleNotificationTap(
     BuildContext context,
     WidgetRef ref,
@@ -52,15 +137,20 @@ class NotificationListTile extends ConsumerWidget {
           .markAsRead(userId, notification.id);
     }
 
-    final notificationType = notification.type.toString().split('.').last;
-    final dataType = (notification.data['type'] ?? '').toString();
-
-    if (notificationType == 'meeting' || dataType == 'meeting') {
+    if (_isMeetingRequestNotification()) {
       if (!context.mounted) return;
+
+      final status = (notification.data['status'] ?? 'pending').toString();
 
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const MyMeetingsScreen(),
+          builder: (_) => MyMeetingsScreen(
+            initialTab: status == 'accepted'
+                ? 1
+                : status == 'rejected'
+                    ? 2
+                    : 0,
+          ),
         ),
       );
       return;
@@ -97,6 +187,72 @@ class NotificationListTile extends ConsumerWidget {
         builder: (_) => NotificationDetailScreen(
           notification: notification,
         ),
+      ),
+    );
+  }
+
+  Widget _meetingActionButtons(BuildContext context, WidgetRef ref) {
+    if (!_canRespondToMeeting(ref)) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          SizedBox(
+            height: 30,
+            child: ElevatedButton.icon(
+              onPressed: () => _respondToMeetingRequest(
+                context: context,
+                ref: ref,
+                responseStatus: 'accepted',
+              ),
+              icon: const Icon(Icons.check_rounded, size: 15),
+              label: const Text(
+                'Accept',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            height: 30,
+            child: OutlinedButton.icon(
+              onPressed: () => _respondToMeetingRequest(
+                context: context,
+                ref: ref,
+                responseStatus: 'rejected',
+              ),
+              icon: const Icon(Icons.close_rounded, size: 15),
+              label: const Text(
+                'Reject',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -182,6 +338,7 @@ class NotificationListTile extends ConsumerWidget {
                         .withOpacity(0.8),
               ),
             ),
+            _meetingActionButtons(context, ref),
             const SizedBox(height: 5),
             if (notification.hasQrData) ...[
               Row(
