@@ -44,7 +44,7 @@ class AttendeeMoreScreen extends ConsumerWidget {
             const SizedBox(height: 22),
             userAsync.when(
               data: (user) {
-                final name = user?.name ?? 'Attendee';
+                final name = user?.name ?? 'Delegate';
                 final email = user?.email ?? '';
                 final imageUrl = user?.profileImageUrl ?? '';
 
@@ -88,6 +88,36 @@ class AttendeeMoreScreen extends ConsumerWidget {
                               style: const TextStyle(
                                 color: AppColors.namaMediumGray,
                                 fontSize: 11.5,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.namaGoldenYellow,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.person_outline_rounded,
+                                    color: AppColors.namaNavyBlue,
+                                    size: 15,
+                                  ),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Delegate',
+                                    style: TextStyle(
+                                      color: AppColors.namaNavyBlue,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -210,53 +240,80 @@ class _ActiveEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Active Event',
-            style: TextStyle(
-              color: AppColors.namaMediumGray,
-              fontSize: 11.5,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            eventName,
-            style: const TextStyle(
-              color: AppColors.namaNavyBlue,
-              fontSize: 15,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 42,
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onFeedbackTap,
-              icon: const Icon(Icons.rate_review_outlined, size: 18),
-              label: const Text(
-                'Submit Event Feedback',
-                style: TextStyle(
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.namaNavyBlue,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 4,
+              height: 82,
+              decoration: BoxDecoration(
+                color: AppColors.namaGoldenYellow,
+                borderRadius: BorderRadius.circular(20),
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Active Event',
+                    style: TextStyle(
+                      color: AppColors.namaMediumGray,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    eventName,
+                    style: const TextStyle(
+                      color: AppColors.namaNavyBlue,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    height: 42,
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: onFeedbackTap,
+                      icon: const Icon(
+                        Icons.rate_review_outlined,
+                        size: 18,
+                        color: AppColors.namaGoldenYellow,
+                      ),
+                      label: const Text(
+                        'Submit Event Feedback',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.namaNavyBlue,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        side: const BorderSide(
+                          color: AppColors.namaGoldenYellow,
+                          width: 1.2,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -292,10 +349,18 @@ class _MoreActionCard extends StatelessWidget {
             ),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  color: AppColors.namaNavyBlue,
-                  size: 27,
+                Container(
+                  height: 42,
+                  width: 42,
+                  decoration: BoxDecoration(
+                    color: AppColors.namaGoldenYellow.withOpacity(0.18),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    icon,
+                    color: AppColors.namaNavyBlue,
+                    size: 25,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -305,7 +370,7 @@ class _MoreActionCard extends StatelessWidget {
                       Text(
                         title,
                         style: const TextStyle(
-                          color: Color(0xFF222222),
+                          color: AppColors.namaNavyBlue,
                           fontSize: 13.5,
                           fontWeight: FontWeight.w900,
                         ),
@@ -325,7 +390,8 @@ class _MoreActionCard extends StatelessWidget {
                 ),
                 const Icon(
                   Icons.chevron_right_rounded,
-                  color: Color(0xFF333333),
+                  color: AppColors.namaGoldenYellow,
+                  size: 27,
                 ),
               ],
             ),
@@ -369,10 +435,18 @@ class _InfoCard extends StatelessWidget {
       decoration: _cardDecoration(),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: AppColors.namaNavyBlue,
-            size: 27,
+          Container(
+            height: 42,
+            width: 42,
+            decoration: BoxDecoration(
+              color: AppColors.namaGoldenYellow.withOpacity(0.18),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              icon,
+              color: AppColors.namaNavyBlue,
+              size: 25,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(

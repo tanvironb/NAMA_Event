@@ -29,7 +29,9 @@ class AdminSessionManagementScreen extends ConsumerStatefulWidget {
 class _AdminSessionManagementScreenState
     extends ConsumerState<AdminSessionManagementScreen> {
   static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _softPurple = Color(0xFFF4F2FB);
+  static const Color _softPurple = Color(0xFFFFF8E6);
+  static const Color _gold = Color(0xFFE4B544);
+  static const Color _softGold = Color(0xFFFFF8E6);
   static const Color _textDark = Color(0xFF111827);
   static const Color _textMuted = Color(0xFF6B7280);
   static const Color _fieldBorder = Color(0xFFE1DDF0);
@@ -383,7 +385,7 @@ class _AdminSessionManagementScreenState
                         height: 4,
                         width: 46,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFE2DEEF),
+                          color: AppColors.namaGoldenYellow,
                           borderRadius: BorderRadius.circular(20),
                         ),
                       ),
@@ -510,10 +512,10 @@ class _AdminSessionManagementScreenState
                     Container(
                       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: const Color(0xFFFFF8E6),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: _fieldBorder,
+                          color: AppColors.namaGoldenYellow.withOpacity(0.45),
                         ),
                       ),
                       child: Row(
@@ -549,7 +551,7 @@ class _AdminSessionManagementScreenState
                           ),
                           Switch(
                             value: isChatEnabled,
-                            activeColor: _primaryColor,
+                            activeColor: AppColors.namaGoldenYellow,
                             onChanged: isSaving
                                 ? null
                                 : (value) {
@@ -579,7 +581,7 @@ class _AdminSessionManagementScreenState
                             ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: _primaryColor,
-                              side: const BorderSide(color: _fieldBorder),
+                              side: BorderSide(color: AppColors.namaGoldenYellow.withOpacity(0.65)),
                               minimumSize: const Size(double.infinity, 46),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
@@ -661,8 +663,9 @@ class _AdminSessionManagementScreenState
               height: 32,
               width: 32,
               decoration: BoxDecoration(
-                color: _softPurple,
+                color: _softGold,
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _gold.withOpacity(0.55)),
               ),
               child: const Icon(
                 Icons.arrow_back_ios_new_rounded,
@@ -701,7 +704,7 @@ class _AdminSessionManagementScreenState
             Icon(
               Icons.event_busy_outlined,
               size: 56,
-              color: AppColors.namaMediumGray,
+              color: AppColors.namaGoldenYellow,
             ),
             const SizedBox(height: 14),
             const Text(
@@ -772,8 +775,13 @@ class _AdminSessionManagementScreenState
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8E4F8),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF8E6), Color(0xFFFFFFFF)],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
         borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: _gold.withOpacity(0.45)),
       ),
       child: Row(
         children: [
@@ -805,13 +813,13 @@ class _AdminSessionManagementScreenState
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.75),
+              color: _primaryColor,
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               '${sessions.length} Sessions',
               style: const TextStyle(
-                color: _primaryColor,
+                color: Colors.white,
                 fontSize: 10.5,
                 fontWeight: FontWeight.w800,
               ),
@@ -926,12 +934,21 @@ class _AdminSessionCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: hasEnded ? const Color(0xFFF1F1F1) : const Color(0xFFF7F7FA),
+        color: hasEnded ? const Color(0xFFF1F1F1) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isActive ? AppColors.successGreen : Colors.transparent,
-          width: isActive ? 1.6 : 0,
+          color: isActive
+              ? AppColors.successGreen
+              : AppColors.namaGoldenYellow.withOpacity(0.36),
+          width: isActive ? 1.6 : 1,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.namaGoldenYellow.withOpacity(hasEnded ? 0 : 0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: InkWell(
         onTap: onTap,
@@ -1036,7 +1053,7 @@ class _AdminSessionCard extends StatelessWidget {
                           _MiniChip(
                             icon: Icons.qr_code_rounded,
                             label: 'QR Active',
-                            color: AppColors.successGreen,
+                            color: AppColors.namaGoldenYellow,
                             faded: hasEnded,
                           ),
                         if (session.totalMessages > 0)
@@ -1174,7 +1191,7 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.namaGoldenYellow.withOpacity(0.22),
+        color: AppColors.namaGoldenYellow.withOpacity(0.28),
         borderRadius: BorderRadius.circular(20),
       ),
       child: const Text(

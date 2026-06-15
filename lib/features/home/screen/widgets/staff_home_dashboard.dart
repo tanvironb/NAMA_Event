@@ -1,3 +1,5 @@
+// lib/features/home/screen/widgets/staff_home_dashboard.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:card_swiper/card_swiper.dart';
@@ -23,7 +25,7 @@ class StaffHomeDashboard extends ConsumerWidget {
     this.onTabSelected,
   });
 
-  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _primaryColor = AppColors.namaNavyBlue;
   static const Color _textDark = Color(0xFF202124);
   static const Color _textMuted = Color(0xFF8A8A8A);
 
@@ -134,7 +136,7 @@ class StaffHomeDashboard extends ConsumerWidget {
                 errorBuilder: (_, __, ___) {
                   return const Icon(
                     Icons.circle,
-                    color: _primaryColor,
+                    color: AppColors.namaNavyBlue,
                     size: 46,
                   );
                 },
@@ -166,13 +168,28 @@ class StaffHomeDashboard extends ConsumerWidget {
           const SizedBox(height: 26),
           Align(
             alignment: Alignment.centerLeft,
-            child: Text(
-              'Hi, $userName!',
-              style: const TextStyle(
-                color: _primaryColor,
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1.1,
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  const TextSpan(
+                    text: 'Hi, ',
+                    style: TextStyle(
+                      color: AppColors.namaNavyBlue,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  TextSpan(
+                    text: '$userName!',
+                    style: const TextStyle(
+                      color: AppColors.namaGoldenYellow,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -217,8 +234,8 @@ class StaffHomeDashboard extends ConsumerWidget {
         children: [
           Icon(
             icon,
-            color: _primaryColor,
-            size: 16,
+            color: AppColors.namaGoldenYellow,
+            size: 17,
           ),
           const SizedBox(width: 8),
           Text(
@@ -376,7 +393,7 @@ class StaffHomeDashboard extends ConsumerWidget {
   Widget _speakerFallback() {
     return Container(
       color: AppColors.avatarPlaceholder,
-      child: Icon(
+      child: const Icon(
         Icons.person,
         size: 58,
         color: AppColors.avatarPlaceholderText,
@@ -446,7 +463,7 @@ class StaffHomeDashboard extends ConsumerWidget {
                       alignment: Alignment.bottomCenter,
                       margin: EdgeInsets.only(bottom: 7),
                       builder: DotSwiperPaginationBuilder(
-                        activeColor: _primaryColor,
+                        activeColor: AppColors.namaGoldenYellow,
                         color: Color(0xFFD6D6D6),
                         size: 5,
                         activeSize: 6,
@@ -504,7 +521,7 @@ class StaffHomeDashboard extends ConsumerWidget {
                               color: const Color(0xFFF1F3F8),
                               child: const Icon(
                                 Icons.broken_image_outlined,
-                                color: _primaryColor,
+                                color: AppColors.namaNavyBlue,
                               ),
                             ),
                           ),
@@ -571,16 +588,16 @@ class StaffHomeDashboard extends ConsumerWidget {
                                   horizontal: 15,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: _primaryColor,
+                                  color: AppColors.namaGoldenYellow,
                                   borderRadius: BorderRadius.circular(16),
                                 ),
                                 alignment: Alignment.center,
                                 child: const Text(
                                   'View',
                                   style: TextStyle(
-                                    color: Colors.white,
+                                    color: AppColors.namaNavyBlue,
                                     fontSize: 10.5,
-                                    fontWeight: FontWeight.w800,
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
                               ),
@@ -722,7 +739,7 @@ class StaffHomeDashboard extends ConsumerWidget {
                 ? const Center(
                     child: Icon(
                       Icons.handshake_outlined,
-                      color: _primaryColor,
+                      color: AppColors.namaNavyBlue,
                       size: 30,
                     ),
                   )
@@ -752,7 +769,7 @@ class StaffHomeDashboard extends ConsumerWidget {
                         return const Center(
                           child: Icon(
                             Icons.broken_image_outlined,
-                            color: _primaryColor,
+                            color: AppColors.namaNavyBlue,
                             size: 28,
                           ),
                         );
@@ -768,7 +785,7 @@ class StaffHomeDashboard extends ConsumerWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: _primaryColor,
+            color: AppColors.namaNavyBlue,
             fontSize: 11,
             fontWeight: FontWeight.w600,
             height: 1.2,
@@ -789,8 +806,6 @@ class _VenueImagePreviewScreen extends StatelessWidget {
     required this.title,
     required this.description,
   });
-
-  static const Color _primaryColor = Color(0xFF1B0F72);
 
   @override
   Widget build(BuildContext context) {
@@ -863,8 +878,8 @@ class _VenueImagePreviewScreen extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.small(
-        backgroundColor: _primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.namaGoldenYellow,
+        foregroundColor: AppColors.namaNavyBlue,
         onPressed: () => Navigator.of(context).pop(),
         child: const Icon(Icons.close),
       ),

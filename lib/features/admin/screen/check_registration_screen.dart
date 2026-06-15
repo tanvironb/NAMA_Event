@@ -196,52 +196,96 @@ class _CheckRegistrationScreenState extends State<CheckRegistrationScreen> {
             return Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
-                  child: Row(
-                    children: [
-                      InkWell(
-                        onTap: () => Navigator.of(context).pop(),
-                        borderRadius: BorderRadius.circular(10),
-                        child: Container(
-                          height: 34,
-                          width: 34,
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.arrow_back_ios_new_rounded,
-                            color: AppColors.namaNavyBlue,
-                            size: 14,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Text(
-                          'Check Registration',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: AppColors.namaNavyBlue,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+  padding: const EdgeInsets.fromLTRB(16, 18, 16, 12),
+  child: Row(
+    children: [
+      InkWell(
+        onTap: () => Navigator.of(context).pop(),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF8E6),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppColors.namaGoldenYellow.withOpacity(0.7),
+            ),
+          ),
+          child: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: AppColors.namaNavyBlue,
+            size: 14,
+          ),
+        ),
+      ),
+
+      const SizedBox(width: 12),
+
+      Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Check Registration',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppColors.namaNavyBlue,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+
+            const SizedBox(height: 2),
+
+            Text(
+              widget.eventName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: AppColors.namaMediumGray,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ],
+  ),
+),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: AppColors.namaNavyBlue,
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.namaNavyBlue.withOpacity(0.25),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
-                    child: Column(
+                    child: Stack(
+                      children: [
+                        Positioned(
+                          right: -25,
+                          top: -25,
+                          child: Opacity(
+                            opacity: 0.15,
+                            child: Icon(
+                              Icons.how_to_reg_rounded,
+                              size: 130,
+                              color: AppColors.namaGoldenYellow,
+                            ),
+                          ),
+                        ),
+                        Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -300,6 +344,8 @@ class _CheckRegistrationScreenState extends State<CheckRegistrationScreen> {
                           ),
                         ),
                       ],
+                    ),
+                        ],
                     ),
                   ),
                 ),

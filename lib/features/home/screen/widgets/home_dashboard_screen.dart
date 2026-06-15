@@ -220,12 +220,26 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 builder: (context, snapshot) {
                   final name = snapshot.data ?? 'User';
 
-                  return Text(
-                    'Hi, $name!',
-                    style: const TextStyle(
-                      fontSize: 22,
-                      color: primaryBlue,
-                      fontWeight: FontWeight.w600,
+                  return RichText(
+                    text: TextSpan(
+                      children: [
+                        const TextSpan(
+                          text: 'Hi, ',
+                          style: TextStyle(
+                            fontSize: 22,
+                            color: primaryBlue,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        TextSpan(
+                          text: '$name!',
+                          style: const TextStyle(
+                            fontSize: 22,
+                            color: namaGoldenYellow,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -414,13 +428,13 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               Container(
                 height: 42,
                 width: 42,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.16),
+                decoration: const BoxDecoration(
+                  color: namaGoldenYellow,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.qr_code_scanner,
-                  color: Colors.white,
+                  color: primaryBlue,
                   size: 23,
                 ),
               ),
@@ -819,7 +833,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: primaryBlue,
+          color: namaGoldenYellow,
           borderRadius: BorderRadius.circular(13),
         ),
         child: Text(
@@ -827,7 +841,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: Colors.white,
+            color: primaryBlue,
             fontSize: 10,
             fontWeight: FontWeight.w700,
           ),

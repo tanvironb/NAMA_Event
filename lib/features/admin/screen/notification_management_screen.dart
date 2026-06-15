@@ -32,6 +32,8 @@ class _NotificationManagementScreenState
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _textMuted = Color(0xFF6B7280);
   static const Color _borderColor = Color(0xFFE8E4F8);
+  static const Color _gold = AppColors.namaGoldenYellow;
+  static const Color _softGold = AppColors.namaWarmGold;
 
   @override
   Widget build(BuildContext context) {
@@ -53,27 +55,34 @@ class _NotificationManagementScreenState
 
   Widget _buildHeader(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 14, 16, 10),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton(
-            onPressed: () => Navigator.pop(context),
-            icon: const Icon(
-              Icons.arrow_back,
-              color: AppColors.namaNavyBlue,
-              size: 22,
-            ),
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(
-              minWidth: 36,
-              minHeight: 36,
+          InkWell(
+            onTap: () => Navigator.pop(context),
+            borderRadius: BorderRadius.circular(14),
+            child: Container(
+              height: 38,
+              width: 38,
+              decoration: BoxDecoration(
+                color: _softGold.withOpacity(0.75),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: _gold.withOpacity(0.55),
+                ),
+              ),
+              child: const Icon(
+                Icons.arrow_back,
+                color: AppColors.namaNavyBlue,
+                size: 21,
+              ),
             ),
           ),
-          const SizedBox(width: 2),
+          const SizedBox(width: 12),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: 2),
+              padding: const EdgeInsets.only(top: 1),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -84,11 +93,20 @@ class _NotificationManagementScreenState
                     style: TextStyle(
                       color: AppColors.namaNavyBlue,
                       fontSize: 20,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Container(
+                    height: 3,
+                    width: 58,
+                    decoration: BoxDecoration(
+                      color: _gold,
+                      borderRadius: BorderRadius.circular(99),
                     ),
                   ),
                   if (widget.isEventSpecific) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       widget.eventName ?? '',
                       maxLines: 1,
@@ -113,7 +131,7 @@ class _NotificationManagementScreenState
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: Colors.white,
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.035),
@@ -127,9 +145,9 @@ class _NotificationManagementScreenState
           const Text(
             'Target Audience:',
             style: TextStyle(
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               fontSize: 12,
-              color: Color(0xFF333333),
+              color: AppColors.namaNavyBlue,
             ),
           ),
           const SizedBox(width: 10),
@@ -140,34 +158,38 @@ class _NotificationManagementScreenState
               icon: const Icon(
                 Icons.keyboard_arrow_down_rounded,
                 size: 20,
-                color: _textMuted,
+                color: AppColors.namaNavyBlue,
               ),
               style: const TextStyle(
                 fontSize: 12.5,
-                color: Color(0xFF333333),
-                fontWeight: FontWeight.w500,
+                color: AppColors.namaNavyBlue,
+                fontWeight: FontWeight.w600,
               ),
               decoration: InputDecoration(
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: _softGold.withOpacity(0.22),
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 10,
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
-                  borderSide: const BorderSide(color: _borderColor),
+                  borderSide: BorderSide(
+                    color: _gold.withOpacity(0.55),
+                  ),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
                   borderSide: const BorderSide(
-                    color: _primaryColor,
+                    color: _gold,
                     width: 1.2,
                   ),
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(20),
-                  borderSide: const BorderSide(color: _borderColor),
+                  borderSide: BorderSide(
+                    color: _gold.withOpacity(0.55),
+                  ),
                 ),
               ),
               items: const [
@@ -260,15 +282,38 @@ class _NotificationManagementScreenState
 
             if (notifications.isEmpty) {
               return Center(
-                child: Text(
-                  widget.isEventSpecific
-                      ? 'No notifications found for this event.'
-                      : 'No notifications found.',
-                  style: const TextStyle(
-                    color: _textMuted,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      height: 58,
+                      width: 58,
+                      decoration: BoxDecoration(
+                        color: _softGold.withOpacity(0.55),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: _gold.withOpacity(0.5),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.notifications_active_outlined,
+                        color: AppColors.namaNavyBlue,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      widget.isEventSpecific
+                          ? 'No notifications found for this event.'
+                          : 'No notifications found.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: _textMuted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
                 ),
               );
             }
@@ -337,7 +382,9 @@ class _NotificationManagementScreenState
 
     final cardShape = RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(16),
-      side: const BorderSide(color: Color(0xFFF0EDF8)),
+      side: BorderSide(
+        color: _gold.withOpacity(0.28),
+      ),
     );
 
     return Card(
@@ -346,202 +393,237 @@ class _NotificationManagementScreenState
       color: Colors.white,
       clipBehavior: Clip.antiAlias,
       shape: cardShape,
-      child: Theme(
-        data: Theme.of(context).copyWith(
-          dividerColor: Colors.transparent,
-          splashColor: Colors.transparent,
-          highlightColor: Colors.transparent,
-        ),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          childrenPadding: EdgeInsets.zero,
-          shape: cardShape,
-          collapsedShape: cardShape,
-          backgroundColor: Colors.white,
-          collapsedBackgroundColor: Colors.white,
-          iconColor: _primaryColor,
-          collapsedIconColor: const Color(0xFF333333),
-          leading: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: type.color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(
-              type.icon,
-              color: type.color,
-              size: 19,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 4,
+              color: _gold,
             ),
           ),
-          title: Text(
-            title,
-            style: const TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 13.5,
-              color: Color(0xFF333333),
+          Theme(
+            data: Theme.of(context).copyWith(
+              dividerColor: Colors.transparent,
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
             ),
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (subtitle != null && subtitle.trim().isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontStyle: FontStyle.italic,
-                    color: Colors.grey[600],
-                    fontSize: 11.5,
+            child: ExpansionTile(
+              tilePadding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+              childrenPadding: EdgeInsets.zero,
+              shape: cardShape,
+              collapsedShape: cardShape,
+              backgroundColor: Colors.white,
+              collapsedBackgroundColor: Colors.white,
+              iconColor: _primaryColor,
+              collapsedIconColor: _gold,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _softGold.withOpacity(0.75),
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(
+                    color: _gold.withOpacity(0.35),
                   ),
                 ),
-              ],
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 10,
-                runSpacing: 4,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.people, size: 12.5, color: Colors.grey[600]),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Target: ${_targetRoleText(targetRole)}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.access_time,
-                        size: 12.5,
-                        color: Colors.grey[600],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        DateFormat('MMM dd, yyyy').format(timestamp),
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+                child: Icon(
+                  type.icon,
+                  color: _primaryColor,
+                  size: 19,
+                ),
               ),
-              if (editedAt != null) ...[
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.edit, size: 12.5, color: Colors.orange[600]),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        'Edited: ${DateFormat('MMM dd, yyyy hh:mm a').format(editedAt)}',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.orange[600],
-                        ),
+              title: Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
+                  color: AppColors.namaNavyBlue,
+                ),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (subtitle != null && subtitle.trim().isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontStyle: FontStyle.italic,
+                        color: _textMuted,
+                        fontSize: 11.5,
                       ),
                     ),
                   ],
-                ),
-              ],
-            ],
-          ),
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 4, 14, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Description:',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 12.5,
-                      color: _primaryColor,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(11),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF7F7FA),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      body,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF333333),
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 4,
                     children: [
-                      OutlinedButton.icon(
-                        onPressed: _isLoading
-                            ? null
-                            : () => _editNotification(notificationId, data),
-                        icon: const Icon(Icons.edit, size: 15),
-                        label: const Text(
-                          'Edit',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.namaNavyBlue,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.people,
+                            size: 12.5,
+                            color: _gold,
                           ),
-                          minimumSize: const Size(0, 34),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Target: ${_targetRoleText(targetRole)}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: _textMuted,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      OutlinedButton.icon(
-                        onPressed: _isLoading
-                            ? null
-                            : () => _deleteNotification(
-                                  notificationId,
-                                  targetRole,
-                                ),
-                        icon: const Icon(Icons.delete, size: 15),
-                        label: const Text(
-                          'Delete',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.access_time,
+                            size: 12.5,
+                            color: _gold,
                           ),
-                          minimumSize: const Size(0, 34),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          const SizedBox(width: 4),
+                          Text(
+                            DateFormat('MMM dd, yyyy').format(timestamp),
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: _textMuted,
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
+                  if (editedAt != null) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.edit,
+                          size: 12.5,
+                          color: Colors.orange[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            'Edited: ${DateFormat('MMM dd, yyyy hh:mm a').format(editedAt)}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.orange[600],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 4, 14, 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Description:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12.5,
+                          color: _primaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(11),
+                        decoration: BoxDecoration(
+                          color: _softGold.withOpacity(0.22),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _gold.withOpacity(0.35),
+                          ),
+                        ),
+                        child: Text(
+                          body,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF333333),
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _isLoading
+                                ? null
+                                : () => _editNotification(notificationId, data),
+                            icon: const Icon(Icons.edit, size: 15),
+                            label: const Text(
+                              'Edit',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.namaNavyBlue,
+                              backgroundColor: _softGold.withOpacity(0.45),
+                              side: BorderSide(
+                                color: _gold.withOpacity(0.55),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              minimumSize: const Size(0, 34),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          OutlinedButton.icon(
+                            onPressed: _isLoading
+                                ? null
+                                : () => _deleteNotification(
+                                      notificationId,
+                                      targetRole,
+                                    ),
+                            icon: const Icon(Icons.delete, size: 15),
+                            label: const Text(
+                              'Delete',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red,
+                              side: BorderSide(
+                                color: Colors.red.withOpacity(0.35),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              minimumSize: const Size(0, 34),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -571,11 +653,15 @@ class _NotificationManagementScreenState
       context: context,
       builder: (context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
           title: const Text(
             'Edit Notification',
             style: TextStyle(
+              color: AppColors.namaNavyBlue,
               fontSize: 16,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
             ),
           ),
           content: SingleChildScrollView(
@@ -585,10 +671,19 @@ class _NotificationManagementScreenState
                 TextField(
                   controller: titleController,
                   style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Title',
-                    labelStyle: TextStyle(fontSize: 12),
-                    border: OutlineInputBorder(),
+                    labelStyle: const TextStyle(fontSize: 12),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: _gold.withOpacity(0.45),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: _gold),
+                    ),
                   ),
                   maxLines: 2,
                 ),
@@ -596,10 +691,19 @@ class _NotificationManagementScreenState
                 TextField(
                   controller: subtitleController,
                   style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Subtitle (optional)',
-                    labelStyle: TextStyle(fontSize: 12),
-                    border: OutlineInputBorder(),
+                    labelStyle: const TextStyle(fontSize: 12),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: _gold.withOpacity(0.45),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: _gold),
+                    ),
                   ),
                   maxLines: 2,
                 ),
@@ -607,10 +711,19 @@ class _NotificationManagementScreenState
                 TextField(
                   controller: bodyController,
                   style: const TextStyle(fontSize: 13),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Description',
-                    labelStyle: TextStyle(fontSize: 12),
-                    border: OutlineInputBorder(),
+                    labelStyle: const TextStyle(fontSize: 12),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                        color: _gold.withOpacity(0.45),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: _gold),
+                    ),
                   ),
                   maxLines: 5,
                 ),
@@ -626,6 +739,14 @@ class _NotificationManagementScreenState
               ),
             ),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.namaNavyBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
               onPressed: () {
                 if (titleController.text.trim().isEmpty ||
                     bodyController.text.trim().isEmpty) {
@@ -717,11 +838,15 @@ class _NotificationManagementScreenState
       context: context,
       builder: (context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
           title: const Text(
             'Delete Notification',
             style: TextStyle(
+              color: Colors.red,
               fontSize: 16,
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.w800,
             ),
           ),
           content: Text(

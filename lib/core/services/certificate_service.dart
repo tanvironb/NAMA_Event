@@ -8,10 +8,15 @@ class CertificateService {
   final FirebaseFirestore _firestore;
 
   CollectionReference<Map<String, dynamic>> _certificatesRef(String eventId) {
+    return _firestore.collection('events').doc(eventId).collection('certificates');
+  }
+
+  DocumentReference<Map<String, dynamic>> _templateRef(String eventId) {
     return _firestore
         .collection('events')
         .doc(eventId)
-        .collection('certificates');
+        .collection('certificateTemplate')
+        .doc('main');
   }
 
   CollectionReference<Map<String, dynamic>> get _usersRef {
@@ -22,11 +27,25 @@ class CertificateService {
     return _certificatesRef(eventId)
         .orderBy('generatedAt', descending: true)
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => CertificateModel.fromFirestore(doc))
-              .toList(),
-        );
+        .map((snapshot) => snapshot.docs
+            .map((doc) => CertificateModel.fromFirestore(doc))
+            .toList());
+  }
+
+  Future<Map<String, dynamic>?> getCertificateTemplate(String eventId) async {
+    final doc = await _templateRef(eventId).get();
+    if (!doc.exists) return null;
+
+    final data = doc.data() ?? {};
+    final templateUrl = (data['templateUrl'] ?? '').toString().trim();
+
+    if (templateUrl.isEmpty) return null;
+    return data;
+  }
+
+  Future<bool> hasCertificateTemplate(String eventId) async {
+    final template = await getCertificateTemplate(eventId);
+    return template != null;
   }
 
   Future<CertificateModel?> getCertificateById({
@@ -34,9 +53,7 @@ class CertificateService {
     required String certificateDocId,
   }) async {
     final doc = await _certificatesRef(eventId).doc(certificateDocId).get();
-
     if (!doc.exists) return null;
-
     return CertificateModel.fromFirestore(doc);
   }
 
@@ -49,14 +66,13 @@ class CertificateService {
         .where('userId', isEqualTo: userId)
         .limit(1);
 
+    // Backward compatibility only. New certificates are event-based.
     if (sessionId != null && sessionId.isNotEmpty) {
       query = query.where('sessionId', isEqualTo: sessionId);
     }
 
     final snapshot = await query.get();
-
     if (snapshot.docs.isEmpty) return null;
-
     return CertificateModel.fromFirestore(snapshot.docs.first);
   }
 
@@ -70,7 +86,6 @@ class CertificateService {
       userId: userId,
       sessionId: sessionId,
     );
-
     return certificate != null;
   }
 
@@ -99,8 +114,11 @@ class CertificateService {
       userId: userId,
     );
 
-    if (existingCertificate != null) {
-      return existingCertificate;
+    if (existingCertificate != null) return existingCertificate;
+
+    final template = await getCertificateTemplate(eventId);
+    if (template == null) {
+      throw Exception('Certificate template is missing. Upload the template first.');
     }
 
     final certificateId = await generateCertificateId(
@@ -121,10 +139,11 @@ class CertificateService {
       certificateId: certificateId,
       status: 'generated',
       generatedAt: DateTime.now(),
+      templateUrl: template['templateUrl']?.toString(),
+      templateStoragePath: template['storagePath']?.toString(),
     );
 
     await docRef.set(certificate.toMap(), SetOptions(merge: true));
-
     return certificate;
   }
 
@@ -133,15 +152,16 @@ class CertificateService {
     required String userId,
     required String userName,
     required String userEmail,
-    required String sessionId,
-    required String sessionTitle,
   }) async {
-    final certificateDocId = '${userId}_$sessionId';
-    final docRef = _certificatesRef(eventId).doc(certificateDocId);
+    // New logic: one event-level speaker certificate per speaker.
+    final docRef = _certificatesRef(eventId).doc(userId);
     final existingDoc = await docRef.get();
 
-    if (existingDoc.exists) {
-      return CertificateModel.fromFirestore(existingDoc);
+    if (existingDoc.exists) return CertificateModel.fromFirestore(existingDoc);
+
+    final template = await getCertificateTemplate(eventId);
+    if (template == null) {
+      throw Exception('Certificate template is missing. Upload the template first.');
     }
 
     final certificateId = await generateCertificateId(
@@ -160,12 +180,11 @@ class CertificateService {
       certificateId: certificateId,
       status: 'generated',
       generatedAt: DateTime.now(),
-      sessionId: sessionId,
-      sessionTitle: sessionTitle,
+      templateUrl: template['templateUrl']?.toString(),
+      templateStoragePath: template['storagePath']?.toString(),
     );
 
     await docRef.set(certificate.toMap(), SetOptions(merge: true));
-
     return certificate;
   }
 
@@ -182,16 +201,11 @@ class CertificateService {
               attendee['fullName'] ??
               'Unknown Attendee')
           .toString();
-      final userEmail =
-          (attendee['userEmail'] ?? attendee['email'] ?? '').toString();
+      final userEmail = (attendee['userEmail'] ?? attendee['email'] ?? '').toString();
 
       if (userId.trim().isEmpty) continue;
 
-      final alreadyExists = await certificateExists(
-        eventId: eventId,
-        userId: userId,
-      );
-
+      final alreadyExists = await certificateExists(eventId: eventId, userId: userId);
       if (alreadyExists) continue;
 
       await generateAttendeeCertificate(
@@ -228,60 +242,45 @@ class CertificateService {
       ...eventSubSessionsSnap.docs,
     ];
 
-    final usedSessionIds = <String>{};
+    final speakerIds = <String>{};
 
     for (final sessionDoc in allSessionDocs) {
-      if (usedSessionIds.contains(sessionDoc.id)) continue;
-      usedSessionIds.add(sessionDoc.id);
-
       final sessionData = sessionDoc.data();
-      final sessionId = sessionDoc.id;
-      final sessionTitle = (sessionData['title'] ??
-              sessionData['sessionTitle'] ??
-              sessionData['name'] ??
-              'Session')
-          .toString();
-
       final speakerIdsRaw = sessionData['speakerIds'];
 
       if (speakerIdsRaw == null || speakerIdsRaw is! List) continue;
 
-      final speakerIds = speakerIdsRaw.map((e) => e.toString()).toList();
-
-      for (final speakerId in speakerIds) {
-        if (speakerId.trim().isEmpty) continue;
-
-        final certificateDocId = '${speakerId}_$sessionId';
-        final existingDoc =
-            await _certificatesRef(eventId).doc(certificateDocId).get();
-
-        if (existingDoc.exists) continue;
-
-        final speakerDoc = await _usersRef.doc(speakerId).get();
-
-        if (!speakerDoc.exists) continue;
-
-        final speakerData = speakerDoc.data() ?? {};
-
-        final userName = (speakerData['name'] ??
-                speakerData['fullName'] ??
-                speakerData['displayName'] ??
-                'Unknown Speaker')
-            .toString();
-
-        final userEmail = (speakerData['email'] ?? '').toString();
-
-        await generateSpeakerCertificate(
-          eventId: eventId,
-          userId: speakerId,
-          userName: userName,
-          userEmail: userEmail,
-          sessionId: sessionId,
-          sessionTitle: sessionTitle,
-        );
-
-        generatedCount++;
+      for (final speakerId in speakerIdsRaw) {
+        final cleanSpeakerId = speakerId.toString().trim();
+        if (cleanSpeakerId.isNotEmpty) speakerIds.add(cleanSpeakerId);
       }
+    }
+
+    for (final speakerId in speakerIds) {
+      final existingDoc = await _certificatesRef(eventId).doc(speakerId).get();
+      if (existingDoc.exists) continue;
+
+      final speakerDoc = await _usersRef.doc(speakerId).get();
+      if (!speakerDoc.exists) continue;
+
+      final speakerData = speakerDoc.data() ?? {};
+
+      final userName = (speakerData['name'] ??
+              speakerData['fullName'] ??
+              speakerData['displayName'] ??
+              'Unknown Speaker')
+          .toString();
+
+      final userEmail = (speakerData['email'] ?? '').toString();
+
+      await generateSpeakerCertificate(
+        eventId: eventId,
+        userId: speakerId,
+        userName: userName,
+        userEmail: userEmail,
+      );
+
+      generatedCount++;
     }
 
     return generatedCount;
@@ -291,14 +290,17 @@ class CertificateService {
     required String eventId,
     required List<Map<String, dynamic>> presentAttendees,
   }) async {
+    final templateExists = await hasCertificateTemplate(eventId);
+    if (!templateExists) {
+      throw Exception('Please upload the certificate template before generating certificates.');
+    }
+
     final attendeeCount = await generateCertificatesForPresentAttendees(
       eventId: eventId,
       presentAttendees: presentAttendees,
     );
 
-    final speakerCount = await generateCertificatesForSpeakers(
-      eventId: eventId,
-    );
+    final speakerCount = await generateCertificatesForSpeakers(eventId: eventId);
 
     return {
       'attendees': attendeeCount,

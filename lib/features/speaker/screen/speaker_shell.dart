@@ -48,7 +48,6 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeNotifications();
     });
@@ -81,7 +80,6 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
     if (!mounted) return;
 
     final pages = _widgetOptions();
-
     if (index < 0 || index >= pages.length) return;
 
     setState(() {
@@ -103,9 +101,9 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
         type: BottomNavigationBarType.fixed,
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
-        selectedItemColor: const Color(0xFFF5B51B),
+        selectedItemColor: AppColors.namaGoldenYellow,
         unselectedItemColor: Colors.white,
-        backgroundColor: const Color(0xFF1B0F72),
+        backgroundColor: AppColors.namaNavyBlue,
         selectedFontSize: 12,
         unselectedFontSize: 12,
         elevation: 0,
@@ -139,7 +137,7 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
 class SpeakerHomeQuickActionsPage extends ConsumerWidget {
   const SpeakerHomeQuickActionsPage({super.key});
 
-  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _primaryColor = AppColors.namaNavyBlue;
   static const Color _textDark = Color(0xFF202124);
   static const Color _textMuted = Color(0xFF8A8A8A);
 
@@ -158,6 +156,10 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
       orElse: () => 'Philanthropy Learning Forum',
     );
 
+    final userName = (user?.name ?? 'Speaker').toString().trim().isEmpty
+        ? 'Speaker'
+        : (user?.name ?? 'Speaker').toString().trim().split(' ').first;
+
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(20, 22, 20, 92),
@@ -173,7 +175,7 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                   width: 68,
                   fit: BoxFit.contain,
                   errorBuilder: (context, error, stackTrace) {
-                    return Icon(
+                    return const Icon(
                       Icons.auto_awesome,
                       color: AppColors.namaNavyBlue,
                       size: 46,
@@ -207,16 +209,28 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 30),
-
-            Text(
-              'Hi, ${user?.name ?? 'Speaker'}!',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.namaNavyBlue,
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Hi, ',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.namaNavyBlue,
+                        ),
                   ),
+                  TextSpan(
+                    text: '$userName!',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.namaGoldenYellow,
+                        ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 6),
             Text(
@@ -227,16 +241,12 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                     color: AppColors.namaMediumGray,
                   ),
             ),
-
             const SizedBox(height: 38),
-
             _buildSectionTitle(
               icon: Icons.bolt,
               title: 'Speaker Tools',
             ),
-
             const SizedBox(height: 18),
-
             GridView(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -308,34 +318,27 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 42),
-
             _buildSectionTitle(
               icon: Icons.mic_rounded,
               title: 'Featured Speakers',
             ),
             const SizedBox(height: 16),
             _buildFeaturedSpeakers(context, speakersAsync),
-
             const SizedBox(height: 42),
-
             _buildSectionTitle(
               icon: Icons.map_outlined,
               title: 'Venue Maps',
             ),
             const SizedBox(height: 16),
             _buildVenueMaps(context, venueMapsAsync),
-
             const SizedBox(height: 42),
-
             _buildSectionTitle(
               icon: Icons.handshake_outlined,
               title: 'Our Partners',
             ),
             const SizedBox(height: 18),
             _buildPartners(context, sponsorsAsync),
-
             const SizedBox(height: 24),
           ],
         ),
@@ -351,8 +354,8 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
       children: [
         Icon(
           icon,
-          color: _primaryColor,
-          size: 16,
+          color: AppColors.namaGoldenYellow,
+          size: 17,
         ),
         const SizedBox(width: 8),
         Text(
@@ -435,7 +438,7 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                     alignment: Alignment.bottomCenter,
                     margin: EdgeInsets.only(bottom: 7),
                     builder: DotSwiperPaginationBuilder(
-                      activeColor: _primaryColor,
+                      activeColor: AppColors.namaGoldenYellow,
                       color: Color(0xFFD6D6D6),
                       size: 5,
                       activeSize: 6,
@@ -491,7 +494,7 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                             color: const Color(0xFFF1F3F8),
                             child: const Icon(
                               Icons.broken_image_outlined,
-                              color: _primaryColor,
+                              color: AppColors.namaNavyBlue,
                             ),
                           ),
                         ),
@@ -554,19 +557,18 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                             },
                             child: Container(
                               height: 30,
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 15),
+                              padding: const EdgeInsets.symmetric(horizontal: 15),
                               decoration: BoxDecoration(
-                                color: _primaryColor,
+                                color: AppColors.namaGoldenYellow,
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               alignment: Alignment.center,
                               child: const Text(
                                 'View',
                                 style: TextStyle(
-                                  color: Colors.white,
+                                  color: AppColors.namaNavyBlue,
                                   fontSize: 10.5,
-                                  fontWeight: FontWeight.w800,
+                                  fontWeight: FontWeight.w900,
                                 ),
                               ),
                             ),
@@ -704,7 +706,7 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                 ? const Center(
                     child: Icon(
                       Icons.handshake_outlined,
-                      color: _primaryColor,
+                      color: AppColors.namaNavyBlue,
                       size: 30,
                     ),
                   )
@@ -734,7 +736,7 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                         return const Center(
                           child: Icon(
                             Icons.broken_image_outlined,
-                            color: _primaryColor,
+                            color: AppColors.namaNavyBlue,
                             size: 28,
                           ),
                         );
@@ -750,7 +752,7 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            color: _primaryColor,
+            color: AppColors.namaNavyBlue,
             fontSize: 11,
             fontWeight: FontWeight.w600,
             height: 1.2,
@@ -771,8 +773,6 @@ class _VenueImagePreviewScreen extends StatelessWidget {
     required this.title,
     required this.description,
   });
-
-  static const Color _primaryColor = Color(0xFF1B0F72);
 
   @override
   Widget build(BuildContext context) {
@@ -845,8 +845,8 @@ class _VenueImagePreviewScreen extends StatelessWidget {
         ],
       ),
       floatingActionButton: FloatingActionButton.small(
-        backgroundColor: _primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: AppColors.namaGoldenYellow,
+        foregroundColor: AppColors.namaNavyBlue,
         onPressed: () => Navigator.of(context).pop(),
         child: const Icon(Icons.close),
       ),
@@ -1088,7 +1088,7 @@ class _FeaturedSpeakerImageCard extends StatelessWidget {
   Widget _speakerFallback() {
     return Container(
       color: AppColors.avatarPlaceholder,
-      child: Icon(
+      child: const Icon(
         Icons.person,
         size: 58,
         color: AppColors.avatarPlaceholderText,

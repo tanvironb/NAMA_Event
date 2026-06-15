@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 
-/// Message icon with unread count badge
-/// Shows a small badge with the number of conversations with unread messages
 class MessageIconWithBadge extends ConsumerWidget {
   const MessageIconWithBadge({super.key});
 
@@ -14,46 +12,54 @@ class MessageIconWithBadge extends ConsumerWidget {
 
     return unreadCountAsync.when(
       data: (count) {
-        if (count == 0) {
-          return const Icon(Icons.message_outlined);
-        }
-
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            const Icon(Icons.message_outlined),
-            Positioned(
-              right: -6,
-              top: -6,
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: AppColors.errorRed,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(
-                  minWidth: 18,
-                  minHeight: 18,
-                ),
-                child: Center(
+            const Icon(
+              Icons.message_outlined,
+              color: AppColors.namaNavyBlue,
+            ),
+            if (count > 0)
+              Positioned(
+                right: -7,
+                top: -7,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(
+                    minWidth: 18,
+                    minHeight: 18,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.namaGoldenYellow,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white,
+                      width: 1.5,
+                    ),
+                  ),
                   child: Text(
                     count > 99 ? '99+' : count.toString(),
-                    style: const TextStyle(
-                      color: AppColors.namaWhite,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      height: 1.0,
-                    ),
                     textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.namaNavyBlue,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      height: 1,
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         );
       },
-      loading: () => const Icon(Icons.message_outlined),
-      error: (_, __) => const Icon(Icons.message_outlined),
+      loading: () => const Icon(
+        Icons.message_outlined,
+        color: AppColors.namaNavyBlue,
+      ),
+      error: (_, __) => const Icon(
+        Icons.message_outlined,
+        color: AppColors.namaNavyBlue,
+      ),
     );
   }
 }

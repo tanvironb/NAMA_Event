@@ -53,6 +53,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   final List<_SpeakerInput> _speakers = [];
 
   static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _goldColor = Color(0xFFE4B544);
+  static const Color _softGold = Color(0xFFFFF8E6);
   static const Color _textMuted = Color(0xFF6B7280);
 
   final List<String> _categories = const [
@@ -267,6 +269,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
                   primary: _primaryColor,
+                  secondary: _goldColor,
                 ),
           ),
           child: child!,
@@ -288,6 +291,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
                   primary: _primaryColor,
+                  secondary: _goldColor,
                 ),
           ),
           child: child!,
@@ -309,6 +313,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           data: Theme.of(context).copyWith(
             colorScheme: Theme.of(context).colorScheme.copyWith(
                   primary: _primaryColor,
+                  secondary: _goldColor,
                 ),
           ),
           child: child!,
@@ -822,10 +827,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             height: 38,
             width: 38,
             decoration: BoxDecoration(
-              color: const Color(0xFFF6F4FD),
+              color: _softGold,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: const Color(0xFFE8E4F8),
+                color: _goldColor.withOpacity(0.65),
               ),
             ),
             child: const Icon(
@@ -1212,7 +1217,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final aboutEventLength = _aboutEventController.text.length;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFFEFCF7),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(18, 18, 18, 24),
@@ -1230,7 +1235,16 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                   letterSpacing: 0.7,
                 ),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
+              Container(
+                height: 3,
+                width: 74,
+                decoration: BoxDecoration(
+                  color: _goldColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+              ),
+              const SizedBox(height: 8),
               Text(
                 widget.isEditMode
                     ? 'Update event details, speaker accounts, and continue to sessions.'
@@ -1431,6 +1445,8 @@ class _SectionContainer extends StatelessWidget {
     required this.child,
   });
 
+  static const Color _goldColor = Color(0xFFE4B544);
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1439,17 +1455,31 @@ class _SectionContainer extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFE8E4F8),
+          color: _goldColor.withOpacity(0.35),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.018),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: _goldColor.withOpacity(0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: child,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            height: 4,
+            width: 42,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: _goldColor,
+              borderRadius: BorderRadius.circular(20),
+            ),
+          ),
+          child,
+        ],
+      ),
     );
   }
 }
@@ -1466,6 +1496,8 @@ class _SectionHeader extends StatelessWidget {
   });
 
   static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _goldColor = Color(0xFFE4B544);
+  static const Color _softGold = Color(0xFFFFF8E6);
   static const Color _textMuted = Color(0xFF6B7280);
 
   @override
@@ -1476,13 +1508,26 @@ class _SectionHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
+              Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: _goldColor,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    title,
+                    style: const TextStyle(
                   color: _primaryColor,
                   fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 3),
               Text(
@@ -1504,10 +1549,10 @@ class _SectionHeader extends StatelessWidget {
             height: 36,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF4F1FF),
+              color: _softGold,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: _primaryColor,
+                color: _goldColor,
               ),
             ),
             child: const Row(
@@ -1549,7 +1594,7 @@ class _PartnerCard extends StatelessWidget {
   });
 
   static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _fieldBorder = Color(0xFFEADAA3);
   static const Color _textMuted = Color(0xFF6B7280);
 
   @override
@@ -1608,7 +1653,7 @@ class _PartnerCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFCFBFF),
+        color: const Color(0xFFFFFCF4),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: _fieldBorder,
@@ -1705,14 +1750,14 @@ class _PartnerCard extends StatelessWidget {
                 children: [
                   Icon(
                     Icons.upload_rounded,
-                    color: _primaryColor,
+                    color: Color(0xFFE4B544),
                     size: 17,
                   ),
                   SizedBox(width: 6),
                   Text(
                     'Upload Partner Logo',
                     style: TextStyle(
-                      color: _primaryColor,
+                      color: Color(0xFF1B0F72),
                       fontSize: 12,
                       fontWeight: FontWeight.w800,
                     ),
@@ -1735,7 +1780,7 @@ class _PartnerNameField extends StatelessWidget {
   });
 
   static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _fieldBorder = Color(0xFFEADAA3);
   static const Color _textMuted = Color(0xFF6B7280);
 
   @override
@@ -1810,7 +1855,7 @@ class _PickerField extends StatelessWidget {
   });
 
   static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _fieldBorder = Color(0xFFEADAA3);
   static const Color _textMuted = Color(0xFF6B7280);
 
   @override
@@ -1884,7 +1929,7 @@ class _DropdownField extends StatelessWidget {
   });
 
   static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _fieldBorder = Color(0xFFEADAA3);
   static const Color _textMuted = Color(0xFF6B7280);
 
   @override
@@ -1975,7 +2020,7 @@ class _ChipGroup extends StatelessWidget {
   });
 
   static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _fieldBorder = Color(0xFFEADAA3);
 
   @override
   Widget build(BuildContext context) {
@@ -2007,11 +2052,11 @@ class _ChipGroup extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: isSelected ? const Color(0xFFF4F1FF) : Colors.white,
+                  color: isSelected ? const Color(0xFFFFF3CC) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: isSelected ? _primaryColor : _fieldBorder,
-                    width: isSelected ? 1.1 : 1,
+                    color: isSelected ? const Color(0xFFE4B544) : _fieldBorder,
+                    width: isSelected ? 1.3 : 1,
                   ),
                 ),
                 child: Row(
@@ -2077,12 +2122,12 @@ class _ActionButton extends StatelessWidget {
         ),
         style: ElevatedButton.styleFrom(
           elevation: 0,
-          backgroundColor: isPrimary ? _primaryColor : Colors.white,
+          backgroundColor: isPrimary ? _primaryColor : const Color(0xFFFFF8E6),
           foregroundColor: isPrimary ? Colors.white : _primaryColor,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
             side: BorderSide(
-              color: isPrimary ? _primaryColor : const Color(0xFFE1DDF0),
+              color: isPrimary ? _primaryColor : const Color(0xFFE4B544),
             ),
           ),
         ),
@@ -2100,7 +2145,7 @@ class _FooterCredit extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Divider(color: Color(0xFFE2DEEF), indent: 50)),
+            Expanded(child: Divider(color: Color(0xFFEADAA3), indent: 50)),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),
               child: Text(
@@ -2112,7 +2157,7 @@ class _FooterCredit extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(child: Divider(color: Color(0xFFE2DEEF), endIndent: 50)),
+            Expanded(child: Divider(color: Color(0xFFEADAA3), endIndent: 50)),
           ],
         ),
         SizedBox(height: 8),
@@ -2140,7 +2185,7 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
   bool _obscurePassword = true;
 
   static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _fieldBorder = Color(0xFFEADAA3);
   static const Color _textMuted = Color(0xFF6B7280);
 
   @override
@@ -2151,7 +2196,7 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFCFBFF),
+        color: const Color(0xFFFFFCF4),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: _fieldBorder,
@@ -2176,7 +2221,7 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF4F1FF),
+                  color: const Color(0xFFFFF3CC),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
@@ -2348,7 +2393,7 @@ class _InputField extends StatelessWidget {
   });
 
   static const Color _primaryColor = Color(0xFF1B0F72);
-  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _fieldBorder = Color(0xFFEADAA3);
   static const Color _textMuted = Color(0xFF6B7280);
 
   @override

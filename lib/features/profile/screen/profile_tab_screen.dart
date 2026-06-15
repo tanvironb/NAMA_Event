@@ -119,7 +119,28 @@ class ProfileTabScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 34),
+                        
+                        const SizedBox(height: 18),
+                        Text(
+                          appUser.name,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.namaNavyBlue,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          appUser.email,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.namaMediumGray,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+
                         _buildMenuItem(
                           context,
                           icon: Icons.person,
@@ -243,7 +264,7 @@ class ProfileTabScreen extends ConsumerWidget {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.navyBlue.withOpacity(0.1),
+            color: AppColors.namaGoldenYellow.withOpacity(0.18),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(
@@ -272,8 +293,8 @@ class ProfileTabScreen extends ConsumerWidget {
         ),
         trailing: const Icon(
           Icons.chevron_right_rounded,
-          size: 20,
-          color: AppColors.namaMediumGray,
+          size: 24,
+          color: AppColors.namaGoldenYellow,
         ),
         onTap: onTap,
       ),

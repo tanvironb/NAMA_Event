@@ -3,6 +3,7 @@
 import 'package:card_swiper/card_swiper.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:flutter/material.dart';
 
 class VenueMapsCarousel extends StatelessWidget {
@@ -56,8 +57,7 @@ class VenueMapsCarousel extends StatelessWidget {
 
         final imageUrls = <String>[];
 
-        final venueImageUrl =
-            (data['venueImageUrl'] ?? '').toString().trim();
+        final venueImageUrl = (data['venueImageUrl'] ?? '').toString().trim();
 
         if (venueImageUrl.isNotEmpty) {
           imageUrls.add(venueImageUrl);
@@ -269,14 +269,14 @@ class VenueMapsCarousel extends StatelessWidget {
                   height: 30,
                   padding: const EdgeInsets.symmetric(horizontal: 15),
                   decoration: BoxDecoration(
-                    color: primaryBlue,
+                    color: AppColors.namaGoldenYellow,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   alignment: Alignment.center,
                   child: const Text(
                     'View',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: AppColors.namaNavyBlue,
                       fontSize: 10.5,
                       fontWeight: FontWeight.w800,
                     ),

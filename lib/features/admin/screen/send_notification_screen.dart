@@ -45,8 +45,7 @@ class SendNotificationScreen extends ConsumerStatefulWidget {
       _SendNotificationScreenState();
 }
 
-class _SendNotificationScreenState
-    extends ConsumerState<SendNotificationScreen> {
+class _SendNotificationScreenState extends ConsumerState<SendNotificationScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _titleController = TextEditingController();
@@ -66,6 +65,9 @@ class _SendNotificationScreenState
   static const Color _textMuted = Color(0xFF6B7280);
   static const Color _borderColor = Color(0xFFE1DDF0);
   static const Color _softPurple = Color(0xFFF6F4FD);
+  static const Color _softGold = Color(0xFFFFF8E6);
+  static const Color _gold = Color(0xFFE4B544);
+  static const Color _richGold = Color(0xFFD4A439);
 
   List<AppNotificationType> get _availableTypes {
     final sendable = AppNotificationType.values
@@ -120,9 +122,8 @@ class _SendNotificationScreenState
       _selectedType = availableTypes.first;
     }
 
-    _selectedAudience = _isValidAudience(widget.initialAudience)
-        ? widget.initialAudience!
-        : 'all';
+    _selectedAudience =
+        _isValidAudience(widget.initialAudience) ? widget.initialAudience! : 'all';
 
     _titleController.text = widget.initialTitle ?? '';
     _subtitleController.text = widget.initialSubtitle ?? '';
@@ -373,9 +374,8 @@ class _SendNotificationScreenState
                 ? 'Notification sent to $successCount user(s).'
                 : 'Sent to $successCount user(s), failed for $failureCount.',
           ),
-          backgroundColor: failureCount == 0
-              ? AppColors.successGreen
-              : AppColors.warningAmber,
+          backgroundColor:
+              failureCount == 0 ? AppColors.successGreen : AppColors.warningAmber,
         ),
       );
     } catch (e) {
@@ -519,11 +519,18 @@ class _SendNotificationScreenState
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF7F6FF),
+        color: _softGold,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFE1DDF0),
+          color: _gold.withOpacity(0.55),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: _gold.withOpacity(0.10),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -567,9 +574,16 @@ class _SendNotificationScreenState
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: AppColors.namaGoldenYellow,
-                width: 1.4,
+                color: _gold,
+                width: 1.6,
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: _gold.withOpacity(0.15),
+                  blurRadius: 14,
+                  offset: const Offset(0, 7),
+                ),
+              ],
             ),
             child: QrImageView(
               data: qrPayload,
@@ -588,8 +602,11 @@ class _SendNotificationScreenState
                 vertical: 11,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xFFF1EEFB),
+                color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: _gold.withOpacity(0.75),
+                ),
               ),
               child: Column(
                 children: [
@@ -653,11 +670,20 @@ class _SendNotificationScreenState
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         InkWell(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(14),
                           onTap: () => Navigator.of(context).pop(),
-                          child: const Padding(
-                            padding: EdgeInsets.only(top: 3, right: 10),
-                            child: Icon(
+                          child: Container(
+                            height: 38,
+                            width: 38,
+                            margin: const EdgeInsets.only(right: 10),
+                            decoration: BoxDecoration(
+                              color: _softGold,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: _gold.withOpacity(0.55),
+                              ),
+                            ),
+                            child: const Icon(
                               Icons.arrow_back,
                               color: AppColors.namaNavyBlue,
                               size: 20,
@@ -676,6 +702,15 @@ class _SendNotificationScreenState
                                   fontWeight: FontWeight.w900,
                                   color: AppColors.namaNavyBlue,
                                   letterSpacing: 0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Container(
+                                height: 3,
+                                width: 54,
+                                decoration: BoxDecoration(
+                                  color: _gold,
+                                  borderRadius: BorderRadius.circular(99),
                                 ),
                               ),
                               if (widget.isEventSpecific) ...[
@@ -805,9 +840,11 @@ class _SendNotificationScreenState
                                 vertical: 6,
                               ),
                               decoration: BoxDecoration(
-                                color: _softPurple,
+                                color: _softGold,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: _borderColor),
+                                border: Border.all(
+                                  color: _gold.withOpacity(0.55),
+                                ),
                               ),
                               child: Row(
                                 children: [
@@ -815,7 +852,8 @@ class _SendNotificationScreenState
                                     scale: 0.9,
                                     child: Checkbox(
                                       value: _hasTimestamp,
-                                      activeColor: AppColors.namaNavyBlue,
+                                      activeColor: _gold,
+                                      checkColor: _primaryColor,
                                       onChanged: (value) {
                                         setState(() {
                                           _hasTimestamp = value ?? false;
@@ -844,10 +882,10 @@ class _SendNotificationScreenState
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFF7F7FA),
+                                  color: _softGold.withOpacity(0.55),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: _borderColor,
+                                    color: _gold.withOpacity(0.45),
                                   ),
                                 ),
                                 child: Column(
@@ -909,6 +947,9 @@ class _SendNotificationScreenState
                                         minimumSize:
                                             const Size(double.infinity, 42),
                                         foregroundColor: AppColors.namaNavyBlue,
+                                        side: BorderSide(
+                                          color: _gold.withOpacity(0.7),
+                                        ),
                                         shape: RoundedRectangleBorder(
                                           borderRadius:
                                               BorderRadius.circular(12),
@@ -979,6 +1020,7 @@ class _SendNotificationScreenState
                                         ? AppColors.errorRed
                                         : AppColors.namaNavyBlue,
                                     foregroundColor: Colors.white,
+                                    elevation: 0,
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(12),
                                     ),
@@ -998,13 +1040,26 @@ class _SendNotificationScreenState
   }
 
   Widget _sectionLabel(String text) {
-    return Text(
-      text,
-      style: const TextStyle(
-        color: _primaryColor,
-        fontWeight: FontWeight.w800,
-        fontSize: 12.5,
-      ),
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 16,
+          decoration: BoxDecoration(
+            color: _gold,
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: const TextStyle(
+            color: _primaryColor,
+            fontWeight: FontWeight.w800,
+            fontSize: 12.5,
+          ),
+        ),
+      ],
     );
   }
 
@@ -1017,6 +1072,8 @@ class _SendNotificationScreenState
         color: _textMuted,
         fontSize: 12,
       ),
+      filled: true,
+      fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: 12,
         vertical: 12,
@@ -1030,8 +1087,8 @@ class _SendNotificationScreenState
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: _borderColor,
+        borderSide: BorderSide(
+          color: _gold.withOpacity(0.35),
         ),
       ),
       focusedBorder: OutlineInputBorder(
@@ -1086,9 +1143,16 @@ class _SelectableBox extends StatelessWidget {
 
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _borderColor = Color(0xFFE1DDF0);
+  static const Color _softGold = Color(0xFFFFF8E6);
+  static const Color _gold = Color(0xFFE4B544);
+  static const Color _richGold = Color(0xFFD4A439);
 
   @override
   Widget build(BuildContext context) {
+    final selectedColor = color == AppColors.errorRed ? color : _gold;
+    final selectedTextColor =
+        color == AppColors.errorRed ? color : _primaryColor;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -1101,10 +1165,14 @@ class _SelectableBox extends StatelessWidget {
             vertical: 8,
           ),
           decoration: BoxDecoration(
-            color: selected ? color.withOpacity(0.1) : Colors.white,
+            color: selected
+                ? (color == AppColors.errorRed
+                    ? color.withOpacity(0.10)
+                    : _softGold)
+                : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: selected ? color : _borderColor,
+              color: selected ? selectedColor : _borderColor,
               width: selected ? 1.3 : 1,
             ),
           ),
@@ -1113,14 +1181,16 @@ class _SelectableBox extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                color: selected ? color : _primaryColor,
+                color: selected
+                    ? (color == AppColors.errorRed ? color : _richGold)
+                    : _primaryColor,
                 size: 16,
               ),
               const SizedBox(width: 6),
               Text(
                 label,
                 style: TextStyle(
-                  color: selected ? color : _primaryColor,
+                  color: selected ? selectedTextColor : _primaryColor,
                   fontSize: 11.3,
                   fontWeight: FontWeight.w800,
                 ),
@@ -1145,6 +1215,8 @@ class _SmallToggleButton extends StatelessWidget {
   });
 
   static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _softGold = Color(0xFFFFF8E6);
+  static const Color _gold = Color(0xFFE4B544);
 
   @override
   Widget build(BuildContext context) {
@@ -1155,16 +1227,16 @@ class _SmallToggleButton extends StatelessWidget {
         height: 38,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? _primaryColor : Colors.white,
+          color: selected ? _softGold : Colors.white,
           borderRadius: BorderRadius.circular(11),
           border: Border.all(
-            color: selected ? _primaryColor : const Color(0xFFE1DDF0),
+            color: selected ? _gold : const Color(0xFFE1DDF0),
           ),
         ),
         child: Text(
           title,
-          style: TextStyle(
-            color: selected ? Colors.white : _primaryColor,
+          style: const TextStyle(
+            color: _primaryColor,
             fontSize: 11.5,
             fontWeight: FontWeight.w800,
           ),
@@ -1188,8 +1260,7 @@ class _AlertTypeSelectionDialog extends StatefulWidget {
       _AlertTypeSelectionDialogState();
 }
 
-class _AlertTypeSelectionDialogState
-    extends State<_AlertTypeSelectionDialog> {
+class _AlertTypeSelectionDialogState extends State<_AlertTypeSelectionDialog> {
   int _secondsLeft = 3;
   bool _canConfirm = false;
 
@@ -1291,8 +1362,7 @@ class _AlertConfirmationDialog extends StatefulWidget {
       _AlertConfirmationDialogState();
 }
 
-class _AlertConfirmationDialogState
-    extends State<_AlertConfirmationDialog> {
+class _AlertConfirmationDialogState extends State<_AlertConfirmationDialog> {
   int _secondsLeft = 3;
   bool _canConfirm = false;
 

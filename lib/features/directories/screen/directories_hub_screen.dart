@@ -1,15 +1,9 @@
-// lib/features/directories/screen/directories_hub_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/features/directories/screen/attendee_directory_screen.dart';
 import 'package:events_app_trueattempt/features/directories/screen/speaker_directory_screen.dart';
 
 class DirectoriesHubScreen extends StatelessWidget {
   const DirectoriesHubScreen({super.key});
-
-  static const Color _primaryColor = Color(0xFF0B0B83);
-  static const Color _tabBackgroundColor = Color(0xFFE7E4F5);
-  static const Color _tabSelectedColor = Color(0xFF4A3B95);
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +29,6 @@ class _DirectoriesHubContent extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Same Networking title for attendee, staff, and speaker.
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
               child: Text(
@@ -47,9 +40,7 @@ class _DirectoriesHubContent extends StatelessWidget {
                     ),
               ),
             ),
-
             const SizedBox(height: 10),
-
             Center(
               child: Container(
                 width: 200,
@@ -88,15 +79,13 @@ class _DirectoriesHubContent extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                   tabs: const [
-                    Tab(text: 'Attendees'),
+                    Tab(text: 'Delegates'),
                     Tab(text: 'Speakers'),
                   ],
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
             const Expanded(
               child: TabBarView(
                 children: [

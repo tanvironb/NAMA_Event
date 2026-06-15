@@ -32,6 +32,10 @@ class _EventAttendanceReportScreenState
   bool _isCopyingCsv = false;
   bool _isGeneratingCertificates = false;
 
+  static const Color _softGold = Color(0xFFFFF8E6);
+  static const Color _gold = AppColors.namaGoldenYellow;
+  static const Color _navy = AppColors.namaNavyBlue;
+
   @override
   void initState() {
     super.initState();
@@ -210,19 +214,21 @@ class _EventAttendanceReportScreenState
 
       if (downloadOnly) {
         await CertificatePreviewScreen.downloadCertificatePdf(
-          context: context,
-          certificate: certificate,
-          eventName: widget.eventName,
-        );
+  context: context,
+  certificate: certificate,
+  eventName: widget.eventName,
+  eventDate: DateTime.now(),
+);
         return;
       }
 
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => CertificatePreviewScreen(
-            certificate: certificate,
-            eventName: widget.eventName,
-          ),
+  certificate: certificate,
+  eventName: widget.eventName,
+  eventDate: DateTime.now(),
+),
         ),
       );
     } catch (e) {
@@ -310,7 +316,7 @@ class _EventAttendanceReportScreenState
             height: 32,
             width: 32,
             decoration: BoxDecoration(
-              color: const Color(0xFFF4F2FB),
+              color: _softGold,
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -340,7 +346,7 @@ class _EventAttendanceReportScreenState
             height: 32,
             width: 32,
             decoration: BoxDecoration(
-              color: const Color(0xFFF4F2FB),
+              color: _softGold,
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
@@ -359,8 +365,19 @@ class _EventAttendanceReportScreenState
       width: double.infinity,
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: AppColors.namaNavyBlue,
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.namaNavyBlue, AppColors.namaDeepNavy],
+        ),
         borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.namaNavyBlue.withOpacity(0.16),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -394,7 +411,7 @@ class _EventAttendanceReportScreenState
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFE4E0F2),
+          color: AppColors.namaGoldenYellow.withOpacity(0.35),
         ),
       ),
       child: TextField(
@@ -518,9 +535,8 @@ class _EventAttendanceReportScreenState
       height: 44,
       width: double.infinity,
       child: ElevatedButton.icon(
-        onPressed: _isGeneratingCertificates
-            ? null
-            : () => _generateCertificates(data),
+        onPressed:
+            _isGeneratingCertificates ? null : () => _generateCertificates(data),
         icon: _isGeneratingCertificates
             ? const SizedBox(
                 height: 17,
@@ -709,9 +725,8 @@ class _EventAttendanceReportScreenState
                 )
                 .toList();
 
-            final otherUsers = filteredParticipants
-                .where((participant) => !participant.isAttendee)
-                .toList();
+            final otherUsers =
+                filteredParticipants.where((p) => !p.isAttendee).toList();
 
             return RefreshIndicator(
               color: AppColors.namaNavyBlue,
@@ -1161,16 +1176,24 @@ class _SummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 105,
+      height: 112,
       padding: const EdgeInsets.all(13),
-      decoration: _cardDecoration(),
+      decoration: _cardDecoration(accentColor: color),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            color: color,
-            size: 24,
+          Container(
+            height: 32,
+            width: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 19,
+            ),
           ),
           const Spacer(),
           Text(
@@ -1222,7 +1245,7 @@ class _ParticipantCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
-      decoration: _cardDecoration(),
+      decoration: _cardDecoration(accentColor: AppColors.namaGoldenYellow),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1431,7 +1454,7 @@ class _SmallChip extends StatelessWidget {
         vertical: 5,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F2FB),
+        color: AppColors.namaGoldenYellow.withOpacity(0.12),
         borderRadius: BorderRadius.circular(30),
       ),
       child: Text(
@@ -1561,10 +1584,13 @@ class _InfoLine extends StatelessWidget {
   }
 }
 
-BoxDecoration _cardDecoration() {
+BoxDecoration _cardDecoration({Color? accentColor}) {
   return BoxDecoration(
     color: Colors.white,
     borderRadius: BorderRadius.circular(16),
+    border: Border.all(
+      color: (accentColor ?? AppColors.namaGoldenYellow).withOpacity(0.16),
+    ),
     boxShadow: [
       BoxShadow(
         color: Colors.black.withOpacity(0.045),

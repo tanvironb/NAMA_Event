@@ -32,6 +32,10 @@ class _EventReportDashboardScreenState
   bool _isGeneratingPdf = false;
 
   static const int maxReportPhotos = 10;
+  static const Color _navy = AppColors.namaNavyBlue;
+  static const Color _gold = AppColors.namaGoldenYellow;
+  static const Color _softGold = Color(0xFFFFF8E6);
+  static const Color _softNavy = Color(0xFFF4F3FF);
 
   @override
   void initState() {
@@ -150,10 +154,8 @@ class _EventReportDashboardScreenState
         if (a.startTime == null && b.startTime == null) {
           return a.title.compareTo(b.title);
         }
-
         if (a.startTime == null) return 1;
         if (b.startTime == null) return -1;
-
         return a.startTime!.compareTo(b.startTime!);
       });
 
@@ -172,10 +174,8 @@ class _EventReportDashboardScreenState
         if (a.createdAt == null && b.createdAt == null) {
           return a.userName.compareTo(b.userName);
         }
-
         if (a.createdAt == null) return 1;
         if (b.createdAt == null) return -1;
-
         return b.createdAt!.compareTo(a.createdAt!);
       });
 
@@ -196,10 +196,8 @@ class _EventReportDashboardScreenState
           if (userCompare != 0) return userCompare;
           return a.sessionTitle.compareTo(b.sessionTitle);
         }
-
         if (a.uploadedAt == null) return 1;
         if (b.uploadedAt == null) return -1;
-
         return b.uploadedAt!.compareTo(a.uploadedAt!);
       });
 
@@ -210,10 +208,8 @@ class _EventReportDashboardScreenState
         if (a.registeredAt == null && b.registeredAt == null) {
           return a.name.compareTo(b.name);
         }
-
         if (a.registeredAt == null) return 1;
         if (b.registeredAt == null) return -1;
-
         return a.registeredAt!.compareTo(b.registeredAt!);
       });
 
@@ -369,14 +365,15 @@ class _EventReportDashboardScreenState
 
       final key = '$userKey-${photo.sessionTitle.trim().toLowerCase()}';
 
-      if (!groupsMap.containsKey(key)) {
-        groupsMap[key] = _EventPhotoGroup(
+      groupsMap.putIfAbsent(
+        key,
+        () => _EventPhotoGroup(
           userName: photo.userName,
           userEmail: photo.userEmail,
           sessionTitle: photo.sessionTitle,
           photos: [],
-        );
-      }
+        ),
+      );
 
       groupsMap[key]!.photos.add(photo);
     }
@@ -387,22 +384,9 @@ class _EventReportDashboardScreenState
   Widget _header() {
     return Row(
       children: [
-        InkWell(
+        _HeaderIconButton(
+          icon: Icons.arrow_back_ios_new_rounded,
           onTap: () => Navigator.of(context).pop(),
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            height: 32,
-            width: 32,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF4F2FB),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: AppColors.namaNavyBlue,
-              size: 14,
-            ),
-          ),
         ),
         const SizedBox(width: 12),
         const Expanded(
@@ -411,28 +395,15 @@ class _EventReportDashboardScreenState
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: AppColors.namaNavyBlue,
+              color: _navy,
               fontSize: 18,
               fontWeight: FontWeight.w900,
             ),
           ),
         ),
-        InkWell(
+        _HeaderIconButton(
+          icon: Icons.refresh_rounded,
           onTap: _refresh,
-          borderRadius: BorderRadius.circular(10),
-          child: Container(
-            height: 32,
-            width: 32,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF4F2FB),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(
-              Icons.refresh_rounded,
-              color: AppColors.namaNavyBlue,
-              size: 18,
-            ),
-          ),
         ),
       ],
     );
@@ -441,51 +412,91 @@ class _EventReportDashboardScreenState
   Widget _overviewCard(_EventReportDashboardData data) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(15),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.namaNavyBlue,
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF1B1464),
+            Color(0xFF0F0E3C),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: _navy.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          const Text(
-            'Report Overview',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            data.eventName,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-              height: 1.35,
-            ),
-          ),
-          if (data.dateText.isNotEmpty) ...[
-            const SizedBox(height: 5),
-            Text(
-              data.dateText,
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 11.5,
+          Positioned(
+            right: -22,
+            top: -26,
+            child: Container(
+              height: 105,
+              width: 105,
+              decoration: BoxDecoration(
+                color: _gold.withOpacity(0.16),
+                shape: BoxShape.circle,
               ),
             ),
-          ],
-          const SizedBox(height: 10),
-          Text(
-            data.description.trim().isEmpty
-                ? 'View event attendance, certificates, feedback, photos, notes, and full report details.'
-                : data.description,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 11.5,
-              height: 1.35,
+          ),
+          Positioned(
+            right: 8,
+            top: 6,
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              color: _gold.withOpacity(0.8),
+              size: 38,
             ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Report Overview',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                data.eventName,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.5,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (data.dateText.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Text(
+                  data.dateText,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 11),
+              Text(
+                data.description.trim().isEmpty
+                    ? 'View event attendance, certificates, feedback, photos, notes, and full report details.'
+                    : data.description,
+                style: const TextStyle(
+                  color: Colors.white70,
+                  fontSize: 11.5,
+                  height: 1.35,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -502,7 +513,7 @@ class _EventReportDashboardScreenState
                 title: 'Total Users',
                 value: data.totalUsers.toString(),
                 icon: Icons.people_alt_outlined,
-                color: AppColors.namaNavyBlue,
+                color: _navy,
               ),
             ),
             const SizedBox(width: 10),
@@ -511,7 +522,7 @@ class _EventReportDashboardScreenState
                 title: 'Attendees',
                 value: data.attendees.toString(),
                 icon: Icons.groups_rounded,
-                color: AppColors.namaGoldenYellow,
+                color: _gold,
               ),
             ),
           ],
@@ -546,7 +557,7 @@ class _EventReportDashboardScreenState
                 title: 'Speakers',
                 value: data.speakers.toString(),
                 icon: Icons.record_voice_over_rounded,
-                color: AppColors.namaNavyBlue,
+                color: _navy,
               ),
             ),
             const SizedBox(width: 10),
@@ -555,7 +566,7 @@ class _EventReportDashboardScreenState
                 title: 'Certificates',
                 value: data.certificates.toString(),
                 icon: Icons.workspace_premium_rounded,
-                color: AppColors.namaGoldenYellow,
+                color: _gold,
               ),
             ),
           ],
@@ -572,7 +583,7 @@ class _EventReportDashboardScreenState
           title: 'Attendance Details',
           subtitle:
               'View present attendees, absent attendees, speakers, staff, admins, and certificate status.',
-          color: AppColors.namaGoldenYellow,
+          color: _gold,
           onTap: _openAttendanceDetails,
         ),
         _ActionCard(
@@ -580,7 +591,7 @@ class _EventReportDashboardScreenState
           title: 'Edit Report Notes',
           subtitle:
               'Add objectives, highlights, outcomes, challenges, recommendations, and conclusion.',
-          color: AppColors.namaNavyBlue,
+          color: _navy,
           onTap: _openEditReportNotes,
         ),
       ],
@@ -588,42 +599,19 @@ class _EventReportDashboardScreenState
   }
 
   Widget _detailsSection(_EventReportDashboardData data) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: _cardDecoration(),
+    return _InfoCard(
       child: Column(
         children: [
-          _MetricRow(
-            label: 'Total Sessions',
-            value: data.sessions.length.toString(),
-          ),
-          _MetricRow(
-            label: 'Feedback Responses',
-            value: data.feedbacks.length.toString(),
-          ),
-          _MetricRow(
-            label: 'Approved Photos',
-            value: data.approvedPhotos.length.toString(),
-          ),
-          _MetricRow(
-            label: 'Registered Participants',
-            value: data.registeredParticipants.length.toString(),
-          ),
+          _MetricRow(label: 'Total Sessions', value: data.sessions.length.toString()),
+          _MetricRow(label: 'Feedback Responses', value: data.feedbacks.length.toString()),
+          _MetricRow(label: 'Approved Photos', value: data.approvedPhotos.length.toString()),
+          _MetricRow(label: 'Registered Participants', value: data.registeredParticipants.length.toString()),
           _MetricRow(
             label: 'Report Photos Limit',
-            value:
-                '${data.approvedPhotos.take(maxReportPhotos).length}/$maxReportPhotos',
+            value: '${data.approvedPhotos.take(maxReportPhotos).length}/$maxReportPhotos',
           ),
-          _MetricRow(
-            label: 'Staff & Admins',
-            value: data.staffAdmins.toString(),
-          ),
-          _MetricRow(
-            label: 'Attendance Rate',
-            value: '${data.attendanceRate}%',
-            isLast: true,
-          ),
+          _MetricRow(label: 'Staff & Admins', value: data.staffAdmins.toString()),
+          _MetricRow(label: 'Attendance Rate', value: '${data.attendanceRate}%', isLast: true),
         ],
       ),
     );
@@ -641,37 +629,16 @@ class _EventReportDashboardScreenState
       );
     }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: _cardDecoration(),
+    return _InfoCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _NoteBlock(
-            title: 'Event Objectives',
-            value: data.reportNotes.eventObjectives,
-          ),
-          _NoteBlock(
-            title: 'Key Highlights',
-            value: data.reportNotes.keyHighlights,
-          ),
-          _NoteBlock(
-            title: 'Main Outcomes',
-            value: data.reportNotes.mainOutcomes,
-          ),
-          _NoteBlock(
-            title: 'Challenges',
-            value: data.reportNotes.challenges,
-          ),
-          _NoteBlock(
-            title: 'Recommendations',
-            value: data.reportNotes.recommendations,
-          ),
-          _NoteBlock(
-            title: 'Conclusion',
-            value: data.reportNotes.conclusion,
-          ),
+          _NoteBlock(title: 'Event Objectives', value: data.reportNotes.eventObjectives),
+          _NoteBlock(title: 'Key Highlights', value: data.reportNotes.keyHighlights),
+          _NoteBlock(title: 'Main Outcomes', value: data.reportNotes.mainOutcomes),
+          _NoteBlock(title: 'Challenges', value: data.reportNotes.challenges),
+          _NoteBlock(title: 'Recommendations', value: data.reportNotes.recommendations),
+          _NoteBlock(title: 'Conclusion', value: data.reportNotes.conclusion),
         ],
       ),
     );
@@ -694,66 +661,28 @@ class _EventReportDashboardScreenState
   }
 
   Widget _engagementSection(_EventReportDashboardData data) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: _cardDecoration(),
+    return _InfoCard(
       child: Column(
         children: [
-          _MetricRow(
-            label: 'Session Check-ins',
-            value: data.totalSessionCheckIns.toString(),
-          ),
-          _MetricRow(
-            label: 'Chat Messages',
-            value: data.totalMessages.toString(),
-          ),
-          _MetricRow(
-            label: 'Feedback Responses',
-            value: data.feedbacks.length.toString(),
-          ),
-          _MetricRow(
-            label: 'Approved Photos',
-            value: data.approvedPhotos.length.toString(),
-            isLast: true,
-          ),
+          _MetricRow(label: 'Session Check-ins', value: data.totalSessionCheckIns.toString()),
+          _MetricRow(label: 'Chat Messages', value: data.totalMessages.toString()),
+          _MetricRow(label: 'Feedback Responses', value: data.feedbacks.length.toString()),
+          _MetricRow(label: 'Approved Photos', value: data.approvedPhotos.length.toString(), isLast: true),
         ],
       ),
     );
   }
 
   Widget _feedbackSummarySection(_EventReportDashboardData data) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: _cardDecoration(),
+    return _InfoCard(
       child: Column(
         children: [
-          _MetricRow(
-            label: 'Total Feedback Responses',
-            value: data.feedbacks.length.toString(),
-          ),
-          _MetricRow(
-            label: 'Average Overall Rating',
-            value: _formatRating(data.averageOverallRating),
-          ),
-          _MetricRow(
-            label: 'Average Session Quality',
-            value: _formatRating(data.averageSessionQualityRating),
-          ),
-          _MetricRow(
-            label: 'Average Speaker Rating',
-            value: _formatRating(data.averageSpeakerRating),
-          ),
-          _MetricRow(
-            label: 'Average Venue Rating',
-            value: _formatRating(data.averageVenueRating),
-          ),
-          _MetricRow(
-            label: 'Average App Experience',
-            value: _formatRating(data.averageAppExperienceRating),
-            isLast: true,
-          ),
+          _MetricRow(label: 'Total Feedback Responses', value: data.feedbacks.length.toString()),
+          _MetricRow(label: 'Average Overall Rating', value: _formatRating(data.averageOverallRating)),
+          _MetricRow(label: 'Average Session Quality', value: _formatRating(data.averageSessionQualityRating)),
+          _MetricRow(label: 'Average Speaker Rating', value: _formatRating(data.averageSpeakerRating)),
+          _MetricRow(label: 'Average Venue Rating', value: _formatRating(data.averageVenueRating)),
+          _MetricRow(label: 'Average App Experience', value: _formatRating(data.averageAppExperienceRating), isLast: true),
         ],
       ),
     );
@@ -798,19 +727,13 @@ class _EventReportDashboardScreenState
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.namaGoldenYellow.withOpacity(0.10),
+            color: _softGold,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.namaGoldenYellow.withOpacity(0.25),
-            ),
+            border: Border.all(color: _gold.withOpacity(0.35)),
           ),
           child: Row(
             children: [
-              const Icon(
-                Icons.info_outline_rounded,
-                color: AppColors.namaGoldenYellow,
-                size: 18,
-              ),
+              const Icon(Icons.info_outline_rounded, color: _gold, size: 18),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -818,7 +741,7 @@ class _EventReportDashboardScreenState
                       ? 'Showing $totalShown photos only. Report limit is max $maxReportPhotos photos.'
                       : 'Showing $totalShown approved photo${totalShown == 1 ? '' : 's'} in the report.',
                   style: const TextStyle(
-                    color: AppColors.namaNavyBlue,
+                    color: _navy,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w800,
                     height: 1.3,
@@ -828,9 +751,7 @@ class _EventReportDashboardScreenState
             ],
           ),
         ),
-        ...groups.map((group) {
-          return _PhotoGroupCard(group: group);
-        }),
+        ...groups.map((group) => _PhotoGroupCard(group: group)),
       ],
     );
   }
@@ -853,37 +774,19 @@ class _EventReportDashboardScreenState
   }
 
   Widget _systemNotes() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(15),
-      decoration: _cardDecoration(),
-      child: const Column(
+    return const _InfoCard(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _BulletText(
-            text:
-                'Attendance rate is calculated using event check-ins compared with registered attendees.',
-          ),
+          _BulletText(text: 'Attendance rate is calculated using event check-ins compared with registered attendees.'),
           SizedBox(height: 7),
-          _BulletText(
-            text:
-                'Only photos approved by admin are included in the event report and PDF gallery.',
-          ),
+          _BulletText(text: 'Only photos approved by admin are included in the event report and PDF gallery.'),
           SizedBox(height: 7),
-          _BulletText(
-            text:
-                'Event report photo gallery shows maximum 10 photos, grouped by attendee and session, with maximum 3 photos per row.',
-          ),
+          _BulletText(text: 'Event report photo gallery shows maximum 10 photos, grouped by attendee and session, with maximum 3 photos per row.'),
           SizedBox(height: 7),
-          _BulletText(
-            text:
-                'Feedback details are collected directly from attendee event feedback forms.',
-          ),
+          _BulletText(text: 'Feedback details are collected directly from attendee event feedback forms.'),
           SizedBox(height: 7),
-          _BulletText(
-            text:
-                'Certificates are generated inside Attendance Details for present attendees and assigned speakers.',
-          ),
+          _BulletText(text: 'Certificates are generated inside Attendance Details for present attendees and assigned speakers.'),
         ],
       ),
     );
@@ -907,19 +810,14 @@ class _EventReportDashboardScreenState
             : const Icon(Icons.picture_as_pdf_rounded, size: 18),
         label: Text(
           _isGeneratingPdf ? 'Generating PDF...' : 'Generate Event Report PDF',
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w900,
-          ),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
         ),
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.namaNavyBlue,
-          disabledBackgroundColor: AppColors.namaNavyBlue.withOpacity(0.55),
+          backgroundColor: _navy,
+          disabledBackgroundColor: _navy.withOpacity(0.55),
           foregroundColor: Colors.white,
           elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         ),
       ),
     );
@@ -935,9 +833,7 @@ class _EventReportDashboardScreenState
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
-                child: CircularProgressIndicator(
-                  color: AppColors.namaNavyBlue,
-                ),
+                child: CircularProgressIndicator(color: _navy),
               );
             }
 
@@ -948,16 +844,12 @@ class _EventReportDashboardScreenState
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
-                        Icons.error_outline_rounded,
-                        color: Colors.red,
-                        size: 34,
-                      ),
+                      const Icon(Icons.error_outline_rounded, color: Colors.red, size: 34),
                       const SizedBox(height: 12),
                       const Text(
                         'Unable to load event report',
                         style: TextStyle(
-                          color: AppColors.namaNavyBlue,
+                          color: _navy,
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
                         ),
@@ -976,7 +868,7 @@ class _EventReportDashboardScreenState
                       ElevatedButton(
                         onPressed: _refresh,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.namaNavyBlue,
+                          backgroundColor: _navy,
                           foregroundColor: Colors.white,
                           elevation: 0,
                         ),
@@ -995,7 +887,7 @@ class _EventReportDashboardScreenState
                 );
 
             return RefreshIndicator(
-              color: AppColors.namaNavyBlue,
+              color: _navy,
               onRefresh: () async => _refresh(),
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
@@ -1068,7 +960,6 @@ class _EventReportPdfGenerator {
 
     final limitedPhotos = data.approvedPhotos.take(maxReportPhotos).toList();
     final photoGroups = _groupPhotosForPdf(limitedPhotos);
-
     final photoImages = <String, pw.ImageProvider?>{};
 
     for (final photo in limitedPhotos) {
@@ -1085,50 +976,10 @@ class _EventReportPdfGenerator {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(28),
-        theme: pw.ThemeData.withFont(
-          base: regularFont,
-          bold: boldFont,
-        ),
+        theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
         build: (context) {
           return [
-            pw.Container(
-              width: double.infinity,
-              padding: const pw.EdgeInsets.all(16),
-              decoration: pw.BoxDecoration(
-                color: PdfColors.indigo900,
-                borderRadius: pw.BorderRadius.circular(8),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text(
-                    'NAMA Foundation',
-                    style: pw.TextStyle(
-                      color: PdfColors.amber,
-                      fontSize: 14,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 8),
-                  pw.Text(
-                    'Event Report',
-                    style: pw.TextStyle(
-                      color: PdfColors.white,
-                      fontSize: 22,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                  pw.SizedBox(height: 5),
-                  pw.Text(
-                    _pdfSafe(data.eventName),
-                    style: const pw.TextStyle(
-                      color: PdfColors.white,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _pdfHeader(data),
             pw.SizedBox(height: 18),
             _pdfTitle('Report Summary'),
             pw.SizedBox(height: 8),
@@ -1151,20 +1002,11 @@ class _EventReportPdfGenerator {
               ['Total Sessions', data.sessions.length.toString()],
               ['Feedback Responses', data.feedbacks.length.toString()],
               ['Approved Photos', data.approvedPhotos.length.toString()],
-              [
-                'Report Photos Included',
-                '${limitedPhotos.length}/$maxReportPhotos',
-              ],
-              [
-                'Registered Participants',
-                data.registeredParticipants.length.toString(),
-              ],
+              ['Report Photos Included', '${limitedPhotos.length}/$maxReportPhotos'],
+              ['Registered Participants', data.registeredParticipants.length.toString()],
               ['Session Check-ins', data.totalSessionCheckIns.toString()],
               ['Chat Messages', data.totalMessages.toString()],
-              [
-                'Average Overall Rating',
-                _formatRating(data.averageOverallRating),
-              ],
+              ['Average Overall Rating', _formatRating(data.averageOverallRating)],
             ]),
             if (data.reportNotes.hasContent) ...[
               pw.SizedBox(height: 18),
@@ -1175,31 +1017,16 @@ class _EventReportPdfGenerator {
             pw.SizedBox(height: 18),
             _pdfTitle('Session Performance'),
             pw.SizedBox(height: 8),
-            if (data.sessions.isEmpty)
-              pw.Text('No sessions found.')
-            else
-              _pdfSessionTable(data.sessions),
+            data.sessions.isEmpty ? pw.Text('No sessions found.') : _pdfSessionTable(data.sessions),
             pw.SizedBox(height: 18),
             _pdfTitle('Feedback Summary'),
             pw.SizedBox(height: 8),
             _pdfInfoTable([
-              [
-                'Average Overall Rating',
-                _formatRating(data.averageOverallRating),
-              ],
-              [
-                'Average Session Quality',
-                _formatRating(data.averageSessionQualityRating),
-              ],
-              [
-                'Average Speaker Rating',
-                _formatRating(data.averageSpeakerRating),
-              ],
+              ['Average Overall Rating', _formatRating(data.averageOverallRating)],
+              ['Average Session Quality', _formatRating(data.averageSessionQualityRating)],
+              ['Average Speaker Rating', _formatRating(data.averageSpeakerRating)],
               ['Average Venue Rating', _formatRating(data.averageVenueRating)],
-              [
-                'Average App Experience',
-                _formatRating(data.averageAppExperienceRating),
-              ],
+              ['Average App Experience', _formatRating(data.averageAppExperienceRating)],
             ]),
             pw.SizedBox(height: 18),
             _pdfTitle('Attendee Feedback'),
@@ -1207,35 +1034,7 @@ class _EventReportPdfGenerator {
             if (data.feedbacks.isEmpty)
               pw.Text('No attendee feedback submitted yet.')
             else
-              ...data.feedbacks.map((feedback) {
-                return pw.Container(
-                  margin: const pw.EdgeInsets.only(bottom: 8),
-                  padding: const pw.EdgeInsets.all(8),
-                  decoration: pw.BoxDecoration(
-                    border: pw.Border.all(color: PdfColors.grey300),
-                    borderRadius: pw.BorderRadius.circular(6),
-                  ),
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        _pdfSafe(feedback.userName),
-                        style: pw.TextStyle(
-                          fontSize: 10,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      if (feedback.additionalComments.isNotEmpty) ...[
-                        pw.SizedBox(height: 4),
-                        pw.Text(
-                          _pdfSafe(feedback.additionalComments),
-                          style: const pw.TextStyle(fontSize: 9),
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              }),
+              ...data.feedbacks.map(_pdfFeedbackCard),
             pw.SizedBox(height: 18),
             _pdfTitle('Photo Gallery'),
             pw.SizedBox(height: 8),
@@ -1269,10 +1068,7 @@ class _EventReportPdfGenerator {
                       pw.SizedBox(height: 3),
                       pw.Text(
                         'Uploaded by: ${_pdfSafe(group.userName)}',
-                        style: const pw.TextStyle(
-                          fontSize: 8.5,
-                          color: PdfColors.grey700,
-                        ),
+                        style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey700),
                       ),
                       pw.SizedBox(height: 6),
                       _pdfPhotoGrid(group.photos, photoImages),
@@ -1284,16 +1080,53 @@ class _EventReportPdfGenerator {
             pw.SizedBox(height: 18),
             _pdfTitle('Registered Participants'),
             pw.SizedBox(height: 8),
-            if (data.registeredParticipants.isEmpty)
-              pw.Text('No registered participants added to report yet.')
-            else
-              _pdfRegisteredParticipantsTable(data.registeredParticipants),
+            data.registeredParticipants.isEmpty
+                ? pw.Text('No registered participants added to report yet.')
+                : _pdfRegisteredParticipantsTable(data.registeredParticipants),
           ];
         },
       ),
     );
 
     return pdf.save();
+  }
+
+  static pw.Widget _pdfHeader(_EventReportDashboardData data) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.all(16),
+      decoration: pw.BoxDecoration(
+        color: PdfColors.indigo900,
+        borderRadius: pw.BorderRadius.circular(8),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            'NAMA Foundation',
+            style: pw.TextStyle(
+              color: PdfColors.amber,
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Text(
+            'Event Report',
+            style: pw.TextStyle(
+              color: PdfColors.white,
+              fontSize: 22,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 5),
+          pw.Text(
+            _pdfSafe(data.eventName),
+            style: const pw.TextStyle(color: PdfColors.white, fontSize: 11),
+          ),
+        ],
+      ),
+    );
   }
 
   static List<_EventPhotoGroup> _groupPhotosForPdf(
@@ -1308,14 +1141,15 @@ class _EventReportPdfGenerator {
 
       final key = '$userKey-${photo.sessionTitle.trim().toLowerCase()}';
 
-      if (!groupsMap.containsKey(key)) {
-        groupsMap[key] = _EventPhotoGroup(
+      groupsMap.putIfAbsent(
+        key,
+        () => _EventPhotoGroup(
           userName: photo.userName,
           userEmail: photo.userEmail,
           sessionTitle: photo.sessionTitle,
           photos: [],
-        );
-      }
+        ),
+      );
 
       groupsMap[key]!.photos.add(photo);
     }
@@ -1369,10 +1203,7 @@ class _EventReportPdfGenerator {
                     : pw.ClipRRect(
                         horizontalRadius: 4,
                         verticalRadius: 4,
-                        child: pw.Image(
-                          image,
-                          fit: pw.BoxFit.cover,
-                        ),
+                        child: pw.Image(image, fit: pw.BoxFit.cover),
                       ),
               ),
             );
@@ -1397,34 +1228,17 @@ class _EventReportPdfGenerator {
 
   static pw.Widget _pdfInfoTable(List<List<String>> rows) {
     return pw.Table.fromTextArray(
-      border: pw.TableBorder.all(
-        color: PdfColors.grey300,
-        width: 0.6,
-      ),
-      cellPadding: const pw.EdgeInsets.symmetric(
-        horizontal: 8,
-        vertical: 6,
-      ),
+      border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.6),
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       headerStyle: pw.TextStyle(
         fontSize: 10,
         fontWeight: pw.FontWeight.bold,
         color: PdfColors.white,
       ),
-      headerDecoration: const pw.BoxDecoration(
-        color: PdfColors.indigo900,
-      ),
-      cellStyle: const pw.TextStyle(
-        fontSize: 9.5,
-      ),
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo900),
+      cellStyle: const pw.TextStyle(fontSize: 9.5),
       headers: ['Item', 'Details'],
-      data: rows
-          .map(
-            (row) => [
-              _pdfSafe(row[0]),
-              _pdfSafe(row[1]),
-            ],
-          )
-          .toList(),
+      data: rows.map((row) => [_pdfSafe(row[0]), _pdfSafe(row[1])]).toList(),
     );
   }
 
@@ -1432,14 +1246,8 @@ class _EventReportPdfGenerator {
     List<_RegistrationReportItem> participants,
   ) {
     return pw.Table.fromTextArray(
-      border: pw.TableBorder.all(
-        color: PdfColors.grey300,
-        width: 0.6,
-      ),
-      cellPadding: const pw.EdgeInsets.symmetric(
-        horizontal: 4,
-        vertical: 5,
-      ),
+      border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.6),
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
       columnWidths: {
         0: const pw.FixedColumnWidth(20),
         1: const pw.FlexColumnWidth(2.5),
@@ -1452,32 +1260,17 @@ class _EventReportPdfGenerator {
         fontWeight: pw.FontWeight.bold,
         color: PdfColors.white,
       ),
-      headerDecoration: const pw.BoxDecoration(
-        color: PdfColors.indigo900,
-      ),
-      cellStyle: const pw.TextStyle(
-        fontSize: 7.4,
-      ),
-      headers: [
-        '#',
-        'Name',
-        'Email',
-        'Role',
-        'Registered At',
-      ],
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo900),
+      cellStyle: const pw.TextStyle(fontSize: 7.4),
+      headers: ['#', 'Name', 'Email', 'Role', 'Registered At'],
       data: List.generate(participants.length, (index) {
         final participant = participants[index];
-
         return [
           '${index + 1}',
           _pdfSafe(participant.name),
           _pdfSafe(participant.email.isEmpty ? '-' : participant.email),
           _pdfSafe(participant.role),
-          _pdfSafe(
-            participant.registeredAt == null
-                ? '-'
-                : _formatDate(participant.registeredAt!),
-          ),
+          _pdfSafe(participant.registeredAt == null ? '-' : _formatDate(participant.registeredAt!)),
         ];
       }),
     );
@@ -1485,14 +1278,8 @@ class _EventReportPdfGenerator {
 
   static pw.Widget _pdfSessionTable(List<_SessionReportItem> sessions) {
     return pw.Table.fromTextArray(
-      border: pw.TableBorder.all(
-        color: PdfColors.grey300,
-        width: 0.6,
-      ),
-      cellPadding: const pw.EdgeInsets.symmetric(
-        horizontal: 4,
-        vertical: 5,
-      ),
+      border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.6),
+      cellPadding: const pw.EdgeInsets.symmetric(horizontal: 4, vertical: 5),
       columnWidths: {
         0: const pw.FixedColumnWidth(20),
         1: const pw.FlexColumnWidth(3.4),
@@ -1506,23 +1293,11 @@ class _EventReportPdfGenerator {
         fontWeight: pw.FontWeight.bold,
         color: PdfColors.white,
       ),
-      headerDecoration: const pw.BoxDecoration(
-        color: PdfColors.indigo900,
-      ),
-      cellStyle: const pw.TextStyle(
-        fontSize: 7.4,
-      ),
-      headers: [
-        '#',
-        'Session',
-        'Time',
-        'Location',
-        'Check-ins',
-        'Messages',
-      ],
+      headerDecoration: const pw.BoxDecoration(color: PdfColors.indigo900),
+      cellStyle: const pw.TextStyle(fontSize: 7.4),
+      headers: ['#', 'Session', 'Time', 'Location', 'Check-ins', 'Messages'],
       data: List.generate(sessions.length, (index) {
         final session = sessions[index];
-
         return [
           '${index + 1}',
           _pdfSafe(session.title),
@@ -1532,6 +1307,38 @@ class _EventReportPdfGenerator {
           session.totalMessages.toString(),
         ];
       }),
+    );
+  }
+
+  static pw.Widget _pdfFeedbackCard(_FeedbackReportItem feedback) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 8),
+      padding: const pw.EdgeInsets.all(8),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey300),
+        borderRadius: pw.BorderRadius.circular(6),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Text(
+            _pdfSafe(feedback.userName),
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.SizedBox(height: 3),
+          pw.Text(
+            'Overall: ${_ratingText(feedback.overallRating)} | Session: ${_ratingText(feedback.sessionQualityRating)} | Speaker: ${_ratingText(feedback.speakerRating)} | Venue: ${_ratingText(feedback.venueRating)} | App: ${_ratingText(feedback.appExperienceRating)}',
+            style: const pw.TextStyle(fontSize: 8.5),
+          ),
+          if (feedback.additionalComments.isNotEmpty) ...[
+            pw.SizedBox(height: 4),
+            pw.Text(
+              _pdfSafe(feedback.additionalComments),
+              style: const pw.TextStyle(fontSize: 9),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1558,10 +1365,7 @@ class _EventReportPdfGenerator {
               pw.SizedBox(height: 3),
               pw.Text(
                 _pdfSafe(value),
-                style: const pw.TextStyle(
-                  fontSize: 9.5,
-                  height: 1.4,
-                ),
+                style: const pw.TextStyle(fontSize: 9.5, height: 1.4),
               ),
             ],
           ),
@@ -1642,21 +1446,14 @@ class _EventReportDashboardData {
 
   String get dateText {
     if (startDate == null && endDate == null) return '';
-
-    if (startDate != null && endDate == null) {
-      return _formatDate(startDate!);
-    }
-
-    if (startDate == null && endDate != null) {
-      return _formatDate(endDate!);
-    }
+    if (startDate != null && endDate == null) return _formatDate(startDate!);
+    if (startDate == null && endDate != null) return _formatDate(endDate!);
 
     final sameDay = startDate!.year == endDate!.year &&
         startDate!.month == endDate!.month &&
         startDate!.day == endDate!.day;
 
     if (sameDay) return _formatDate(startDate!);
-
     return '${_formatDate(startDate!)} - ${_formatDate(endDate!)}';
   }
 
@@ -1792,25 +1589,15 @@ class _FeedbackReportItem {
 
     return _FeedbackReportItem(
       id: doc.id,
-      userName: (data['userName'] ??
-              data['name'] ??
-              data['fullName'] ??
-              'Attendee')
-          .toString(),
+      userName: (data['userName'] ?? data['name'] ?? data['fullName'] ?? 'Attendee').toString(),
       userEmail: (data['userEmail'] ?? data['email'] ?? '').toString(),
-      overallRating:
-          ((data['overallRating'] ?? data['rating'] ?? 0) as num?)
-                  ?.toDouble() ??
-              0,
-      sessionQualityRating:
-          ((data['sessionQualityRating'] ?? 0) as num?)?.toDouble() ?? 0,
+      overallRating: ((data['overallRating'] ?? data['rating'] ?? 0) as num?)?.toDouble() ?? 0,
+      sessionQualityRating: ((data['sessionQualityRating'] ?? 0) as num?)?.toDouble() ?? 0,
       speakerRating: ((data['speakerRating'] ?? 0) as num?)?.toDouble() ?? 0,
       venueRating: ((data['venueRating'] ?? 0) as num?)?.toDouble() ?? 0,
-      appExperienceRating:
-          ((data['appExperienceRating'] ?? 0) as num?)?.toDouble() ?? 0,
+      appExperienceRating: ((data['appExperienceRating'] ?? 0) as num?)?.toDouble() ?? 0,
       likedMost: (data['likedMost'] ?? '').toString(),
-      improvementSuggestion:
-          (data['improvementSuggestion'] ?? '').toString(),
+      improvementSuggestion: (data['improvementSuggestion'] ?? '').toString(),
       additionalComments: (data['additionalComments'] ?? '').toString(),
       createdAt: _readDate(data['createdAt'] ?? data['submittedAt']),
     );
@@ -1938,6 +1725,50 @@ class _ReportNotes {
   }
 }
 
+class _HeaderIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _HeaderIconButton({
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        height: 32,
+        width: 32,
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF8E6),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.namaGoldenYellow.withOpacity(0.4)),
+        ),
+        child: Icon(icon, color: AppColors.namaNavyBlue, size: 16),
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  final Widget child;
+
+  const _InfoCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: _cardDecoration(),
+      child: child,
+    );
+  }
+}
+
 class _StatCard extends StatelessWidget {
   final String title;
   final String value;
@@ -1953,14 +1784,24 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool isGold = color == AppColors.namaGoldenYellow;
+
     return Container(
-      height: 105,
+      height: 112,
       padding: const EdgeInsets.all(13),
       decoration: _cardDecoration(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 24),
+          Container(
+            height: 32,
+            width: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(isGold ? 0.18 : 0.10),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: color, size: 19),
+          ),
           const Spacer(),
           Text(
             value,
@@ -2011,56 +1852,63 @@ class _ActionCard extends StatelessWidget {
         color: Colors.white,
         child: InkWell(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(
-              children: [
-                Container(
-                  height: 42,
-                  width: 42,
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, color: color, size: 22),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            children: [
+              Container(width: 4, height: 78, color: color),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
                     children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.namaNavyBlue,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w900,
+                      Container(
+                        height: 42,
+                        width: 42,
+                        decoration: BoxDecoration(
+                          color: color.withOpacity(0.13),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(icon, color: color, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.namaNavyBlue,
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              subtitle,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: AppColors.namaMediumGray,
+                                fontSize: 11.5,
+                                height: 1.3,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: AppColors.namaMediumGray,
-                          fontSize: 11.5,
-                          height: 1.3,
-                        ),
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppColors.namaNavyBlue,
+                        size: 24,
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.chevron_right_rounded,
-                  color: AppColors.namaNavyBlue,
-                  size: 24,
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -2088,9 +1936,7 @@ class _MetricRow extends StatelessWidget {
         border: isLast
             ? null
             : Border(
-                bottom: BorderSide(
-                  color: Colors.black.withOpacity(0.06),
-                ),
+                bottom: BorderSide(color: Colors.black.withOpacity(0.06)),
               ),
       ),
       child: Row(
@@ -2122,10 +1968,7 @@ class _NoteBlock extends StatelessWidget {
   final String title;
   final String value;
 
-  const _NoteBlock({
-    required this.title,
-    required this.value,
-  });
+  const _NoteBlock({required this.title, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -2162,9 +2005,7 @@ class _NoteBlock extends StatelessWidget {
 class _SessionCard extends StatelessWidget {
   final _SessionReportItem session;
 
-  const _SessionCard({
-    required this.session,
-  });
+  const _SessionCard({required this.session});
 
   @override
   Widget build(BuildContext context) {
@@ -2189,31 +2030,13 @@ class _SessionCard extends StatelessWidget {
             text: _formatSessionTime(session.startTime, session.endTime),
           ),
           const SizedBox(height: 5),
-          _SmallInfoLine(
-            icon: Icons.location_on_outlined,
-            text: session.location,
-          ),
+          _SmallInfoLine(icon: Icons.location_on_outlined, text: session.location),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(
-                child: _MiniMetric(
-                  label: 'Check-ins',
-                  value: session.checkedInCount.toString(),
-                ),
-              ),
-              Expanded(
-                child: _MiniMetric(
-                  label: 'Messages',
-                  value: session.totalMessages.toString(),
-                ),
-              ),
-              Expanded(
-                child: _MiniMetric(
-                  label: 'Chat Users',
-                  value: session.activeChatUsers.toString(),
-                ),
-              ),
+              Expanded(child: _MiniMetric(label: 'Check-ins', value: session.checkedInCount.toString())),
+              Expanded(child: _MiniMetric(label: 'Messages', value: session.totalMessages.toString())),
+              Expanded(child: _MiniMetric(label: 'Chat Users', value: session.activeChatUsers.toString())),
             ],
           ),
         ],
@@ -2225,9 +2048,7 @@ class _SessionCard extends StatelessWidget {
 class _FeedbackCard extends StatelessWidget {
   final _FeedbackReportItem feedback;
 
-  const _FeedbackCard({
-    required this.feedback,
-  });
+  const _FeedbackCard({required this.feedback});
 
   @override
   Widget build(BuildContext context) {
@@ -2250,10 +2071,7 @@ class _FeedbackCard extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               feedback.userEmail,
-              style: const TextStyle(
-                color: AppColors.namaMediumGray,
-                fontSize: 11,
-              ),
+              style: const TextStyle(color: AppColors.namaMediumGray, fontSize: 11),
             ),
           ],
           const SizedBox(height: 10),
@@ -2261,22 +2079,11 @@ class _FeedbackCard extends StatelessWidget {
             spacing: 6,
             runSpacing: 6,
             children: [
-              _SmallChip(
-                text: 'Overall: ${_ratingText(feedback.overallRating)}',
-              ),
-              _SmallChip(
-                text:
-                    'Session: ${_ratingText(feedback.sessionQualityRating)}',
-              ),
-              _SmallChip(
-                text: 'Speaker: ${_ratingText(feedback.speakerRating)}',
-              ),
-              _SmallChip(
-                text: 'Venue: ${_ratingText(feedback.venueRating)}',
-              ),
-              _SmallChip(
-                text: 'App: ${_ratingText(feedback.appExperienceRating)}',
-              ),
+              _SmallChip(text: 'Overall: ${_ratingText(feedback.overallRating)}'),
+              _SmallChip(text: 'Session: ${_ratingText(feedback.sessionQualityRating)}'),
+              _SmallChip(text: 'Speaker: ${_ratingText(feedback.speakerRating)}'),
+              _SmallChip(text: 'Venue: ${_ratingText(feedback.venueRating)}'),
+              _SmallChip(text: 'App: ${_ratingText(feedback.appExperienceRating)}'),
             ],
           ),
           if (feedback.likedMost.isNotEmpty) ...[
@@ -2285,17 +2092,11 @@ class _FeedbackCard extends StatelessWidget {
           ],
           if (feedback.improvementSuggestion.isNotEmpty) ...[
             const SizedBox(height: 8),
-            _TextBlock(
-              title: 'Improvement Suggestion',
-              text: feedback.improvementSuggestion,
-            ),
+            _TextBlock(title: 'Improvement Suggestion', text: feedback.improvementSuggestion),
           ],
           if (feedback.additionalComments.isNotEmpty) ...[
             const SizedBox(height: 8),
-            _TextBlock(
-              title: 'Additional Comments',
-              text: feedback.additionalComments,
-            ),
+            _TextBlock(title: 'Additional Comments', text: feedback.additionalComments),
           ],
         ],
       ),
@@ -2306,9 +2107,7 @@ class _FeedbackCard extends StatelessWidget {
 class _RegistrationCard extends StatelessWidget {
   final _RegistrationReportItem participant;
 
-  const _RegistrationCard({
-    required this.participant,
-  });
+  const _RegistrationCard({required this.participant});
 
   @override
   Widget build(BuildContext context) {
@@ -2324,7 +2123,7 @@ class _RegistrationCard extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: AppColors.namaNavyBlue.withOpacity(0.10),
+            backgroundColor: AppColors.namaGoldenYellow.withOpacity(0.18),
             child: Text(
               participant.name.trim().isNotEmpty
                   ? participant.name.trim()[0].toUpperCase()
@@ -2355,35 +2154,27 @@ class _RegistrationCard extends StatelessWidget {
                   participant.email.isEmpty ? '-' : participant.email,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.namaMediumGray,
-                    fontSize: 11,
-                  ),
+                  style: const TextStyle(color: AppColors.namaMediumGray, fontSize: 11),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${participant.role} • $registeredAt',
-                  style: const TextStyle(
-                    color: AppColors.namaMediumGray,
-                    fontSize: 10.5,
-                  ),
+                  style: const TextStyle(color: AppColors.namaMediumGray, fontSize: 10.5),
                 ),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 8,
-              vertical: 5,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.10),
+              color: AppColors.namaGoldenYellow.withOpacity(0.13),
               borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: AppColors.namaGoldenYellow.withOpacity(0.3)),
             ),
             child: const Text(
               'Registered',
               style: TextStyle(
-                color: Colors.green,
+                color: AppColors.namaNavyBlue,
                 fontSize: 9,
                 fontWeight: FontWeight.w900,
               ),
@@ -2398,9 +2189,7 @@ class _RegistrationCard extends StatelessWidget {
 class _PhotoGroupCard extends StatelessWidget {
   final _EventPhotoGroup group;
 
-  const _PhotoGroupCard({
-    required this.group,
-  });
+  const _PhotoGroupCard({required this.group});
 
   @override
   Widget build(BuildContext context) {
@@ -2424,19 +2213,13 @@ class _PhotoGroupCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Uploaded by: ${group.userName}',
-            style: const TextStyle(
-              color: AppColors.namaMediumGray,
-              fontSize: 11.5,
-            ),
+            style: const TextStyle(color: AppColors.namaMediumGray, fontSize: 11.5),
           ),
           if (group.userEmail.trim().isNotEmpty) ...[
             const SizedBox(height: 2),
             Text(
               group.userEmail,
-              style: const TextStyle(
-                color: AppColors.namaMediumGray,
-                fontSize: 10.5,
-              ),
+              style: const TextStyle(color: AppColors.namaMediumGray, fontSize: 10.5),
             ),
           ],
           const SizedBox(height: 10),
@@ -2449,10 +2232,7 @@ class _PhotoGroupCard extends StatelessWidget {
                 spacing: spacing,
                 runSpacing: spacing,
                 children: photos.map((photo) {
-                  return SizedBox(
-                    width: itemWidth,
-                    child: _PhotoThumb(photo: photo),
-                  );
+                  return SizedBox(width: itemWidth, child: _PhotoThumb(photo: photo));
                 }).toList(),
               );
             },
@@ -2466,9 +2246,7 @@ class _PhotoGroupCard extends StatelessWidget {
 class _PhotoThumb extends StatelessWidget {
   final _EventPhotoReportItem photo;
 
-  const _PhotoThumb({
-    required this.photo,
-  });
+  const _PhotoThumb({required this.photo});
 
   @override
   Widget build(BuildContext context) {
@@ -2481,7 +2259,7 @@ class _PhotoThumb extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: photo.photoUrl.isEmpty
                 ? Container(
-                    color: const Color(0xFFF4F2FB),
+                    color: const Color(0xFFFFF8E6),
                     child: const Icon(
                       Icons.image_not_supported_outlined,
                       color: AppColors.namaNavyBlue,
@@ -2493,7 +2271,7 @@ class _PhotoThumb extends StatelessWidget {
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) {
                       return Container(
-                        color: const Color(0xFFF4F2FB),
+                        color: const Color(0xFFFFF8E6),
                         child: const Icon(
                           Icons.broken_image_outlined,
                           color: AppColors.namaNavyBlue,
@@ -2526,20 +2304,13 @@ class _SmallInfoLine extends StatelessWidget {
   final IconData icon;
   final String text;
 
-  const _SmallInfoLine({
-    required this.icon,
-    required this.text,
-  });
+  const _SmallInfoLine({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(
-          icon,
-          color: AppColors.namaGoldenYellow,
-          size: 14,
-        ),
+        Icon(icon, color: AppColors.namaGoldenYellow, size: 14),
         const SizedBox(width: 7),
         Expanded(
           child: Text(
@@ -2560,10 +2331,7 @@ class _MiniMetric extends StatelessWidget {
   final String label;
   final String value;
 
-  const _MiniMetric({
-    required this.label,
-    required this.value,
-  });
+  const _MiniMetric({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -2580,10 +2348,7 @@ class _MiniMetric extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.namaMediumGray,
-            fontSize: 9.5,
-          ),
+          style: const TextStyle(color: AppColors.namaMediumGray, fontSize: 9.5),
         ),
       ],
     );
@@ -2593,20 +2358,16 @@ class _MiniMetric extends StatelessWidget {
 class _SmallChip extends StatelessWidget {
   final String text;
 
-  const _SmallChip({
-    required this.text,
-  });
+  const _SmallChip({required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 9,
-        vertical: 5,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFF4F2FB),
+        color: const Color(0xFFFFF8E6),
         borderRadius: BorderRadius.circular(30),
+        border: Border.all(color: AppColors.namaGoldenYellow.withOpacity(0.25)),
       ),
       child: Text(
         text,
@@ -2624,10 +2385,7 @@ class _TextBlock extends StatelessWidget {
   final String title;
   final String text;
 
-  const _TextBlock({
-    required this.title,
-    required this.text,
-  });
+  const _TextBlock({required this.title, required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -2659,9 +2417,7 @@ class _TextBlock extends StatelessWidget {
 class _BulletText extends StatelessWidget {
   final String text;
 
-  const _BulletText({
-    required this.text,
-  });
+  const _BulletText({required this.text});
 
   @override
   Widget build(BuildContext context) {
@@ -2698,13 +2454,28 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: AppColors.namaNavyBlue,
-        fontSize: 15,
-        fontWeight: FontWeight.w900,
-      ),
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 18,
+          decoration: BoxDecoration(
+            color: AppColors.namaGoldenYellow,
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: AppColors.namaNavyBlue,
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2732,7 +2503,15 @@ class _EmptyCard extends StatelessWidget {
       decoration: _cardDecoration(),
       child: Column(
         children: [
-          Icon(icon, color: AppColors.namaNavyBlue, size: 30),
+          Container(
+            height: 44,
+            width: 44,
+            decoration: BoxDecoration(
+              color: AppColors.namaGoldenYellow.withOpacity(0.16),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(icon, color: AppColors.namaGoldenYellow, size: 25),
+          ),
           const SizedBox(height: 10),
           Text(
             title,
@@ -2760,19 +2539,14 @@ class _EmptyCard extends StatelessWidget {
               child: ElevatedButton(
                 onPressed: onActionTap,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.namaNavyBlue,
-                  foregroundColor: Colors.white,
+                  backgroundColor: AppColors.namaGoldenYellow,
+                  foregroundColor: AppColors.namaNavyBlue,
                   elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
-                  ),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(13)),
                 ),
                 child: Text(
                   actionText!,
-                  style: const TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w900,
-                  ),
+                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w900),
                 ),
               ),
             ),
@@ -2787,6 +2561,7 @@ BoxDecoration _cardDecoration() {
   return BoxDecoration(
     color: Colors.white,
     borderRadius: BorderRadius.circular(16),
+    border: Border.all(color: AppColors.namaGoldenYellow.withOpacity(0.08)),
     boxShadow: [
       BoxShadow(
         color: Colors.black.withOpacity(0.045),
@@ -2807,18 +2582,8 @@ DateTime? _readDate(dynamic value) {
 
 String _formatDate(DateTime date) {
   const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
   ];
 
   return '${date.day} ${months[date.month - 1]} ${date.year}';
@@ -2826,14 +2591,8 @@ String _formatDate(DateTime date) {
 
 String _formatSessionTime(DateTime? start, DateTime? end) {
   if (start == null && end == null) return 'Time not set';
-
-  if (start != null && end == null) {
-    return '${_formatDate(start)} - ${_formatTime(start)}';
-  }
-
-  if (start == null && end != null) {
-    return '${_formatDate(end)} - ${_formatTime(end)}';
-  }
+  if (start != null && end == null) return '${_formatDate(start)} - ${_formatTime(start)}';
+  if (start == null && end != null) return '${_formatDate(end)} - ${_formatTime(end)}';
 
   final sameDay = start!.year == end!.year &&
       start.month == end.month &&
@@ -2866,9 +2625,5 @@ String _ratingText(double value) {
 }
 
 String _pdfSafe(String value) {
-  return value
-      .replaceAll('\n', ' ')
-      .replaceAll('\r', ' ')
-      .replaceAll(' ', '')
-      .trim();
+  return value.replaceAll('\n', ' ').replaceAll('\r', ' ').trim();
 }

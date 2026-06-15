@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'admin_session_management_screen.dart';
+import 'certificate_template_setup_screen.dart';
 import 'check_registration_screen.dart';
 import 'create_event_screen.dart';
 import 'event_photos_screen.dart';
@@ -36,7 +37,10 @@ bool _isArchivingEvent = false;
 bool _isUnarchivingEvent = false;
 bool _showArchivedEvents = false;
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
+  static const Color goldColor = Color(0xFFE4B544);
+  static const Color richGold = Color(0xFFD4A439);
+  static const Color softGold = Color(0xFFFFF8E6);
   static const Color textDark = Color(0xFF111827);
   static const Color textMuted = Color(0xFF8B8FA3);
 
@@ -431,7 +435,7 @@ await eventRef.update({
   'cleanupScheduledAt': FieldValue.delete(),
   'cleanupCompletedAt': FieldValue.delete(),
   'allowCheckIns': true,
-  'allowRegistrations': true,
+  'allowRegistrations': true, 
   'allowUploads': true,
   'updatedAt': FieldValue.serverTimestamp(),
 });
@@ -689,13 +693,22 @@ await eventRef.update({
                         TextSpan(
                           text: 'Boss!',
                           style: TextStyle(
-                            color: primaryColor,
+                            color: goldColor,
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
                             letterSpacing: 0.2,
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 70,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: goldColor,
+                      borderRadius: BorderRadius.circular(99),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -810,7 +823,7 @@ class _HeaderLogoRow extends ConsumerWidget {
     required this.onProfileTap,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -913,7 +926,7 @@ class _SearchBox extends StatelessWidget {
     required this.onChanged,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
   static const Color textMuted = Color(0xFF8B8FA3);
 
   @override
@@ -925,7 +938,7 @@ class _SearchBox extends StatelessWidget {
         color: Colors.white,
         borderRadius: BorderRadius.circular(26),
         border: Border.all(
-          color: const Color(0xFFE4E0F2),
+          color: const Color(0xFFF0DFA7),
         ),
         boxShadow: [
           BoxShadow(
@@ -977,7 +990,7 @@ class _SearchBox extends StatelessWidget {
           const SizedBox(width: 9),
           const Icon(
             Icons.search_rounded,
-            color: primaryColor,
+            color: Color(0xFFE4B544),
             size: 21,
           ),
         ],
@@ -993,7 +1006,8 @@ class _CreateEventButton extends StatelessWidget {
     required this.onTap,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
+  static const Color goldColor = Color(0xFFE4B544);
 
   @override
   Widget build(BuildContext context) {
@@ -1036,7 +1050,7 @@ class _EventFilterTabs extends StatelessWidget {
     required this.onChanged,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
 
   @override
   Widget build(BuildContext context) {
@@ -1044,10 +1058,10 @@ class _EventFilterTabs extends StatelessWidget {
       height: 42,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1EEF9),
+        color: const Color(0xFFFFF8E6),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFFE4E0F2),
+          color: const Color(0xFFF0DFA7),
         ),
       ),
       child: Row(
@@ -1088,7 +1102,7 @@ class _EventFilterTabButton extends StatelessWidget {
     required this.onTap,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
 
   @override
   Widget build(BuildContext context) {
@@ -1099,7 +1113,7 @@ class _EventFilterTabButton extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: selected ? Colors.white : Colors.transparent,
+          color: selected ? primaryColor : Colors.transparent,
           borderRadius: BorderRadius.circular(13),
           boxShadow: selected
               ? [
@@ -1117,7 +1131,7 @@ class _EventFilterTabButton extends StatelessWidget {
             Icon(
               icon,
               size: 15,
-              color: selected ? primaryColor : const Color(0xFF6B7280),
+              color: selected ? Colors.white : const Color(0xFF6B7280),
             ),
             const SizedBox(width: 6),
             Flexible(
@@ -1126,7 +1140,7 @@ class _EventFilterTabButton extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: selected ? primaryColor : const Color(0xFF6B7280),
+                  color: selected ? Colors.white : const Color(0xFF6B7280),
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
                 ),
@@ -1146,7 +1160,7 @@ class _SectionTitle extends StatelessWidget {
     required this.showArchivedEvents,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
 
   @override
   Widget build(BuildContext context) {
@@ -1156,7 +1170,7 @@ class _SectionTitle extends StatelessWidget {
           showArchivedEvents
               ? Icons.archive_outlined
               : Icons.calendar_today_outlined,
-          color: primaryColor,
+          color: Color(0xFFE4B544),
           size: 20,
         ),
         const SizedBox(width: 9),
@@ -1202,17 +1216,17 @@ class _EventsList extends StatelessWidget {
     required this.onActiveToggle,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF6F4FD),
+        color: const Color(0xFFFFFBF0),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: const Color(0xFFE8E4F8),
+          color: const Color(0xFFF0DFA7),
         ),
       ),
       child: Column(
@@ -1236,7 +1250,7 @@ class _EventsList extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
                   color: isActive
-                      ? Colors.green.withOpacity(0.65)
+                      ? const Color(0xFFE4B544)
                       : Colors.transparent,
                   width: 1.2,
                 ),
@@ -1253,13 +1267,13 @@ class _EventsList extends StatelessWidget {
                           width: 34,
                           decoration: BoxDecoration(
                             color: isActive
-                                ? Colors.green.withOpacity(0.12)
+                                ? const Color(0xFFFFF3D1)
                                 : const Color(0xFFF0EDFA),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(
                             Icons.calendar_today_outlined,
-                            color: isActive ? Colors.green : primaryColor,
+                            color: isActive ? const Color(0xFFD4A439) : primaryColor,
                             size: 17,
                           ),
                         ),
@@ -1284,8 +1298,7 @@ class _EventsList extends StatelessWidget {
                               vertical: 4,
                             ),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(30),
+                              color: const Color.fromARGB(255, 231, 252, 202) ,                    borderRadius: BorderRadius.circular(30),
                             ),
                             child: const Text(
                               'ACTIVE',
@@ -1405,11 +1418,11 @@ class _ActiveToggleButton extends StatelessWidget {
     required this.onTap,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
 
   @override
   Widget build(BuildContext context) {
-    final activeColor = isActive ? Colors.green : primaryColor;
+final activeColor = isActive ? Colors.green : primaryColor;
 
     return InkWell(
       onTap: onTap,
@@ -1419,7 +1432,7 @@ class _ActiveToggleButton extends StatelessWidget {
         width: 78,
         padding: const EdgeInsets.symmetric(horizontal: 7),
         decoration: BoxDecoration(
-          color: isActive ? Colors.green.withOpacity(0.08) : Colors.white,
+          color: isActive ? const Color(0xFFE8F5E9) : Colors.white,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
             color: activeColor.withOpacity(0.35),
@@ -1477,52 +1490,27 @@ class _EmptyStateCard extends StatelessWidget {
     required this.subtitle,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 20,
-      ),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF6F4FD),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: const Color(0xFFE8E4F8),
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            icon,
-            color: primaryColor,
-            size: 28,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: primaryColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF6B7280),
-              fontSize: 10.5,
-              height: 1.35,
-            ),
-          ),
-        ],
-      ),
+  padding: const EdgeInsets.symmetric(
+    horizontal: 10,
+    vertical: 4,
+  ),
+  decoration: BoxDecoration(
+    color: const Color(0xFFE8F5E9),
+    borderRadius: BorderRadius.circular(20),
+  ),
+  child: const Text(
+    '• Active',
+    style: TextStyle(
+      color: Colors.green,
+      fontSize: 11,
+      fontWeight: FontWeight.w700,
+    ),
+  ),
     );
   }
 }
@@ -1530,7 +1518,7 @@ class _EmptyStateCard extends StatelessWidget {
 class _FooterCredit extends StatelessWidget {
   const _FooterCredit();
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
 
   @override
   Widget build(BuildContext context) {
@@ -1540,7 +1528,7 @@ class _FooterCredit extends StatelessWidget {
           children: [
             Expanded(
               child: Divider(
-                color: Color(0xFFE2DEEF),
+                color: Color(0xFFF0DFA7),
                 thickness: 1,
                 indent: 44,
               ),
@@ -1558,7 +1546,7 @@ class _FooterCredit extends StatelessWidget {
             ),
             Expanded(
               child: Divider(
-                color: Color(0xFFE2DEEF),
+                color: Color(0xFFF0DFA7),
                 thickness: 1,
                 endIndent: 44,
               ),
@@ -1567,9 +1555,9 @@ class _FooterCredit extends StatelessWidget {
         ),
         SizedBox(height: 7),
         Icon(
-          Icons.circle,
-          color: Color(0xFFF5B51B),
-          size: 6,
+          Icons.auto_awesome_rounded,
+          color: Color(0xFFE4B544),
+          size: 10,
         ),
       ],
     );
@@ -1593,11 +1581,13 @@ class AdminEventControlScreen extends ConsumerStatefulWidget {
 
 class _AdminEventControlScreenState
     extends ConsumerState<AdminEventControlScreen> {
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
+  static const Color goldColor = Color(0xFFE4B544);
+  static const Color richGold = Color(0xFFD4A439);
   static const Color navyText = Color(0xFF050A35);
   static const Color mutedText = Color(0xFF6F7282);
   static const Color softBackground = Color(0xFFFAFAFD);
-  static const Color green = Color(0xFF0ABF63);
+  static const Color green = Color(0xFFE4B544);
 
   bool _isDeletingEvent = false;
 
@@ -1985,8 +1975,8 @@ Stream<String> _averageScreenTimeStream() {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
               decoration: BoxDecoration(
                 color: isActive
-                    ? const Color(0xFFE9FAF1)
-                    : const Color(0xFFF3F4F6),
+    ? const Color(0xFFE8F5E9)
+    : const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
@@ -1994,16 +1984,16 @@ Stream<String> _averageScreenTimeStream() {
                 children: [
                   Icon(
                     Icons.circle,
-                    color: isActive ? green : const Color(0xFF9CA3AF),
+                    color: isActive ? Colors.green : const Color(0xFF9CA3AF),
                     size: 6,
                   ),
                   const SizedBox(width: 5),
                   Text(
                     isActive ? 'Active' : 'Inactive',
                     style: TextStyle(
-                      color: isActive
-                          ? const Color(0xFF088B4A)
-                          : const Color(0xFF6B7280),
+color: isActive
+    ? Colors.green
+    : const Color(0xFF6B7280),
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
                     ),
@@ -2215,10 +2205,25 @@ Widget _buildAdminTools({
         children: [
           Expanded(
             child: _ModernAdminToolCard(
+              icon: Icons.workspace_premium_rounded,
+              title: 'Certificate Template',
+              subtitle: 'Upload certificate design',
+              onTap: () {
+                _openScreen(
+                  CertificateTemplateSetupScreen(
+                    eventId: eventId,
+                    eventName: eventName,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _ModernAdminToolCard(
               icon: Icons.delete_forever_rounded,
               title: _isDeletingEvent ? 'Checking...' : 'Delete Event',
               subtitle: 'Only for empty/test events',
-              fullWidth: true,
               danger: true,
               onTap: _isDeletingEvent ? () {} : _confirmDeleteEventFromTools,
             ),
@@ -2236,8 +2241,8 @@ Widget _buildAdminTools({
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [
-            Color(0xFFF4F0FF),
-            Color(0xFFFBFAFF),
+            Color(0xFFFFF8E6),
+            Color(0xFFFFFFFF),
           ],
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
@@ -2257,7 +2262,7 @@ Widget _buildAdminTools({
             width: 38,
             height: 38,
             decoration: BoxDecoration(
-              color: const Color(0xFFE9E2FF),
+              color: const Color(0xFFFFF3D1),
               borderRadius: BorderRadius.circular(13),
             ),
             child: const Icon(
@@ -2440,7 +2445,7 @@ class _BaseStatCard extends StatelessWidget {
     required this.icon,
   });
 
-  static const Color primaryColor = Color(0xFF1B0F72);
+  static const Color primaryColor = Color(0xFF1B1464);
   static const Color navyText = Color(0xFF050A35);
   static const Color mutedText = Color(0xFF6F7282);
 
@@ -2467,12 +2472,12 @@ class _BaseStatCard extends StatelessWidget {
             width: 30,
             height: 30,
             decoration: BoxDecoration(
-              color: const Color(0xFFF0ECFF),
+              color: const Color(0xFFE8F5E9),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
               icon,
-              color: primaryColor,
+              color: Colors.green,
               size: 18,
             ),
           ),
@@ -2548,22 +2553,20 @@ class _ModernAdminToolCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final iconGradient = danger
-        ? const LinearGradient(
-            colors: [
-              Color(0xFFE53935),
-              Color(0xFFB71C1C),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          )
-        : const LinearGradient(
-            colors: [
-              Color(0xFF3923B7),
-              Color(0xFF18077D),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          );
+    ? const LinearGradient(
+        colors: [
+          Color(0xFFE53935),
+          Color(0xFFB71C1C),
+        ],
+      )
+    : const LinearGradient(
+        colors: [
+          Color(0xFFEAF4FF),
+          Color(0xFFDCEEFF),
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      );
 
     return SizedBox(
       height: fullWidth ? 72 : 84,
@@ -2606,10 +2609,12 @@ class _ModernAdminToolCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
-                        icon,
-                        color: Colors.white,
-                        size: 20,
-                      ),
+  icon,
+  color: danger
+      ? Colors.white
+      : const Color(0xFF5BA8FF),
+  size: 20,
+),
                     ),
                     if (badgeCount > 0)
                       Positioned(
