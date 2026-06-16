@@ -30,9 +30,11 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
 
   bool _privacyDialogShown = false;
   bool _usageTrackingStarted = false;
+  bool _welcomeNotificationChecked = false;
 
   String? _lastDialogCheckedUid;
   String? _trackedEventId;
+  String? _lastWelcomeCheckedUid;
 
   @override
   void initState() {
@@ -144,6 +146,86 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
     if (needsPrivacySelection && mounted) {
       _privacyDialogShown = true;
       _showPrivacySelectionDialog(currentVisibility);
+    }
+  }
+
+  Future<void> _createWelcomeNotificationIfNeeded({
+    required String uid,
+    required Map<String, dynamic> userData,
+  }) async {
+    if (_lastWelcomeCheckedUid == uid && _welcomeNotificationChecked) return;
+
+    _lastWelcomeCheckedUid = uid;
+    _welcomeNotificationChecked = true;
+
+    if (userData['welcomeNotificationSent'] == true) return;
+
+    final role = _normalizeRole(userData);
+
+    if (role != 'attendee' && role != 'speaker' && role != 'staff') {
+      return;
+    }
+
+    try {
+      final activeEventSnapshot = await FirebaseFirestore.instance
+          .collection('events')
+          .where('isActive', isEqualTo: true)
+          .limit(1)
+          .get();
+
+      if (activeEventSnapshot.docs.isEmpty) {
+        debugPrint('MainHubScreen: No active event found for welcome message.');
+        return;
+      }
+
+      final eventDoc = activeEventSnapshot.docs.first;
+      final eventData = eventDoc.data();
+
+      final eventName = (eventData['name'] ??
+              eventData['title'] ??
+              eventData['eventName'] ??
+              'NAMA Event')
+          .toString();
+
+      final notificationRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('notifications')
+          .doc('welcome_onboard_${eventDoc.id}');
+
+      final existingNotification = await notificationRef.get();
+
+      if (!existingNotification.exists) {
+        await notificationRef.set({
+          'eventId': eventDoc.id,
+          'eventName': eventName,
+          'title': 'Welcome Onboard',
+          'subtitle': 'We are glad to have you here',
+          'body':
+              'Welcome onboard! We are excited to have you as part of $eventName. Explore the app, connect with others, and enjoy a smooth event experience.',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'type': 'information',
+          'targetRole': role,
+          'includeDate': true,
+          'data': {
+            'notificationCategory': 'welcomeOnboard',
+            'eventId': eventDoc.id,
+            'role': role,
+          },
+        });
+      }
+
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({
+        'welcomeNotificationSent': true,
+        'welcomeNotificationSentAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      debugPrint('MainHubScreen: Welcome notification created for $uid');
+    } catch (e) {
+      debugPrint('MainHubScreen: Failed to create welcome notification: $e');
+      _welcomeNotificationChecked = false;
     }
   }
 
@@ -274,6 +356,8 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
     if (rawRole == 'admins') return 'admin';
     if (rawRole == 'speaker_user') return 'speaker';
     if (rawRole == 'staff_user') return 'staff';
+    if (rawRole == 'delegate') return 'attendee';
+    if (rawRole == 'delegates') return 'attendee';
     if (rawRole == 'user') return 'attendee';
 
     return rawRole;
@@ -346,6 +430,11 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _checkAndShowPrivacySelectionDialog(
+            uid: firebaseUser.uid,
+            userData: userData,
+          );
+
+          _createWelcomeNotificationIfNeeded(
             uid: firebaseUser.uid,
             userData: userData,
           );

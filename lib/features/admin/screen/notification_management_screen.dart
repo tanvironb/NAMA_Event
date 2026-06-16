@@ -1,9 +1,9 @@
 // lib/features/admin/screen/notification_management_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:intl/intl.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 
@@ -31,7 +31,6 @@ class _NotificationManagementScreenState
 
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _textMuted = Color(0xFF6B7280);
-  static const Color _borderColor = Color(0xFFE8E4F8);
   static const Color _gold = AppColors.namaGoldenYellow;
   static const Color _softGold = AppColors.namaWarmGold;
 
@@ -143,7 +142,7 @@ class _NotificationManagementScreenState
       child: Row(
         children: [
           const Text(
-            'Target Audience:',
+            'Filter:',
             style: TextStyle(
               fontWeight: FontWeight.w700,
               fontSize: 12,
@@ -366,9 +365,6 @@ class _NotificationManagementScreenState
     final body = data['body'] as String? ?? '';
     final targetRole = data['targetRole'] as String? ?? 'all';
     final typeStr = data['type'] as String? ?? 'generic';
-    final timestamp =
-        (data['timestamp'] as Timestamp?)?.toDate() ?? DateTime.now();
-    final editedAt = (data['editedAt'] as Timestamp?)?.toDate();
 
     AppNotificationType type;
     try {
@@ -443,87 +439,19 @@ class _NotificationManagementScreenState
                   color: AppColors.namaNavyBlue,
                 ),
               ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (subtitle != null && subtitle.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontStyle: FontStyle.italic,
-                        color: _textMuted,
-                        fontSize: 11.5,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 6),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 4,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.people,
-                            size: 12.5,
-                            color: _gold,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Target: ${_targetRoleText(targetRole)}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: _textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.access_time,
-                            size: 12.5,
-                            color: _gold,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            DateFormat('MMM dd, yyyy').format(timestamp),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: _textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  if (editedAt != null) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.edit,
-                          size: 12.5,
-                          color: Colors.orange[600],
+              subtitle: subtitle != null && subtitle.trim().isNotEmpty
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        subtitle,
+                        style: const TextStyle(
+                          fontStyle: FontStyle.italic,
+                          color: _textMuted,
+                          fontSize: 11.5,
                         ),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            'Edited: ${DateFormat('MMM dd, yyyy hh:mm a').format(editedAt)}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.orange[600],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
+                      ),
+                    )
+                  : null,
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(18, 4, 14, 14),
@@ -531,7 +459,7 @@ class _NotificationManagementScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Description:',
+                        'Message',
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 12.5,
@@ -628,13 +556,6 @@ class _NotificationManagementScreenState
     );
   }
 
-  String _targetRoleText(String targetRole) {
-    if (targetRole == 'all') return 'All Users';
-    if (targetRole.isEmpty) return 'Unknown';
-
-    return targetRole[0].toUpperCase() + targetRole.substring(1);
-  }
-
   Future<void> _editNotification(
     String notificationId,
     Map<String, dynamic> currentData,
@@ -712,7 +633,7 @@ class _NotificationManagementScreenState
                   controller: bodyController,
                   style: const TextStyle(fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: 'Description',
+                    labelText: 'Message',
                     labelStyle: const TextStyle(fontSize: 12),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -752,7 +673,7 @@ class _NotificationManagementScreenState
                     bodyController.text.trim().isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Title and Description cannot be empty'),
+                      content: Text('Title and Message cannot be empty'),
                     ),
                   );
                   return;
@@ -850,7 +771,7 @@ class _NotificationManagementScreenState
             ),
           ),
           content: Text(
-            'Are you sure you want to delete this notification for ALL ${targetRole == 'all' ? 'users' : '${targetRole}s'}?\n\nThis action cannot be undone.',
+            'Are you sure you want to delete this notification?\n\nThis action cannot be undone.',
             style: const TextStyle(fontSize: 13),
           ),
           actions: [

@@ -1,13 +1,12 @@
 // lib/features/notifications/screen/notification_detail_screen.dart
+import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class NotificationDetailScreen extends ConsumerStatefulWidget {
@@ -29,8 +28,6 @@ class _NotificationDetailScreenState
   late TextEditingController _subtitleController;
   late TextEditingController _bodyController;
 
-  late DateTime? _editedAt;
-
   bool _isEditing = false;
   bool _isLoading = false;
 
@@ -43,21 +40,10 @@ class _NotificationDetailScreenState
   void initState() {
     super.initState();
 
-    _titleController = TextEditingController(
-      text: widget.notification.title,
-    );
-
-    _subtitleController = TextEditingController(
-      text: widget.notification.subtitle ?? '',
-    );
-
-    _bodyController = TextEditingController(
-      text: widget.notification.body,
-    );
-
-    final editedAtValue = widget.notification.data['editedAt'];
-
-    _editedAt = editedAtValue is Timestamp ? editedAtValue.toDate() : null;
+    _titleController = TextEditingController(text: widget.notification.title);
+    _subtitleController =
+        TextEditingController(text: widget.notification.subtitle ?? '');
+    _bodyController = TextEditingController(text: widget.notification.body);
   }
 
   @override
@@ -71,14 +57,12 @@ class _NotificationDetailScreenState
   String get _qrPayload {
     final fromModel = widget.notification.qrPayload.trim();
     if (fromModel.isNotEmpty) return fromModel;
-
     return (widget.notification.data['qrPayload'] ?? '').toString().trim();
   }
 
   String get _sessionCode {
     final fromModel = widget.notification.sessionCode.trim();
     if (fromModel.isNotEmpty) return fromModel;
-
     return (widget.notification.data['sessionCode'] ?? '').toString().trim();
   }
 
@@ -125,6 +109,13 @@ class _NotificationDetailScreenState
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Title cannot be empty')),
+      );
+      return;
+    }
+
+    if (_bodyController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Message cannot be empty')),
       );
       return;
     }
@@ -189,7 +180,6 @@ class _NotificationDetailScreenState
       setState(() {
         _isEditing = false;
         _isLoading = false;
-        _editedAt = DateTime.now();
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -222,7 +212,7 @@ class _NotificationDetailScreenState
             style: TextStyle(fontSize: 16),
           ),
           content: const Text(
-            'Are you sure you want to delete this notification for ALL users? This action cannot be undone.',
+            'Are you sure you want to delete this notification? This action cannot be undone.',
             style: TextStyle(fontSize: 13),
           ),
           actions: [
@@ -326,24 +316,6 @@ class _NotificationDetailScreenState
     });
   }
 
-  String _formatEventTimestamp() {
-    if (widget.notification.eventTimestamp == null) return '';
-
-    final eventTime = widget.notification.eventTimestamp!;
-
-    if (widget.notification.includeDate) {
-      return DateFormat('EEEE, MMMM d, yyyy • h:mm a').format(eventTime);
-    }
-
-    return DateFormat('h:mm a').format(eventTime);
-  }
-
-  String _formatCreatedAt() {
-    return DateFormat('MMM d, yyyy • h:mm a').format(
-      widget.notification.timestamp.toDate(),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final currentUserAsync = ref.watch(userAppProfileStreamProvider);
@@ -374,7 +346,6 @@ class _NotificationDetailScreenState
                         children: [
                           _buildTopSummary(),
                           const SizedBox(height: 22),
-
                           if (_isEditing) ...[
                             _buildEditableFields(),
                           ] else ...[
@@ -384,32 +355,6 @@ class _NotificationDetailScreenState
                             ],
                             _buildMessageSection(),
                           ],
-
-                          const SizedBox(height: 22),
-
-                          if (widget.notification.eventTimestamp != null)
-                            _buildInfoCard(
-                              widget.notification.includeDate
-                                  ? 'Event Time'
-                                  : 'Time',
-                              _formatEventTimestamp(),
-                              Icons.event_outlined,
-                            ),
-
-                          if (widget.notification.eventTimestamp != null)
-                            const SizedBox(height: 12),
-
-                          _buildInfoCard(
-                            'Target Audience',
-                            widget.notification.targetRole == 'all'
-                                ? 'All Users'
-                                : _capitalize(widget.notification.targetRole),
-                            Icons.people_outline,
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          _buildTimestampInfo(),
                         ],
                       ),
                     ),
@@ -560,27 +505,6 @@ class _NotificationDetailScreenState
                     ),
                   ),
                 ],
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.access_time,
-                      size: 14,
-                      color: _textMuted,
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Text(
-                        _formatCreatedAt(),
-                        style: const TextStyle(
-                          color: _textMuted,
-                          fontSize: 11.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
@@ -610,7 +534,6 @@ class _NotificationDetailScreenState
               fontWeight: FontWeight.w900,
             ),
           ),
-
           if (_sessionTitle.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -624,9 +547,7 @@ class _NotificationDetailScreenState
               ),
             ),
           ],
-
           const SizedBox(height: 14),
-
           if (_hasQrPayload)
             Container(
               padding: const EdgeInsets.all(11),
@@ -646,7 +567,6 @@ class _NotificationDetailScreenState
                 foregroundColor: AppColors.namaNavyBlue,
               ),
             ),
-
           if (_hasSessionCode) ...[
             const SizedBox(height: 14),
             InkWell(
@@ -716,9 +636,7 @@ class _NotificationDetailScreenState
               ),
             ),
           ],
-
           const SizedBox(height: 10),
-
           const Text(
             'Scan the QR code or copy the PIN to check in.',
             textAlign: TextAlign.center,
@@ -828,133 +746,5 @@ class _NotificationDetailScreenState
         ),
       ),
     );
-  }
-
-  Widget _buildInfoCard(String label, String value, IconData icon) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F7FA),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _borderColor,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 19,
-            color: AppColors.namaNavyBlue,
-          ),
-          const SizedBox(width: 11),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: _textMuted,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF111827),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimestampInfo() {
-    final dateFormat = DateFormat('MMM dd, yyyy hh:mm a');
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F7FA),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _borderColor,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Timestamps',
-            style: TextStyle(
-              color: AppColors.namaNavyBlue,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _buildTimestampRow(
-            'Created',
-            dateFormat.format(widget.notification.timestamp.toDate()),
-          ),
-          if (_editedAt != null) ...[
-            const SizedBox(height: 7),
-            _buildTimestampRow(
-              'Edited',
-              dateFormat.format(_editedAt!),
-              color: Colors.orange,
-            ),
-          ],
-          const SizedBox(height: 7),
-          _buildTimestampRow(
-            'Read Status',
-            widget.notification.isRead ? 'Read' : 'Unread',
-            color: widget.notification.isRead ? Colors.green : Colors.grey,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimestampRow(String label, String value, {Color? color}) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 86,
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: _textMuted,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: color ?? const Color(0xFF111827),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _capitalize(String value) {
-    if (value.trim().isEmpty) return value;
-    return value[0].toUpperCase() + value.substring(1).toLowerCase();
   }
 }

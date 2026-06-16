@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -30,6 +31,7 @@ class _NotificationDetailViewState
   Future<void> _markAsRead() async {
     if (!widget.notification.isRead) {
       final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
+
       if (userId != null) {
         await ref
             .read(notificationRepositoryProvider)
@@ -71,9 +73,9 @@ class _NotificationDetailViewState
 
     if (widget.notification.includeDate) {
       return DateFormat('EEEE, MMMM d, yyyy • h:mm a').format(eventTime);
-    } else {
-      return DateFormat('h:mm a').format(eventTime);
     }
+
+    return DateFormat('h:mm a').format(eventTime);
   }
 
   @override
@@ -104,239 +106,239 @@ class _NotificationDetailViewState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    _priorityColor.withOpacity(0.08),
-                    _priorityColor.withOpacity(0.04),
-                  ],
-                ),
-                border: Border(
-                  bottom: BorderSide(
-                    color: _priorityColor.withOpacity(0.25),
-                    width: 1.4,
+            _buildTopSection(timestamp),
+            _buildMessageSection(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopSection(String timestamp) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _priorityColor.withOpacity(0.08),
+            _priorityColor.withOpacity(0.04),
+          ],
+        ),
+        border: Border(
+          bottom: BorderSide(
+            color: _priorityColor.withOpacity(0.25),
+            width: 1.4,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: widget.notification.type.color.withOpacity(0.16),
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: widget.notification.type.color,
+                    width: 1.6,
                   ),
+                ),
+                child: Icon(
+                  widget.notification.type.icon,
+                  color: widget.notification.type.color,
+                  size: 26,
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(13),
-                        decoration: BoxDecoration(
-                          color: widget.notification.type.color.withOpacity(0.16),
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: widget.notification.type.color,
-                            width: 1.6,
-                          ),
-                        ),
-                        child: Icon(
-                          widget.notification.type.icon,
-                          color: widget.notification.type.color,
-                          size: 26,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.notification.type.displayName.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: widget.notification.type.color,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 5),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: _priorityColor.withOpacity(0.16),
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: _priorityColor,
-                                  width: 1.2,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _priorityIcon,
-                                    size: 11,
-                                    color: _priorityColor,
-                                  ),
-                                  const SizedBox(width: 5),
-                                  Text(
-                                    '${widget.notification.priority.toUpperCase()} PRIORITY',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.bold,
-                                      color: _priorityColor,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 18),
-
-                  Text(
-                    widget.notification.title,
-                    style: const TextStyle(
-                      fontSize: 21,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.namaNavyBlue,
-                      height: 1.25,
-                    ),
-                  ),
-
-                  if (widget.notification.subtitle != null &&
-                      widget.notification.subtitle!.isNotEmpty) ...[
-                    const SizedBox(height: 9),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      widget.notification.subtitle!,
+                      widget.notification.type.displayName.toUpperCase(),
                       style: TextStyle(
-                        fontSize: 13,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.grey[700],
-                        height: 1.3,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: widget.notification.type.color,
+                        letterSpacing: 1.2,
                       ),
                     ),
-                  ],
-
-                  const SizedBox(height: 14),
-
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.access_time,
-                        size: 14,
-                        color: Colors.grey[600],
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        timestamp,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.notification.eventTimestamp != null) ...[
+                    const SizedBox(height: 5),
                     Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
-                        color: AppColors.namaNavyBlue.withOpacity(0.04),
-                        borderRadius: BorderRadius.circular(10),
+                        color: _priorityColor.withOpacity(0.16),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: AppColors.namaNavyBlue.withOpacity(0.15),
+                          color: _priorityColor,
+                          width: 1.2,
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.event,
-                                size: 17,
-                                color: AppColors.namaNavyBlue.withOpacity(0.7),
-                              ),
-                              const SizedBox(width: 7),
-                              Text(
-                                widget.notification.includeDate
-                                    ? 'Event Time'
-                                    : 'Time',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color:
-                                      AppColors.namaNavyBlue.withOpacity(0.75),
-                                  letterSpacing: 0.3,
-                                ),
-                              ),
-                            ],
+                          Icon(
+                            _priorityIcon,
+                            size: 11,
+                            color: _priorityColor,
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(width: 5),
                           Text(
-                            _formatEventTimestamp(),
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.namaNavyBlue,
-                              height: 1.4,
+                            '${widget.notification.priority.toUpperCase()} PRIORITY',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: _priorityColor,
+                              letterSpacing: 0.5,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 20),
                   ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            widget.notification.title,
+            style: const TextStyle(
+              fontSize: 21,
+              fontWeight: FontWeight.bold,
+              color: AppColors.namaNavyBlue,
+              height: 1.25,
+            ),
+          ),
+          if (widget.notification.subtitle != null &&
+              widget.notification.subtitle!.isNotEmpty) ...[
+            const SizedBox(height: 9),
+            Text(
+              widget.notification.subtitle!,
+              style: TextStyle(
+                fontSize: 13,
+                fontStyle: FontStyle.italic,
+                color: Colors.grey[700],
+                height: 1.3,
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Icon(
+                Icons.access_time,
+                size: 14,
+                color: Colors.grey[600],
+              ),
+              const SizedBox(width: 6),
+              Text(
+                timestamp,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-                  const Text(
-                    'Message',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.namaNavyBlue,
-                      letterSpacing: 0.3,
-                    ),
+  Widget _buildMessageSection() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (widget.notification.eventTimestamp != null) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.namaNavyBlue.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.namaNavyBlue.withOpacity(0.15),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.event,
+                        size: 17,
+                        color: AppColors.namaNavyBlue.withOpacity(0.7),
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        widget.notification.includeDate
+                            ? 'Event Time'
+                            : 'Time',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.namaNavyBlue.withOpacity(0.75),
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(17),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Text(
-                      widget.notification.body,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        height: 1.45,
-                        color: AppColors.namaNavyBlue,
-                      ),
+                  Text(
+                    _formatEventTimestamp(),
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.namaNavyBlue,
+                      height: 1.4,
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 20),
           ],
-        ),
+          const Text(
+            'Message',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AppColors.namaNavyBlue,
+              letterSpacing: 0.3,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(17),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.grey[300]!),
+            ),
+            child: Text(
+              widget.notification.body,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: AppColors.namaNavyBlue,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

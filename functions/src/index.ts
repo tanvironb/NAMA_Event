@@ -1736,6 +1736,223 @@ async function cleanupEventUsers(eventId: string): Promise<{
   };
 }
 
+
+// ============================================================================
+// AUTOMATIC EVENT NOTIFICATIONS
+// ============================================================================
+
+async function createUserNotificationOnce({
+  userId,
+  notificationId,
+  data,
+}: {
+  userId: string;
+  notificationId: string;
+  data: Record<string, any>;
+}) {
+  const notificationRef = db
+    .collection("users")
+    .doc(userId)
+    .collection("notifications")
+    .doc(notificationId);
+
+  const existingNotification = await notificationRef.get();
+
+  if (existingNotification.exists) {
+    return false;
+  }
+
+  await notificationRef.set({
+    ...data,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    isRead: false,
+  });
+
+  return true;
+}
+
+/**
+ * Runs every minute and alerts assigned speakers 5 minutes before their
+ * active/upcoming session ends.
+ */
+export const sendSpeakerSessionEndingAlerts = onSchedule(
+  {
+    region: FUNCTION_REGION,
+    schedule: "every 1 minutes",
+    timeZone: "Asia/Kuala_Lumpur",
+  },
+  async () => {
+    const now = new Date();
+
+    const alertWindowStart = admin.firestore.Timestamp.fromDate(
+      new Date(now.getTime() + 4 * 60 * 1000)
+    );
+
+    const alertWindowEnd = admin.firestore.Timestamp.fromDate(
+      new Date(now.getTime() + 6 * 60 * 1000)
+    );
+
+    const sessionsSnap = await db
+      .collection("sessions")
+      .where("endTime", ">=", alertWindowStart)
+      .where("endTime", "<=", alertWindowEnd)
+      .get();
+
+    let sentCount = 0;
+
+    for (const sessionDoc of sessionsSnap.docs) {
+      const sessionData = sessionDoc.data();
+
+      if (sessionData.speakerFiveMinuteAlertSent === true) {
+        continue;
+      }
+
+      const speakerIds = Array.isArray(sessionData.speakerIds) ?
+        sessionData.speakerIds.map((speakerId) => speakerId.toString()) :
+        [];
+
+      if (speakerIds.length === 0) {
+        await sessionDoc.ref.update({
+          speakerFiveMinuteAlertSent: true,
+          speakerFiveMinuteAlertSkippedReason: "No speakerIds found",
+          speakerFiveMinuteAlertSentAt:
+            admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        continue;
+      }
+
+      const eventId = (sessionData.eventId || "").toString();
+      const sessionTitle = (sessionData.title || "Session").toString();
+      const sessionLocation = (sessionData.location || "").toString();
+
+      for (const speakerId of speakerIds) {
+        const created = await createUserNotificationOnce({
+          userId: speakerId,
+          notificationId: `speaker_5min_${sessionDoc.id}`,
+          data: {
+            eventId,
+            title: "Session Ending Soon",
+            subtitle: "5 minutes remaining",
+            body: `Your session "${sessionTitle}" will end in 5 minutes.`,
+            type: "alert",
+            targetRole: "speaker",
+            includeDate: true,
+            data: {
+              notificationCategory: "speakerSessionEndingAlert",
+              sessionId: sessionDoc.id,
+              sessionTitle,
+              sessionLocation,
+              eventId,
+            },
+          },
+        });
+
+        if (created) sentCount++;
+      }
+
+      await sessionDoc.ref.update({
+        speakerFiveMinuteAlertSent: true,
+        speakerFiveMinuteAlertSentAt:
+          admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    console.log(`Speaker 5-minute session alerts created: ${sentCount}`);
+  }
+);
+
+/**
+ * Runs every 5 minutes and sends a closing message to delegates/attendees and
+ * speakers shortly before the active event ends.
+ *
+ * Required event document field:
+ * endTime: Firestore Timestamp
+ */
+export const sendEventEndingMessages = onSchedule(
+  {
+    region: FUNCTION_REGION,
+    schedule: "every 5 minutes",
+    timeZone: "Asia/Kuala_Lumpur",
+  },
+  async () => {
+    const now = new Date();
+
+    const endingWindowStart = admin.firestore.Timestamp.fromDate(
+      new Date(now.getTime() + 25 * 60 * 1000)
+    );
+
+    const endingWindowEnd = admin.firestore.Timestamp.fromDate(
+      new Date(now.getTime() + 35 * 60 * 1000)
+    );
+
+    const eventsSnap = await db
+      .collection("events")
+      .where("isActive", "==", true)
+      .where("endTime", ">=", endingWindowStart)
+      .where("endTime", "<=", endingWindowEnd)
+      .get();
+
+    let sentCount = 0;
+
+    for (const eventDoc of eventsSnap.docs) {
+      const eventData = eventDoc.data();
+
+      if (eventData.eventEndingMessageSent === true) {
+        continue;
+      }
+
+      const eventName = (
+        eventData.name ||
+        eventData.title ||
+        eventData.eventName ||
+        "the event"
+      ).toString();
+
+      const usersSnap = await db
+        .collection("users")
+        .where("status", "==", "approved")
+        .where("eventIds", "array-contains", eventDoc.id)
+        .where("role", "in", ["attendee", "delegate", "speaker"])
+        .get();
+
+      for (const userDoc of usersSnap.docs) {
+        const created = await createUserNotificationOnce({
+          userId: userDoc.id,
+          notificationId: `event_ending_${eventDoc.id}`,
+          data: {
+            eventId: eventDoc.id,
+            eventName,
+            title: "Event Coming to an End",
+            subtitle: "Thank you for being part of this event",
+            body:
+              `As ${eventName} comes to an end, we sincerely thank you for ` +
+              "your participation, engagement, and valuable presence. We hope " +
+              "this event was meaningful and memorable for you.",
+            type: "information",
+            targetRole: "all",
+            includeDate: true,
+            data: {
+              notificationCategory: "eventEndingMessage",
+              eventId: eventDoc.id,
+            },
+          },
+        });
+
+        if (created) sentCount++;
+      }
+
+      await eventDoc.ref.update({
+        eventEndingMessageSent: true,
+        eventEndingMessageSentAt:
+          admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    console.log(`Event ending messages created: ${sentCount}`);
+  }
+);
+
 /**
  * Runs daily and cleans archived events whose cleanupScheduledAt is due.
  * Keeps admin/staff accounts and keeps approved report photos.
