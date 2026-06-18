@@ -38,7 +38,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
   final ImagePicker _imagePicker = ImagePicker();
 
-  DateTime? _selectedDate;
+  DateTime? _startDate;
+  DateTime? _endDate;
   TimeOfDay? _startTime;
   TimeOfDay? _endTime;
 
@@ -123,7 +124,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     if (startTimestamp is Timestamp) {
       final startDate = startTimestamp.toDate();
-      _selectedDate = DateTime(
+      _startDate = DateTime(
         startDate.year,
         startDate.month,
         startDate.day,
@@ -136,6 +137,11 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     if (endTimestamp is Timestamp) {
       final endDate = endTimestamp.toDate();
+      _endDate = DateTime(
+        endDate.year,
+        endDate.month,
+        endDate.day,
+      );
       _endTime = TimeOfDay(
         hour: endDate.hour,
         minute: endDate.minute,
@@ -256,12 +262,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     );
   }
 
-  Future<void> _pickDate() async {
+  Future<void> _pickStartDate() async {
     final now = DateTime.now();
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? now,
+      initialDate: _startDate ?? now,
       firstDate: DateTime(now.year - 1),
       lastDate: DateTime(now.year + 10),
       builder: (context, child) {
@@ -278,7 +284,23 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     );
 
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() => _startDate = picked);
+    }
+  }
+
+
+  Future<void> _pickEndDate() async {
+    final now = DateTime.now();
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? _startDate ?? now,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 10),
+    );
+
+    if (picked != null) {
+      setState(() => _endDate = picked);
     }
   }
 
@@ -681,13 +703,18 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
 
     if (!_formKey.currentState!.validate()) return null;
 
-    if (_selectedDate == null) {
-      _showMessage('Please select event date.');
+    if (_startDate == null) {
+      _showMessage('Please select start date.');
       return null;
     }
 
     if (_startTime == null) {
       _showMessage('Please select start time.');
+      return null;
+    }
+
+    if (_endDate == null) {
+      _showMessage('Please select end date.');
       return null;
     }
 
@@ -699,8 +726,8 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     if (!_validatePartners()) return null;
     if (!_validateSpeakers()) return null;
 
-    final startDate = _combineDateAndTime(_selectedDate!, _startTime!);
-    final endDate = _combineDateAndTime(_selectedDate!, _endTime!);
+    final startDate = _combineDateAndTime(_startDate!, _startTime!);
+    final endDate = _combineDateAndTime(_endDate!, _endTime!);
 
     if (!endDate.isAfter(startDate)) {
       _showMessage('End time must be after start time.');
@@ -859,10 +886,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           return Column(
             children: [
               _PickerField(
-                label: 'Event Date',
-                value: _formatDate(_selectedDate),
+                label: 'Start Date',
+                value: _formatDate(_startDate),
                 icon: Icons.calendar_today_outlined,
-                onTap: _pickDate,
+                onTap: _pickStartDate,
               ),
               const SizedBox(height: 15),
               Row(
@@ -898,10 +925,10 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           children: [
             Expanded(
               child: _PickerField(
-                label: 'Event Date',
-                value: _formatDate(_selectedDate),
+                label: 'Start Date',
+                value: _formatDate(_startDate),
                 icon: Icons.calendar_today_outlined,
-                onTap: _pickDate,
+                onTap: _pickStartDate,
               ),
             ),
             const SizedBox(width: 8),

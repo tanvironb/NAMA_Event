@@ -1462,17 +1462,62 @@ export const deleteAuthUserFromFirestore = functionsV1
 // ============================================================================
 
 async function assertAdminUser(uid: string): Promise<void> {
+  const authUser = await admin.auth().getUser(uid);
+  const customClaims = authUser.customClaims || {};
+
+  if (customClaims.admin === true || customClaims.role === "admin") {
+    console.log("Archive admin check passed by custom claim:", {uid});
+    return;
+  }
+
   const userDoc = await db.collection("users").doc(uid).get();
 
-  if (!userDoc.exists) {
-    throw new HttpsError("permission-denied", "Admin profile not found.");
+  if (userDoc.exists) {
+    const userData = userDoc.data() || {};
+    const role = (userData.role || "").toString().toLowerCase().trim();
+    const status = (userData.status || "").toString().toLowerCase().trim();
+
+    console.log("Archive admin check by uid document:", {
+      uid,
+      role,
+      status,
+      email: userData.email || authUser.email || "",
+    });
+
+    if (role === "admin") {
+      return;
+    }
   }
 
-  const role = (userDoc.data()?.role || "").toString().toLowerCase();
+  const email = (authUser.email || "").toString().toLowerCase().trim();
 
-  if (role !== "admin") {
-    throw new HttpsError("permission-denied", "Only admins can archive events.");
+  if (email) {
+    const emailSnapshot = await db
+      .collection("users")
+      .where("email", "==", email)
+      .limit(1)
+      .get();
+
+    if (!emailSnapshot.empty) {
+      const userData = emailSnapshot.docs[0].data() || {};
+      const role = (userData.role || "").toString().toLowerCase().trim();
+      const status = (userData.status || "").toString().toLowerCase().trim();
+
+      console.log("Archive admin check by email document:", {
+        uid,
+        firestoreDocId: emailSnapshot.docs[0].id,
+        role,
+        status,
+        email,
+      });
+
+      if (role === "admin") {
+        return;
+      }
+    }
   }
+
+  throw new HttpsError("permission-denied", "Only admins can archive events.");
 }
 
 /**
