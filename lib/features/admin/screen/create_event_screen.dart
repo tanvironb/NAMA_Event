@@ -136,15 +136,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     }
 
     if (endTimestamp is Timestamp) {
-      final endDate = endTimestamp.toDate();
+      final endDateValue = endTimestamp.toDate();
       _endDate = DateTime(
-        endDate.year,
-        endDate.month,
-        endDate.day,
+        endDateValue.year,
+        endDateValue.month,
+        endDateValue.day,
       );
       _endTime = TimeOfDay(
-        hour: endDate.hour,
-        minute: endDate.minute,
+        hour: endDateValue.hour,
+        minute: endDateValue.minute,
       );
     }
 
@@ -284,10 +284,15 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     );
 
     if (picked != null) {
-      setState(() => _startDate = picked);
+      setState(() {
+        _startDate = picked;
+
+        if (_endDate != null && _endDate!.isBefore(_dateOnly(picked))) {
+          _endDate = picked;
+        }
+      });
     }
   }
-
 
   Future<void> _pickEndDate() async {
     final now = DateTime.now();
@@ -295,13 +300,28 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: _endDate ?? _startDate ?? now,
-      firstDate: DateTime(now.year - 1),
+      firstDate: _startDate ?? DateTime(now.year - 1),
       lastDate: DateTime(now.year + 10),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+                  primary: _primaryColor,
+                  secondary: _goldColor,
+                ),
+          ),
+          child: child!,
+        );
+      },
     );
 
     if (picked != null) {
       setState(() => _endDate = picked);
     }
+  }
+
+  DateTime _dateOnly(DateTime date) {
+    return DateTime(date.year, date.month, date.day);
   }
 
   Future<void> _pickStartTime() async {
@@ -730,7 +750,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     final endDate = _combineDateAndTime(_endDate!, _endTime!);
 
     if (!endDate.isAfter(startDate)) {
-      _showMessage('End time must be after start time.');
+      _showMessage('End date and time must be after start date and time.');
       return null;
     }
 
@@ -880,20 +900,22 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   Widget _buildDateTimeFields() {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isSmall = constraints.maxWidth < 360;
+        final isSmall = constraints.maxWidth < 380;
 
         if (isSmall) {
           return Column(
             children: [
-              _PickerField(
-                label: 'Start Date',
-                value: _formatDate(_startDate),
-                icon: Icons.calendar_today_outlined,
-                onTap: _pickStartDate,
-              ),
-              const SizedBox(height: 15),
               Row(
                 children: [
+                  Expanded(
+                    child: _PickerField(
+                      label: 'Start Date',
+                      value: _formatDate(_startDate),
+                      icon: Icons.calendar_today_outlined,
+                      onTap: _pickStartDate,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: _PickerField(
                       label: 'Start Time',
@@ -902,6 +924,19 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                           : _formatTime(_startTime),
                       icon: Icons.access_time_rounded,
                       onTap: _pickStartTime,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+              Row(
+                children: [
+                  Expanded(
+                    child: _PickerField(
+                      label: 'End Date',
+                      value: _formatDate(_endDate),
+                      icon: Icons.event_available_outlined,
+                      onTap: _pickEndDate,
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -921,34 +956,53 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
           );
         }
 
-        return Row(
+        return Column(
           children: [
-            Expanded(
-              child: _PickerField(
-                label: 'Start Date',
-                value: _formatDate(_startDate),
-                icon: Icons.calendar_today_outlined,
-                onTap: _pickStartDate,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: _PickerField(
+                    label: 'Start Date',
+                    value: _formatDate(_startDate),
+                    icon: Icons.calendar_today_outlined,
+                    onTap: _pickStartDate,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _PickerField(
+                    label: 'Start Time',
+                    value: _startTime == null
+                        ? 'Start time'
+                        : _formatTime(_startTime),
+                    icon: Icons.access_time_rounded,
+                    onTap: _pickStartTime,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _PickerField(
-                label: 'Start Time',
-                value:
-                    _startTime == null ? 'Start time' : _formatTime(_startTime),
-                icon: Icons.access_time_rounded,
-                onTap: _pickStartTime,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _PickerField(
-                label: 'End Time',
-                value: _endTime == null ? 'End time' : _formatTime(_endTime),
-                icon: Icons.access_time_rounded,
-                onTap: _pickEndTime,
-              ),
+            const SizedBox(height: 15),
+            Row(
+              children: [
+                Expanded(
+                  child: _PickerField(
+                    label: 'End Date',
+                    value: _formatDate(_endDate),
+                    icon: Icons.event_available_outlined,
+                    onTap: _pickEndDate,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _PickerField(
+                    label: 'End Time',
+                    value:
+                        _endTime == null ? 'End time' : _formatTime(_endTime),
+                    icon: Icons.access_time_rounded,
+                    onTap: _pickEndTime,
+                  ),
+                ),
+              ],
             ),
           ],
         );
