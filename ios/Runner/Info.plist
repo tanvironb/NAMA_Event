@@ -69,5 +69,8 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to upload profile pictures and event images.</string>
 
+	<key>NSContactsUsageDescription</key>
+	<string>This app needs access to your contacts so scanned event participants can be saved to your phone contacts.</string>
+
 </dict>
 </plist>
