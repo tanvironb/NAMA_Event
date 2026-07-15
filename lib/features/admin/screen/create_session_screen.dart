@@ -47,6 +47,10 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
   bool _isSaving = false;
 
   final List<String?> _selectedSpeakerIds = [null];
+  final List<String?> _selectedModeratorIds = [null];
+
+  late final Stream<List<_SpeakerOption>> _speakerOptionsStream;
+  late final Stream<List<_ModeratorOption>> _moderatorOptionsStream;
 
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _textMuted = Color(0xFF6B7280);
@@ -60,8 +64,18 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     'Networking',
     'Forum',
     'Breakout Session',
+    'Opening',
+    'Break',
+    'Closing',
     'Other',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _speakerOptionsStream = _createSpeakersStream();
+    _moderatorOptionsStream = _createModeratorsStream();
+  }
 
   @override
   void dispose() {
@@ -72,7 +86,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     super.dispose();
   }
 
-  Stream<List<_SpeakerOption>> _speakersStream() {
+  Stream<List<_SpeakerOption>> _createSpeakersStream() {
     return FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'speaker')
@@ -95,6 +109,32 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       );
 
       return speakers;
+    });
+  }
+
+  Stream<List<_ModeratorOption>> _createModeratorsStream() {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'moderator')
+        .where('eventIds', arrayContains: widget.eventId)
+        .snapshots()
+        .map((snapshot) {
+      final moderators = snapshot.docs.map((doc) {
+        final data = doc.data();
+
+        return _ModeratorOption(
+          id: doc.id,
+          name: (data['name'] ?? '').toString(),
+          email: (data['email'] ?? '').toString(),
+          company: (data['company'] ?? '').toString(),
+        );
+      }).toList();
+
+      moderators.sort(
+        (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+      );
+
+      return moderators;
     });
   }
 
@@ -215,6 +255,25 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     });
   }
 
+  void _addModeratorDropdown() {
+    setState(() {
+      _selectedModeratorIds.add(null);
+    });
+  }
+
+  void _removeModeratorDropdown(int index) {
+    if (_selectedModeratorIds.length == 1) {
+      setState(() {
+        _selectedModeratorIds[index] = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedModeratorIds.removeAt(index);
+    });
+  }
+
   void _clearFormForMoreSession() {
     _formKey.currentState?.reset();
 
@@ -235,6 +294,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       _sessionImageName = null;
       _venueImageName = null;
       _selectedSpeakerIds
+        ..clear()
+        ..add(null);
+      _selectedModeratorIds
         ..clear()
         ..add(null);
     });
@@ -337,6 +399,31 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     return '$hour:$minute $period';
   }
 
+  bool get _isNonSpeakingCategory {
+    final category = (_selectedCategory ?? '').trim().toLowerCase();
+
+    return category == 'opening' ||
+        category == 'opeaning' ||
+        category == 'break' ||
+        category == 'closing';
+  }
+
+  void _handleCategoryChanged(String? value) {
+    setState(() {
+      _selectedCategory = value;
+
+      if (_isNonSpeakingCategory) {
+        _selectedSpeakerIds
+          ..clear()
+          ..add(null);
+
+        _selectedModeratorIds
+          ..clear()
+          ..add(null);
+      }
+    });
+  }
+
   bool _validateSelectedSpeakers() {
     final selectedIds = _selectedSpeakerIds
         .whereType<String>()
@@ -350,6 +437,20 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
     if (selectedIds.toSet().length != selectedIds.length) {
       _showMessage('You selected the same speaker more than once.');
+      return false;
+    }
+
+    return true;
+  }
+
+  bool _validateSelectedModerators() {
+    final selectedIds = _selectedModeratorIds
+        .whereType<String>()
+        .where((id) => id.trim().isNotEmpty)
+        .toList();
+
+    if (selectedIds.toSet().length != selectedIds.length) {
+      _showMessage('You selected the same moderator more than once.');
       return false;
     }
 
@@ -376,17 +477,11 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
       return false;
     }
 
-    if (!_validateSelectedSpeakers()) {
+    if (!_isNonSpeakingCategory && !_validateSelectedSpeakers()) {
       return false;
     }
 
-    if (_sessionImageBytes == null) {
-      _showMessage('Please upload session picture.');
-      return false;
-    }
-
-    if (_venueImageBytes == null) {
-      _showMessage('Please upload venue picture.');
+    if (!_isNonSpeakingCategory && !_validateSelectedModerators()) {
       return false;
     }
 
@@ -401,25 +496,42 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final speakerIds = _selectedSpeakerIds
-          .whereType<String>()
-          .where((id) => id.trim().isNotEmpty)
-          .toSet()
-          .toList();
+      final speakerIds = _isNonSpeakingCategory
+          ? <String>[]
+          : _selectedSpeakerIds
+              .whereType<String>()
+              .where((id) => id.trim().isNotEmpty)
+              .toSet()
+              .toList();
+
+      final moderatorIds = _isNonSpeakingCategory
+          ? <String>[]
+          : _selectedModeratorIds
+              .whereType<String>()
+              .where((id) => id.trim().isNotEmpty)
+              .toSet()
+              .toList();
 
       final sessionDoc = FirebaseFirestore.instance.collection('sessions').doc();
 
-      final sessionImageUrl = await _uploadImageToStorage(
-        imageBytes: _sessionImageBytes!,
-        path:
-            'sessions/${sessionDoc.id}/session_image_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
+      String sessionImageUrl = '';
+      String venueImageUrl = '';
 
-      final venueImageUrl = await _uploadImageToStorage(
-        imageBytes: _venueImageBytes!,
-        path:
-            'sessions/${sessionDoc.id}/venue_image_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
+      if (_sessionImageBytes != null) {
+        sessionImageUrl = await _uploadImageToStorage(
+          imageBytes: _sessionImageBytes!,
+          path:
+              'sessions/${sessionDoc.id}/session_image_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+      }
+
+      if (_venueImageBytes != null) {
+        venueImageUrl = await _uploadImageToStorage(
+          imageBytes: _venueImageBytes!,
+          path:
+              'sessions/${sessionDoc.id}/venue_image_${DateTime.now().millisecondsSinceEpoch}.jpg',
+        );
+      }
 
       await sessionDoc.set({
         'eventId': widget.eventId,
@@ -429,6 +541,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
         'endTime': Timestamp.fromDate(endDate),
         'location': _sessionLocationController.text.trim(),
         'speakerIds': speakerIds,
+        'moderatorIds': moderatorIds,
         'liveStreamUrl': _liveStreamController.text.trim(),
         'qrCodePayload': sessionDoc.id,
         'category': _selectedCategory ?? '',
@@ -611,7 +724,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Add session details and assign speakers from dropdown.',
+                'Add session details and assign speakers and moderators.',
                 style: TextStyle(
                   color: _textMuted,
                   fontSize: 12.5,
@@ -674,9 +787,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                                   hint: 'Select category',
                                   icon: Icons.sell_outlined,
                                   items: _categories,
-                                  onChanged: (value) {
-                                    setState(() => _selectedCategory = value);
-                                  },
+                                  onChanged: _handleCategoryChanged,
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -699,9 +810,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                           ),
                           const SizedBox(height: 15),
                           _ImageUploadField(
-                            label: 'Session Picture',
+                            label: 'Session Picture (Optional)',
                             subtitle:
-                                'This image will appear in attendee event details and homepage.',
+                                'Optional. This image will appear in attendee event details and homepage.',
                             imageBytes: _sessionImageBytes,
                             icon: Icons.image_outlined,
                             onTap: _pickSessionImage,
@@ -709,9 +820,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                           ),
                           const SizedBox(height: 15),
                           _ImageUploadField(
-                            label: 'Venue / Location Picture',
+                            label: 'Venue / Location Picture (Optional)',
                             subtitle:
-                                'This image will appear on attendee homepage under venue section.',
+                                'Optional. This image will appear on attendee homepage under venue section.',
                             imageBytes: _venueImageBytes,
                             icon: Icons.location_city_outlined,
                             onTap: _pickVenueImage,
@@ -721,8 +832,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    if (!_isNonSpeakingCategory) ...[
                     StreamBuilder<List<_SpeakerOption>>(
-                      stream: _speakersStream(),
+                      stream: _speakerOptionsStream,
                       builder: (context, snapshot) {
                         final speakers = snapshot.data ?? [];
 
@@ -813,6 +925,140 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                       },
                     ),
                     const SizedBox(height: 14),
+                    StreamBuilder<List<_ModeratorOption>>(
+                      stream: _moderatorOptionsStream,
+                      builder: (context, snapshot) {
+                        final moderators = snapshot.data ?? [];
+
+                        return _SectionCard(
+                          title: 'Assign Moderator (Optional)',
+                          subtitle:
+                              'You may assign one or more moderators, or leave this section empty.',
+                          child: snapshot.connectionState ==
+                                  ConnectionState.waiting
+                              ? const Padding(
+                                  padding: EdgeInsets.all(18),
+                                  child: Center(
+                                    child: CircularProgressIndicator(
+                                      color: _primaryColor,
+                                    ),
+                                  ),
+                                )
+                              : moderators.isEmpty
+                                  ? const _NoModeratorsBox()
+                                  : Column(
+                                      children: [
+                                        ...List.generate(
+                                          _selectedModeratorIds.length,
+                                          (index) {
+                                            return Padding(
+                                              padding: EdgeInsets.only(
+                                                bottom: index ==
+                                                        _selectedModeratorIds
+                                                                .length -
+                                                            1
+                                                    ? 0
+                                                    : 12,
+                                              ),
+                                              child: _ModeratorDropdownField(
+                                                label:
+                                                    'Moderator ${index + 1}',
+                                                value: _selectedModeratorIds[
+                                                    index],
+                                                moderators: moderators,
+                                                onChanged: (value) {
+                                                  setState(() {
+                                                    _selectedModeratorIds[
+                                                        index] = value;
+                                                  });
+                                                },
+                                                onRemove: () =>
+                                                    _removeModeratorDropdown(
+                                                  index,
+                                                ),
+                                                canRemove:
+                                                    _selectedModeratorIds
+                                                            .length >
+                                                        1,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        const SizedBox(height: 12),
+                                        SizedBox(
+                                          width: double.infinity,
+                                          height: 44,
+                                          child: OutlinedButton.icon(
+                                            onPressed: _addModeratorDropdown,
+                                            icon: const Icon(
+                                              Icons.add_rounded,
+                                              size: 18,
+                                            ),
+                                            label: const Text(
+                                              'Add Another Moderator',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                            ),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: _primaryColor,
+                                              side: const BorderSide(
+                                                color: _fieldBorder,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    ] else ...[
+                      _SectionCard(
+                        title: 'Speaker and Moderator Assignment',
+                        subtitle:
+                            'No speaker or moderator is required for Opening, Break, or Closing sessions.',
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFAFAFF),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: _fieldBorder,
+                            ),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.info_outline_rounded,
+                                color: _primaryColor,
+                                size: 20,
+                              ),
+                              SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'You can create this session without assigning a speaker or moderator.',
+                                  style: TextStyle(
+                                    color: _textMuted,
+                                    fontSize: 11.5,
+                                    height: 1.35,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     _SwitchCard(
                       title: 'Enable Session Chat',
                       subtitle: 'Allow attendees to chat during this session.',
@@ -971,9 +1217,8 @@ class _SpeakerDropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final validValue = speakers.any((speaker) => speaker.id == value)
-        ? value
-        : null;
+    final validValue =
+        speakers.any((speaker) => speaker.id == value) ? value : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -981,143 +1226,106 @@ class _SpeakerDropdownField extends StatelessWidget {
         _FieldLabel(label),
         const SizedBox(height: 6),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: SizedBox(
-                height: 48,
-                child: DropdownButtonFormField<String>(
-                  value: validValue,
-                  isExpanded: true,
-                  menuMaxHeight: 300,
-                  onChanged: onChanged,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Required';
-                    }
-                    return null;
-                  },
-                  selectedItemBuilder: (context) {
-                    return speakers.map((speaker) {
-                      return Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          speaker.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF1F2937),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      );
-                    }).toList();
-                  },
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: Color(0xFF454062),
-                    size: 18,
+              child: DropdownButtonFormField<String>(
+                value: validValue,
+                isExpanded: true,
+                menuMaxHeight: 320,
+                dropdownColor: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                onChanged: onChanged,
+                validator: (selectedValue) {
+                  if (selectedValue == null ||
+                      selectedValue.trim().isEmpty) {
+                    return 'Please select a speaker';
+                  }
+                  return null;
+                },
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF454062),
+                  size: 18,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Select speaker',
+                  hintStyle: const TextStyle(
+                    color: _textMuted,
+                    fontSize: 12,
                   ),
-                  decoration: InputDecoration(
-                    hintText: 'Select speaker',
-                    hintStyle: const TextStyle(
-                      color: _textMuted,
-                      fontSize: 12,
+                  prefixIcon: const Icon(
+                    Icons.person_outline_rounded,
+                    color: _primaryColor,
+                    size: 19,
+                  ),
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 42,
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 13,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide: const BorderSide(
+                      color: _fieldBorder,
                     ),
-                    prefixIcon: const Icon(
-                      Icons.person_outline_rounded,
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide: const BorderSide(
                       color: _primaryColor,
-                      size: 19,
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 11,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(13),
-                      borderSide: const BorderSide(
-                        color: _fieldBorder,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(13),
-                      borderSide: const BorderSide(
-                        color: _primaryColor,
-                        width: 1.1,
-                      ),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(13),
-                      borderSide: const BorderSide(
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                    focusedErrorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(13),
-                      borderSide: const BorderSide(
-                        color: Colors.redAccent,
-                      ),
+                      width: 1.1,
                     ),
                   ),
-                  items: speakers.map((speaker) {
-                    return DropdownMenuItem<String>(
-                      value: speaker.id,
-                      child: SizedBox(
-                        width: double.infinity,
-                        child: Row(
-                          children: [
-                            Container(
-                              height: 28,
-                              width: 28,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFF4F1FF),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(
-                                Icons.person_outline_rounded,
-                                color: _primaryColor,
-                                size: 16,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    speaker.displayName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Color(0xFF1F2937),
-                                      fontSize: 11.8,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 1),
-                                  Text(
-                                    speaker.subtitle,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: _textMuted,
-                                      fontSize: 9.8,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide: const BorderSide(
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide: const BorderSide(
+                      color: Colors.redAccent,
+                    ),
+                  ),
+                ),
+                selectedItemBuilder: (context) {
+                  return speakers.map((speaker) {
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        speaker.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF1F2937),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     );
-                  }).toList(),
-                ),
+                  }).toList();
+                },
+                items: speakers.map((speaker) {
+                  return DropdownMenuItem<String>(
+                    value: speaker.id,
+                    child: Text(
+                      speaker.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF1F2937),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
             ),
             const SizedBox(width: 8),
@@ -1125,7 +1333,7 @@ class _SpeakerDropdownField extends StatelessWidget {
               onTap: onRemove,
               borderRadius: BorderRadius.circular(12),
               child: Container(
-                height: 46,
+                height: 48,
                 width: 40,
                 decoration: BoxDecoration(
                   color: Colors.white,
@@ -1133,6 +1341,231 @@ class _SpeakerDropdownField extends StatelessWidget {
                   border: Border.all(
                     color: _fieldBorder,
                   ),
+                ),
+                child: Icon(
+                  canRemove
+                      ? Icons.delete_outline_rounded
+                      : Icons.close_rounded,
+                  color: canRemove ? Colors.redAccent : _primaryColor,
+                  size: 19,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ModeratorOption {
+  final String id;
+  final String name;
+  final String email;
+  final String company;
+
+  const _ModeratorOption({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.company,
+  });
+
+  String get displayName {
+    final cleanName = name.trim().isEmpty ? 'Unnamed Moderator' : name.trim();
+
+    if (company.trim().isNotEmpty) {
+      return '$cleanName • $company';
+    }
+
+    return cleanName;
+  }
+
+  String get subtitle {
+    if (email.trim().isNotEmpty) return email.trim();
+    return 'Moderator';
+  }
+}
+
+class _NoModeratorsBox extends StatelessWidget {
+  const _NoModeratorsBox();
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE1DDF0)),
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.person_off_outlined,
+            color: _primaryColor,
+            size: 26,
+          ),
+          SizedBox(height: 8),
+          Text(
+            'No moderator accounts found',
+            style: TextStyle(
+              color: _primaryColor,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          SizedBox(height: 5),
+          Text(
+            'Admin must create moderator accounts inside Create Event first.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: _textMuted,
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModeratorDropdownField extends StatelessWidget {
+  final String label;
+  final String? value;
+  final List<_ModeratorOption> moderators;
+  final ValueChanged<String?> onChanged;
+  final VoidCallback onRemove;
+  final bool canRemove;
+
+  const _ModeratorDropdownField({
+    required this.label,
+    required this.value,
+    required this.moderators,
+    required this.onChanged,
+    required this.onRemove,
+    required this.canRemove,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+  static const Color _textMuted = Color(0xFF6B7280);
+
+  @override
+  Widget build(BuildContext context) {
+    final validValue =
+        moderators.any((moderator) => moderator.id == value) ? value : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label),
+        const SizedBox(height: 6),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                value: validValue,
+                isExpanded: true,
+                menuMaxHeight: 320,
+                dropdownColor: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                onChanged: onChanged,
+
+                icon: const Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: Color(0xFF454062),
+                  size: 18,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Select moderator',
+                  hintStyle: const TextStyle(
+                    color: _textMuted,
+                    fontSize: 12,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.person_outline_rounded,
+                    color: _primaryColor,
+                    size: 19,
+                  ),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 42),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 13,
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide: const BorderSide(color: _fieldBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide: const BorderSide(
+                      color: _primaryColor,
+                      width: 1.1,
+                    ),
+                  ),
+                  errorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide: const BorderSide(color: Colors.redAccent),
+                  ),
+                  focusedErrorBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(13),
+                    borderSide: const BorderSide(color: Colors.redAccent),
+                  ),
+                ),
+                selectedItemBuilder: (context) {
+                  return moderators.map((moderator) {
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        moderator.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF1F2937),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    );
+                  }).toList();
+                },
+                items: moderators.map((moderator) {
+                  return DropdownMenuItem<String>(
+                    value: moderator.id,
+                    child: Text(
+                      moderator.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF1F2937),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: onRemove,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                height: 48,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _fieldBorder),
                 ),
                 child: Icon(
                   canRemove
@@ -1216,7 +1649,7 @@ class _ImageUploadField extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Upload $label',
+                                'Upload ${label.replaceAll(' (Optional)', '')}',
                                 style: const TextStyle(
                                   color: _primaryColor,
                                   fontSize: 12,

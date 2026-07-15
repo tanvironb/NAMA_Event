@@ -1,15 +1,16 @@
 // lib/features/settings/screen/settings_screen.dart
 
+import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
+import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
 import 'package:events_app_trueattempt/features/certificates/screen/my_certificates_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
+import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
+import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/settings/screen/about_event_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
-import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
-import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -19,7 +20,9 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final ValueNotifier<double> _scale = ValueNotifier(1);
+  final ValueNotifier<double> _scale = ValueNotifier<double>(1);
+
+  bool _isLoggingOut = false;
 
   @override
   void dispose() {
@@ -28,15 +31,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _logout() async {
+    if (_isLoggingOut) return;
+
     final confirmed = await _showLogoutDialog(context);
 
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
-    await ref.read(authViewModelProvider.notifier).signOut();
+    setState(() {
+      _isLoggingOut = true;
+    });
 
-    if (!mounted) return;
+    try {
+      await ref.read(authViewModelProvider.notifier).signOut();
 
-    Navigator.of(context, rootNavigator: true).popUntil((route) => route.isFirst);
+      if (!mounted) return;
+
+      final currentUser = ref.read(firebaseAuthProvider).currentUser;
+
+      if (currentUser != null) {
+        throw Exception('Firebase authentication session was not cleared.');
+      }
+
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute<void>(
+          builder: (_) => const LoginScreen(),
+        ),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isLoggingOut = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Logout failed: $e'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
+    }
   }
 
   bool _canSeeCertificates(String? role) {
@@ -48,7 +84,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _canSeeConnections(String? role) {
     final cleanRole = (role ?? '').trim().toLowerCase();
 
-    // Connections should show for staff, attendee, and speaker.
     return cleanRole == 'staff' ||
         cleanRole == 'attendee' ||
         cleanRole == 'speaker';
@@ -57,7 +92,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _canSeeHelpCentre(String? role) {
     final cleanRole = (role ?? '').trim().toLowerCase();
 
-    // Admin should NOT see Help Centre.
     return cleanRole != 'admin';
   }
 
@@ -83,11 +117,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               Row(
                 children: [
                   InkWell(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(
-                      Icons.arrow_back,
-                      size: 22,
-                      color: AppColors.namaNavyBlue,
+                    onTap: _isLoggingOut
+                        ? null
+                        : () {
+                            Navigator.of(context).pop();
+                          },
+                    borderRadius: BorderRadius.circular(10),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(
+                        Icons.arrow_back,
+                        size: 22,
+                        color: AppColors.namaNavyBlue,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -108,9 +150,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: Icons.workspace_premium_outlined,
                   title: 'My Certificates',
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
                         builder: (_) => const MyCertificatesScreen(),
                       ),
                     );
@@ -122,9 +163,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: Icons.people_outline,
                   title: 'Connections',
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
                         builder: (_) => const ConnectionsScreen(),
                       ),
                     );
@@ -135,9 +175,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.info_outline_rounded,
                 title: 'About Event',
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
                       builder: (_) => const AboutEventScreen(),
                     ),
                   );
@@ -148,9 +187,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.lock_outline,
                 title: 'Privacy',
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
                       builder: (_) => const PrivacyScreen(),
                     ),
                   );
@@ -162,9 +200,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   icon: Icons.help_outline,
                   title: 'Help Centre',
                   onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
                         builder: (_) => const HelpCenterScreen(),
                       ),
                     );
@@ -180,17 +217,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     return Transform.scale(
                       scale: scale,
                       child: GestureDetector(
-                        onTapDown: (_) => _scale.value = 0.96,
-                        onTapCancel: () => _scale.value = 1,
-                        onTapUp: (_) {
-                          _scale.value = 1;
-                          _logout();
-                        },
-                        child: Container(
+                        onTapDown: _isLoggingOut
+                            ? null
+                            : (_) {
+                                _scale.value = 0.96;
+                              },
+                        onTapCancel: _isLoggingOut
+                            ? null
+                            : () {
+                                _scale.value = 1;
+                              },
+                        onTapUp: _isLoggingOut
+                            ? null
+                            : (_) {
+                                _scale.value = 1;
+                                _logout();
+                              },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
                           width: buttonWidth,
                           height: 42,
                           decoration: BoxDecoration(
-                            color: Colors.red.shade600,
+                            color: _isLoggingOut
+                                ? Colors.red.shade300
+                                : Colors.red.shade600,
                             borderRadius: BorderRadius.circular(22),
                             boxShadow: [
                               BoxShadow(
@@ -201,14 +251,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ],
                           ),
                           alignment: Alignment.center,
-                          child: const Text(
-                            'Log Out',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          child: _isLoggingOut
+                              ? const SizedBox(
+                                  height: 19,
+                                  width: 19,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'Log Out',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                         ),
                       ),
                     );
@@ -230,7 +289,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required VoidCallback onTap,
   }) {
     return InkWell(
-      onTap: onTap,
+      onTap: _isLoggingOut ? null : onTap,
       child: Container(
         height: 48,
         decoration: BoxDecoration(
@@ -274,8 +333,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<bool?> _showLogoutDialog(BuildContext context) {
     return showDialog<bool>(
       context: context,
-      barrierDismissible: true,
-      builder: (context) {
+      barrierDismissible: false,
+      builder: (dialogContext) {
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(18),
@@ -298,7 +357,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
               child: const Text(
                 'Cancel',
                 style: TextStyle(
@@ -308,7 +369,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
             ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red.shade600,
                 foregroundColor: Colors.white,

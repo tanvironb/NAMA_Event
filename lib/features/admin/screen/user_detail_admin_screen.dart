@@ -23,8 +23,26 @@ class UserDetailAdminScreen extends ConsumerStatefulWidget {
 class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
   @override
   Widget build(BuildContext context) {
-    final possibleRoles = ['attendee', 'staff', 'speaker', 'admin'];
-    final possibleStatuses = ['pending', 'approved', 'rejected', 'blocked'];
+    final possibleRoles = <String>[
+      'attendee',
+      'staff',
+      'speaker',
+      'moderator',
+      'admin',
+    ];
+    final possibleStatuses = <String>[
+      'pending',
+      'approved',
+      'rejected',
+      'blocked',
+    ];
+
+    final currentRole = widget.user.role.trim().toLowerCase();
+    final currentStatus = widget.user.status.trim().toLowerCase();
+
+    final safeRole = possibleRoles.contains(currentRole) ? currentRole : null;
+    final safeStatus =
+        possibleStatuses.contains(currentStatus) ? currentStatus : null;
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -113,7 +131,7 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
 
                     // Role Changer
                     DropdownButtonFormField<String>(
-                      value: widget.user.role,
+                      value: safeRole,
                       isExpanded: true,
                       icon: const Icon(Icons.keyboard_arrow_down_rounded),
                       items: possibleRoles
@@ -138,7 +156,7 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
 
                     // Status Changer
                     DropdownButtonFormField<String>(
-                      value: widget.user.status,
+                      value: safeStatus,
                       isExpanded: true,
                       icon: const Icon(Icons.keyboard_arrow_down_rounded),
                       items: possibleStatuses
@@ -301,7 +319,9 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
   }
 
   Future<void> _handleRoleChange(String? newRole) async {
-    if (newRole != null && newRole != widget.user.role) {
+    final currentRole = widget.user.role.trim().toLowerCase();
+
+    if (newRole != null && newRole != currentRole) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (BuildContext dialogContext) {
@@ -378,7 +398,9 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
   }
 
   Future<void> _handleStatusChange(String? newStatus) async {
-    if (newStatus != null && newStatus != widget.user.status) {
+    final currentStatus = widget.user.status.trim().toLowerCase();
+
+    if (newStatus != null && newStatus != currentStatus) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (BuildContext dialogContext) {
