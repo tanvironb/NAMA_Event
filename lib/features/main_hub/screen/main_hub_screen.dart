@@ -162,7 +162,10 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
 
     final role = _normalizeRole(userData);
 
-    if (role != 'attendee' && role != 'speaker' && role != 'staff') {
+    if (role != 'attendee' &&
+        role != 'speaker' &&
+        role != 'moderator' &&
+        role != 'staff') {
       return;
     }
 
@@ -354,8 +357,20 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
 
     if (rawRole == 'administrator') return 'admin';
     if (rawRole == 'admins') return 'admin';
+
     if (rawRole == 'speaker_user') return 'speaker';
+    if (rawRole == 'speaker user') return 'speaker';
+    if (rawRole == 'speaker-user') return 'speaker';
+
+    if (rawRole == 'moderator_user') return 'moderator';
+    if (rawRole == 'moderator user') return 'moderator';
+    if (rawRole == 'moderator-user') return 'moderator';
+    if (rawRole == 'mod') return 'moderator';
+
     if (rawRole == 'staff_user') return 'staff';
+    if (rawRole == 'staff user') return 'staff';
+    if (rawRole == 'staff-user') return 'staff';
+
     if (rawRole == 'delegate') return 'attendee';
     if (rawRole == 'delegates') return 'attendee';
     if (rawRole == 'user') return 'attendee';
@@ -371,6 +386,7 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
         );
 
       case 'speaker':
+      case 'moderator':
         return SpeakerShell(
           key: ValueKey('speaker_shell_$role'),
         );

@@ -15,6 +15,7 @@ import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/services/notification_services.dart';
 
+import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
@@ -40,6 +41,7 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
 
   List<Widget> _widgetOptions() => <Widget>[
         const SpeakerHomeQuickActionsPage(),
+        const AgendaScreen(),
         const DirectoriesHubScreen(),
         const QRHubScreen(),
         const ProfileTabScreen(),
@@ -104,14 +106,19 @@ class _SpeakerShellState extends ConsumerState<SpeakerShell> {
         selectedItemColor: AppColors.namaGoldenYellow,
         unselectedItemColor: Colors.white,
         backgroundColor: AppColors.namaNavyBlue,
-        selectedFontSize: 12,
-        unselectedFontSize: 12,
+        selectedFontSize: 11,
+        unselectedFontSize: 11,
         elevation: 0,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             activeIcon: Icon(Icons.home),
             label: 'Home',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.calendar_month_outlined),
+            activeIcon: Icon(Icons.calendar_month),
+            label: 'Agenda',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.people_outline),
@@ -407,8 +414,9 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
               allVenueImages.add({
                 'url': imageUrl,
                 'title': venueTitle.isEmpty ? 'Venue' : venueTitle,
-                'description':
-                    venueDescription.isEmpty ? 'Venue details' : venueDescription,
+                'description': venueDescription.isEmpty
+                    ? 'Venue details'
+                    : venueDescription,
               });
             }
           }
@@ -557,7 +565,8 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                             },
                             child: Container(
                               height: 30,
-                              padding: const EdgeInsets.symmetric(horizontal: 15),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 15),
                               decoration: BoxDecoration(
                                 color: AppColors.namaGoldenYellow,
                                 borderRadius: BorderRadius.circular(16),

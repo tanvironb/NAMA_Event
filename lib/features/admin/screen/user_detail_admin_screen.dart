@@ -1,4 +1,5 @@
 // lib/features/admin/screen/user_detail_admin_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
@@ -23,26 +24,23 @@ class UserDetailAdminScreen extends ConsumerStatefulWidget {
 class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
   @override
   Widget build(BuildContext context) {
-    final possibleRoles = <String>[
+    final possibleRoles = [
       'attendee',
       'staff',
       'speaker',
       'moderator',
       'admin',
     ];
-    final possibleStatuses = <String>[
-      'pending',
-      'approved',
-      'rejected',
-      'blocked',
-    ];
 
-    final currentRole = widget.user.role.trim().toLowerCase();
-    final currentStatus = widget.user.status.trim().toLowerCase();
+    final possibleStatuses = ['pending', 'approved', 'rejected', 'blocked'];
 
-    final safeRole = possibleRoles.contains(currentRole) ? currentRole : null;
-    final safeStatus =
-        possibleStatuses.contains(currentStatus) ? currentStatus : null;
+    final currentRole = possibleRoles.contains(widget.user.role)
+        ? widget.user.role
+        : 'attendee';
+
+    final currentStatus = possibleStatuses.contains(widget.user.status)
+        ? widget.user.status
+        : 'pending';
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -56,7 +54,6 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
 
               const SizedBox(height: 18),
 
-              // User Details Card
               _buildCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,7 +111,6 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
 
               const SizedBox(height: 18),
 
-              // Admin Controls Card
               _buildCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,21 +125,30 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Role Changer
                     DropdownButtonFormField<String>(
-                      value: safeRole,
+                      value: currentRole,
                       isExpanded: true,
                       icon: const Icon(Icons.keyboard_arrow_down_rounded),
                       items: possibleRoles
                           .map(
                             (role) => DropdownMenuItem(
                               value: role,
-                              child: Text(
-                                role.toUpperCase(),
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  letterSpacing: 0.5,
-                                ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _getRoleIcon(role),
+                                    color: _getRoleColor(role),
+                                    size: 17,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _getRoleLabel(role),
+                                    style: const TextStyle(
+                                      fontSize: 14,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           )
@@ -154,9 +159,8 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
 
                     const SizedBox(height: 14),
 
-                    // Status Changer
                     DropdownButtonFormField<String>(
-                      value: safeStatus,
+                      value: currentStatus,
                       isExpanded: true,
                       icon: const Icon(Icons.keyboard_arrow_down_rounded),
                       items: possibleStatuses
@@ -189,7 +193,6 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
 
                     const SizedBox(height: 18),
 
-                    // Manage User's Profile Button
                     Align(
                       alignment: Alignment.center,
                       child: SizedBox(
@@ -234,6 +237,55 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
         ),
       ),
     );
+  }
+
+  String _getRoleLabel(String role) {
+    switch (role) {
+      case 'attendee':
+        return 'ATTENDEE';
+      case 'staff':
+        return 'STAFF';
+      case 'speaker':
+        return 'SPEAKER';
+      case 'moderator':
+        return 'MODERATOR';
+      case 'admin':
+        return 'ADMIN';
+      default:
+        return role.toUpperCase();
+    }
+  }
+
+  IconData _getRoleIcon(String role) {
+    switch (role) {
+      case 'admin':
+        return Icons.admin_panel_settings_rounded;
+      case 'staff':
+        return Icons.badge_outlined;
+      case 'speaker':
+        return Icons.mic_rounded;
+      case 'moderator':
+        return Icons.record_voice_over_rounded;
+      case 'attendee':
+      default:
+        return Icons.person_outline_rounded;
+    }
+  }
+
+  Color _getRoleColor(String role) {
+    switch (role) {
+      case 'admin':
+        return AppColors.namaNavyBlue;
+      case 'staff':
+        return Colors.blueGrey;
+      case 'speaker':
+        return AppColors.namaGoldenYellow;
+      case 'moderator':
+        return Colors.deepPurple;
+      case 'attendee':
+      default:
+        return Colors.grey;
+    }
   }
 
   Widget _buildCustomHeader(BuildContext context) {
@@ -319,9 +371,7 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
   }
 
   Future<void> _handleRoleChange(String? newRole) async {
-    final currentRole = widget.user.role.trim().toLowerCase();
-
-    if (newRole != null && newRole != currentRole) {
+    if (newRole != null && newRole != widget.user.role) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (BuildContext dialogContext) {
@@ -334,7 +384,7 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
               style: TextStyle(fontSize: 18),
             ),
             content: Text(
-              'Are you sure you want to change this user\'s role to ${newRole.toUpperCase()}?',
+              'Are you sure you want to change this user\'s role to ${_getRoleLabel(newRole)}?',
               style: const TextStyle(fontSize: 14),
             ),
             actions: [
@@ -366,7 +416,10 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
         try {
           await ref.read(userProfileRepositoryProvider).updateUserProfile(
             widget.user.uid,
-            {'role': newRole},
+            {
+              'role': newRole,
+              'updatedAt': DateTime.now(),
+            },
           );
 
           if (mounted) {
@@ -374,7 +427,7 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
 
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Role updated to ${newRole.toUpperCase()}'),
+                content: Text('Role updated to ${_getRoleLabel(newRole)}'),
                 backgroundColor: AppColors.successGreen,
               ),
             );
@@ -398,9 +451,7 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
   }
 
   Future<void> _handleStatusChange(String? newStatus) async {
-    final currentStatus = widget.user.status.trim().toLowerCase();
-
-    if (newStatus != null && newStatus != currentStatus) {
+    if (newStatus != null && newStatus != widget.user.status) {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (BuildContext dialogContext) {

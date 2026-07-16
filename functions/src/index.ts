@@ -3,7 +3,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-multiple-empty-lines */
 
-
 import {onDocumentCreated, onDocumentWritten} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler";
@@ -59,6 +58,148 @@ export const handleUserWrite = onDocumentWritten(
         qrCodeGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
+
+    return null;
+  }
+);
+
+// ============================================================================
+// SPEAKER / MODERATOR ROLE EMAIL
+// ============================================================================
+
+function normalizeRoleValue(role: any): string {
+  return (role || "").toString().trim().toLowerCase();
+}
+
+async function queueSpeakerRoleEmail({
+  userId,
+  email,
+  name,
+  role,
+}: {
+  userId: string;
+  email: string;
+  name: string;
+  role: "speaker" | "moderator";
+}) {
+  const cleanEmail = email.trim();
+
+  if (!cleanEmail) {
+    console.log(`Skipping ${role} role email for ${userId}: no email found.`);
+    return;
+  }
+
+  const displayName = name.trim().length > 0 ? name.trim() : "there";
+  const roleLabel = role === "moderator" ? "Moderator" : "Speaker";
+
+  await db.collection("mail").add({
+    to: [cleanEmail],
+    message: {
+      subject: `You have been assigned as ${roleLabel}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #222;">
+          <p>Dear ${displayName},</p>
+
+          <p>
+            You have been assigned as a <strong>${roleLabel}</strong> for the event.
+          </p>
+
+          <p>
+            You may now log in to the NAMA Events app using your registered email address.
+            Your interface will provide access to the speaker/moderator tools and related event features.
+          </p>
+
+          <p>
+            Thank you.
+          </p>
+
+          <p>
+            Best regards,<br/>
+            NAMA Events Team
+          </p>
+        </div>
+      `,
+      text:
+        `Dear ${displayName},\n\n` +
+        `You have been assigned as a ${roleLabel} for the event.\n\n` +
+        "You may now log in to the NAMA Events app using your registered email address. " +
+        "Your interface will provide access to the speaker/moderator tools and related event features.\n\n" +
+        "Thank you.\n\n" +
+        "Best regards,\n" +
+        "NAMA Events Team",
+    },
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    userId,
+    role,
+    emailType: "speakerRoleAssigned",
+  });
+}
+
+/**
+ * Triggered when a user's role changes.
+ * Sends the same role-assignment email for speaker and moderator.
+ *
+ * IMPORTANT:
+ * This uses Firebase Trigger Email extension format:
+ * mail/{docId} with {to, message}.
+ */
+export const sendSpeakerOrModeratorRoleEmail = onDocumentWritten(
+  {
+    document: "users/{userId}",
+    region: FUNCTION_REGION,
+  },
+  async (event) => {
+    const userId = event.params.userId;
+
+    const before = event.data?.before.exists ?
+      event.data.before.data() :
+      null;
+
+    const after = event.data?.after.exists ?
+      event.data.after.data() :
+      null;
+
+    if (!after) return null;
+
+    const beforeRole = normalizeRoleValue(before?.role);
+    const afterRole = normalizeRoleValue(after.role);
+
+    if (beforeRole === afterRole) {
+      return null;
+    }
+
+    if (afterRole !== "speaker" && afterRole !== "moderator") {
+      return null;
+    }
+
+    const emailAlreadySentField =
+      afterRole === "moderator" ?
+        "moderatorRoleEmailSent" :
+        "speakerRoleEmailSent";
+
+    if (after[emailAlreadySentField] === true) {
+      console.log(`Skipping ${afterRole} role email for ${userId}: already sent.`);
+      return null;
+    }
+
+    const email = (after.email || "").toString().trim();
+    const name = (after.name || "").toString().trim();
+
+    await queueSpeakerRoleEmail({
+      userId,
+      email,
+      name,
+      role: afterRole as "speaker" | "moderator",
+    });
+
+    await event.data?.after.ref.update({
+      [emailAlreadySentField]: true,
+      [`${emailAlreadySentField}At`]:
+        admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    console.log(`${afterRole} role email queued for ${email}`);
 
     return null;
   }
@@ -420,7 +561,6 @@ export const logSessionCheckIn = onCall(
         eventId: sessionData.eventId || "",
       };
 
-      // If old check-in exists, repair checkedInAttendees.
       if (checkinDoc.exists) {
         alreadyCheckedIn = true;
 
@@ -1456,7 +1596,6 @@ export const deleteAuthUserFromFirestore = functionsV1
     return null;
   });
 
-
 // ============================================================================
 // EVENT ARCHIVE + 15 DAY CLEANUP
 // ============================================================================
@@ -1475,12 +1614,10 @@ async function assertAdminUser(uid: string): Promise<void> {
   if (userDoc.exists) {
     const userData = userDoc.data() || {};
     const role = (userData.role || "").toString().toLowerCase().trim();
-    const status = (userData.status || "").toString().toLowerCase().trim();
 
     console.log("Archive admin check by uid document:", {
       uid,
       role,
-      status,
       email: userData.email || authUser.email || "",
     });
 
@@ -1501,13 +1638,11 @@ async function assertAdminUser(uid: string): Promise<void> {
     if (!emailSnapshot.empty) {
       const userData = emailSnapshot.docs[0].data() || {};
       const role = (userData.role || "").toString().toLowerCase().trim();
-      const status = (userData.status || "").toString().toLowerCase().trim();
 
       console.log("Archive admin check by email document:", {
         uid,
         firestoreDocId: emailSnapshot.docs[0].id,
         role,
-        status,
         email,
       });
 
@@ -1622,8 +1757,6 @@ async function cleanupEventPhotos(eventId: string): Promise<number> {
     .doc(eventId)
     .collection("eventPhotos");
 
-  // After the 15-day grace period, delete all event photos.
-  // The admin should export/download the final report before cleanup runs.
   const photosSnap = await photosRef.get();
 
   let deleted = 0;
@@ -1780,7 +1913,6 @@ async function cleanupEventUsers(eventId: string): Promise<{
     eventLinksRemoved,
   };
 }
-
 
 // ============================================================================
 // AUTOMATIC EVENT NOTIFICATIONS
@@ -2037,7 +2169,6 @@ export const cleanupArchivedEvents = onSchedule(
         const deletedPhotos = await cleanupEventPhotos(eventId);
         const userCleanup = await cleanupEventUsers(eventId);
 
-        // Delete high-volume temporary/event-only subcollections.
         const registrationsDeleted = await deleteCollectionInBatches(
           eventDoc.ref.collection("registrations")
         );
@@ -2070,7 +2201,6 @@ export const cleanupArchivedEvents = onSchedule(
           eventDoc.ref.collection("sessionAttendance")
         );
 
-        // These may contain Storage files such as PDF certificates or uploads.
         const certificatesCleanup = await deleteCollectionWithStorageInBatches(
           eventDoc.ref.collection("certificates")
         );
@@ -2115,4 +2245,3 @@ export const cleanupArchivedEvents = onSchedule(
     }
   }
 );
-

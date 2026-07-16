@@ -1,27 +1,66 @@
 // lib/features/auth/screen/auth_view_model.dart
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:events_app_trueattempt/features/auth/data/auth_repository.dart';
 
-// Enum to represent the current authentication form state
 enum AuthFormType { login, signup }
 
-// StateNotifier for AuthViewModel to manage authentication logic and state.
 class AuthViewModel extends StateNotifier<AsyncValue<void>> {
   final AuthRepository _authRepository;
 
   AuthViewModel(this._authRepository) : super(const AsyncValue.data(null));
 
-  // Handles user sign-in.
+  Future<void> _markUserLoggedIn(User user) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+        {
+          'lastSeen': FieldValue.serverTimestamp(),
+          'lastLoginAt': FieldValue.serverTimestamp(),
+          'isOnline': true,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('AuthViewModel: failed to update login status: $e');
+    }
+  }
+
+  Future<void> _markUserLoggedOut(User user) async {
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+        {
+          'lastSeen': FieldValue.serverTimestamp(),
+          'isOnline': false,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('AuthViewModel: failed to update logout status: $e');
+    }
+  }
+
   Future<void> signIn(String email, String password) async {
     if (!mounted) return;
 
     state = const AsyncValue.loading();
 
     try {
-      await _authRepository.signInWithEmailAndPassword(email, password);
+      await _authRepository.signInWithEmailAndPassword(
+        email.trim(),
+        password,
+      );
+
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user != null) {
+        await _markUserLoggedIn(user);
+      }
 
       if (mounted) {
         state = const AsyncValue.data(null);
@@ -37,7 +76,6 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
     }
   }
 
-  // Handles user sign-up.
   Future<void> signUp(String email, String password, {String? name}) async {
     if (!mounted) return;
 
@@ -45,10 +83,16 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
 
     try {
       await _authRepository.createUserWithEmailAndPassword(
-        email,
+        email.trim(),
         password,
         name: name,
       );
+
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user != null) {
+        await _markUserLoggedIn(user);
+      }
 
       if (mounted) {
         state = const AsyncValue.data(null);
@@ -64,21 +108,38 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
     }
   }
 
-  // Handles user sign-out.
   Future<void> signOut() async {
     if (!mounted) return;
 
+    // Important:
+    // Do NOT keep authViewModelProvider in loading state during logout.
+    // LoginScreen watches this same provider, so if it remains loading,
+    // user cannot login again until app refresh.
     state = const AsyncValue.data(null);
 
     try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user != null) {
+        await _markUserLoggedOut(user);
+      }
+
       await _authRepository.signOut();
     } on Exception catch (e) {
       debugPrint('AuthViewModel: signOut error: $e');
+    } finally {
+      if (mounted) {
+        state = const AsyncValue.data(null);
+      }
     }
+  }
+
+  void resetState() {
+    if (!mounted) return;
+    state = const AsyncValue.data(null);
   }
 }
 
-// Riverpod provider for AuthViewModel
 final authViewModelProvider =
     StateNotifierProvider<AuthViewModel, AsyncValue<void>>((ref) {
   return AuthViewModel(ref.watch(authRepositoryProvider));

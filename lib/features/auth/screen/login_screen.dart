@@ -31,13 +31,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void initState() {
     super.initState();
 
-    // rebuild UI when focus changes
     _emailFocus.addListener(() => setState(() {}));
     _passwordFocus.addListener(() => setState(() {}));
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(authViewModelProvider.notifier).resetState();
+    });
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    FocusScope.of(context).unfocus();
 
     final viewModel = ref.read(authViewModelProvider.notifier);
 
@@ -54,6 +60,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final error = authState.error;
       final code = error is FirebaseAuthException ? error.code : null;
       _showSnackBar(_friendlyMessage(code), isError: true);
+
+      ref.read(authViewModelProvider.notifier).resetState();
     }
   }
 
@@ -90,7 +98,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required FocusNode focusNode,
   }) {
     return InputDecoration(
-      hintText: focusNode.hasFocus ? '' : hint, // ✅ hide when clicked
+      hintText: focusNode.hasFocus ? '' : hint,
       hintStyle: TextStyle(
         fontSize: 13,
         color: Colors.grey.shade600,
@@ -103,8 +111,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         horizontal: 22,
         vertical: 17,
       ),
-
-      // remove border completely
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
         borderSide: BorderSide.none,
@@ -135,14 +141,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               child: Column(
                 children: [
                   const SizedBox(height: 35),
-
                   Image.asset(
                     AppConstants.logoEmblemPath,
                     height: 85,
                   ),
-
                   const SizedBox(height: 24),
-
                   const Text(
                     'Welcome User!',
                     style: TextStyle(
@@ -151,10 +154,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       color: Color(0xFF090B8F),
                     ),
                   ),
-
                   const SizedBox(height: 42),
 
-                  // EMAIL
                   TextFormField(
                     controller: _emailController,
                     focusNode: _emailFocus,
@@ -174,7 +175,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                   const SizedBox(height: 15),
 
-                  // PASSWORD
                   TextFormField(
                     controller: _passwordController,
                     focusNode: _passwordFocus,
@@ -208,14 +208,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ForgotPasswordScreen(),
-                          ),
-                        );
-                      },
+                      onPressed: authState.isLoading
+                          ? null
+                          : () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      const ForgotPasswordScreen(),
+                                ),
+                              );
+                            },
                       child: const Text(
                         'Forgot Password?',
                         style: TextStyle(
@@ -261,14 +264,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     children: [
                       const Text('Don’t have an account? '),
                       GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const RegisterScreen(),
-                            ),
-                          );
-                        },
+                        onTap: authState.isLoading
+                            ? null
+                            : () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const RegisterScreen(),
+                                  ),
+                                );
+                              },
                         child: const Text(
                           'Sign UP!',
                           style: TextStyle(
@@ -295,8 +300,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _emailFocus.dispose();     // ✅ important
-    _passwordFocus.dispose();  // ✅ important
+    _emailFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 }

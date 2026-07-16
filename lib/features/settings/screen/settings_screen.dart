@@ -2,8 +2,8 @@
 
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/auth/screen/auth_gate.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
-import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
 import 'package:events_app_trueattempt/features/certificates/screen/my_certificates_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
@@ -46,15 +46,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       if (!mounted) return;
 
-      final currentUser = ref.read(firebaseAuthProvider).currentUser;
-
-      if (currentUser != null) {
-        throw Exception('Firebase authentication session was not cleared.');
-      }
-
       Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute<void>(
-          builder: (_) => const LoginScreen(),
+          builder: (_) => const AuthGate(),
         ),
         (route) => false,
       );
