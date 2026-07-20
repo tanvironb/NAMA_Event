@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/admin/screen/edit_report_notes_screen.dart';
-import 'package:events_app_trueattempt/features/admin/screen/event_attendance_report_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -309,16 +308,6 @@ class _EventReportDashboardScreenState
     }
   }
 
-  void _openAttendanceDetails() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => EventAttendanceReportScreen(
-          eventId: widget.eventId,
-          eventName: widget.eventName,
-        ),
-      ),
-    );
-  }
 
   Future<void> _generatePdf(_EventReportDashboardData data) async {
     if (_isGeneratingPdf) return;
@@ -576,25 +565,13 @@ class _EventReportDashboardScreenState
   }
 
   Widget _reportActions() {
-    return Column(
-      children: [
-        _ActionCard(
-          icon: Icons.fact_check_outlined,
-          title: 'Attendance Details',
-          subtitle:
-              'View present attendees, absent attendees, speakers, staff, admins, and certificate status.',
-          color: _gold,
-          onTap: _openAttendanceDetails,
-        ),
-        _ActionCard(
-          icon: Icons.edit_note_rounded,
-          title: 'Edit Report Notes',
-          subtitle:
-              'Add objectives, highlights, outcomes, challenges, recommendations, and conclusion.',
-          color: _navy,
-          onTap: _openEditReportNotes,
-        ),
-      ],
+    return _ActionCard(
+      icon: Icons.edit_note_rounded,
+      title: 'Edit Report Notes',
+      subtitle:
+          'Add objectives, highlights, outcomes, challenges, recommendations, and conclusion.',
+      color: _navy,
+      onTap: _openEditReportNotes,
     );
   }
 

@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 
 class CertificateTemplateSetupScreen extends StatefulWidget {
@@ -30,6 +31,7 @@ class _CertificateTemplateSetupScreenState
   XFile? _selectedImage;
   Uint8List? _selectedImageBytes;
 
+  String _selectedRole = 'attendee';
   String _templateUrl = '';
   String _storagePath = '';
   String _orientation = 'landscape';
@@ -46,15 +48,101 @@ class _CertificateTemplateSetupScreenState
   double _certificateIdY = 0.88;
 
   double _nameFontSize = 34;
-  double _normalFontSize = 16;
+  double _eventFontSize = 16;
+  double _dateFontSize = 16;
+  double _certificateIdFontSize = 16;
   String _textColor = '#111827';
+
+  static const List<String> _supportedRoles = <String>[
+    'attendee',
+    'speaker',
+    'moderator',
+    'staff',
+  ];
 
   DocumentReference<Map<String, dynamic>> get _templateRef {
     return _firestore
         .collection('events')
         .doc(widget.eventId)
-        .collection('certificateTemplate')
-        .doc('main');
+        .collection('certificateTemplates')
+        .doc(_selectedRole);
+  }
+
+  String get _selectedRoleLabel {
+    switch (_selectedRole) {
+      case 'speaker':
+        return 'Speaker';
+      case 'moderator':
+        return 'Moderator';
+      case 'staff':
+        return 'Staff / Volunteer';
+      case 'attendee':
+      default:
+        return 'Attendee';
+    }
+  }
+
+  String get _previewPersonName {
+    switch (_selectedRole) {
+      case 'speaker':
+        return 'Speaker Name';
+      case 'moderator':
+        return 'Moderator Name';
+      case 'staff':
+        return 'Volunteer Name';
+      case 'attendee':
+      default:
+        return 'Participant Name';
+    }
+  }
+
+  String get _previewCertificateId {
+    switch (_selectedRole) {
+      case 'speaker':
+        return 'NAMA-SPK-2026-0001';
+      case 'moderator':
+        return 'NAMA-MOD-2026-0001';
+      case 'staff':
+        return 'NAMA-STF-2026-0001';
+      case 'attendee':
+      default:
+        return 'NAMA-PART-2026-0001';
+    }
+  }
+
+  void _resetTemplateValues() {
+    _selectedImage = null;
+    _selectedImageBytes = null;
+    _templateUrl = '';
+    _storagePath = '';
+    _orientation = 'landscape';
+
+    _nameX = 0.50;
+    _nameY = 0.48;
+    _eventX = 0.50;
+    _eventY = 0.60;
+    _dateX = 0.50;
+    _dateY = 0.68;
+    _certificateIdX = 0.50;
+    _certificateIdY = 0.88;
+
+    _nameFontSize = 34;
+    _eventFontSize = 16;
+    _dateFontSize = 16;
+    _certificateIdFontSize = 16;
+    _textColor = '#111827';
+  }
+
+  Future<void> _changeRole(String role) async {
+    if (_isSaving || role == _selectedRole) return;
+
+    setState(() {
+      _selectedRole = role;
+      _isLoading = true;
+      _resetTemplateValues();
+    });
+
+    await _loadTemplate();
   }
 
   @override
@@ -68,24 +156,54 @@ class _CertificateTemplateSetupScreenState
       final doc = await _templateRef.get();
       final data = doc.data();
 
-      if (data != null) {
-        _templateUrl = (data['templateUrl'] ?? '').toString();
-        _storagePath = (data['storagePath'] ?? '').toString();
-        _orientation = (data['orientation'] ?? 'landscape').toString();
-        _nameX = _readDouble(data['nameX'], _nameX);
-        _nameY = _readDouble(data['nameY'], _nameY);
-        _eventX = _readDouble(data['eventX'], _eventX);
-        _eventY = _readDouble(data['eventY'], _eventY);
-        _dateX = _readDouble(data['dateX'], _dateX);
-        _dateY = _readDouble(data['dateY'], _dateY);
-        _certificateIdX = _readDouble(data['certificateIdX'], _certificateIdX);
-        _certificateIdY = _readDouble(data['certificateIdY'], _certificateIdY);
-        _nameFontSize = _readDouble(data['nameFontSize'], _nameFontSize);
-        _normalFontSize = _readDouble(data['normalFontSize'], _normalFontSize);
-        _textColor = (data['textColor'] ?? _textColor).toString();
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (!mounted) return;
+
+      setState(() {
+        if (data != null) {
+          _templateUrl = (data['templateUrl'] ?? '').toString();
+          _storagePath = (data['storagePath'] ?? '').toString();
+          _orientation = (data['orientation'] ?? 'landscape').toString();
+          _nameX = _readDouble(data['nameX'], _nameX);
+          _nameY = _readDouble(data['nameY'], _nameY);
+          _eventX = _readDouble(data['eventX'], _eventX);
+          _eventY = _readDouble(data['eventY'], _eventY);
+          _dateX = _readDouble(data['dateX'], _dateX);
+          _dateY = _readDouble(data['dateY'], _dateY);
+          _certificateIdX =
+              _readDouble(data['certificateIdX'], _certificateIdX);
+          _certificateIdY =
+              _readDouble(data['certificateIdY'], _certificateIdY);
+          final legacyNormalFontSize =
+              _readDouble(data['normalFontSize'], 16);
+          _nameFontSize =
+              _readDouble(data['nameFontSize'], _nameFontSize);
+          _eventFontSize =
+              _readDouble(data['eventFontSize'], legacyNormalFontSize);
+          _dateFontSize =
+              _readDouble(data['dateFontSize'], legacyNormalFontSize);
+          _certificateIdFontSize = _readDouble(
+            data['certificateIdFontSize'],
+            legacyNormalFontSize,
+          );
+          _textColor = (data['textColor'] ?? _textColor).toString();
+        }
+
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Unable to load the $_selectedRoleLabel certificate template.',
+          ),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -124,7 +242,8 @@ class _CertificateTemplateSetupScreenState
             : 'jpg';
 
     final path =
-        'certificate_templates/${widget.eventId}/template_$timestamp.$safeExtension';
+        'certificate_templates/${widget.eventId}/$_selectedRole/'
+        'template_$timestamp.$safeExtension';
 
     final ref = _storage.ref(path);
     final metadata = SettableMetadata(
@@ -154,6 +273,8 @@ class _CertificateTemplateSetupScreenState
         {
           'templateUrl': downloadUrl,
           'storagePath': _storagePath,
+          'role': _selectedRole,
+          'roleLabel': _selectedRoleLabel,
           'orientation': _orientation,
           'nameX': _nameX,
           'nameY': _nameY,
@@ -164,7 +285,11 @@ class _CertificateTemplateSetupScreenState
           'certificateIdX': _certificateIdX,
           'certificateIdY': _certificateIdY,
           'nameFontSize': _nameFontSize,
-          'normalFontSize': _normalFontSize,
+          'eventFontSize': _eventFontSize,
+          'dateFontSize': _dateFontSize,
+          'certificateIdFontSize': _certificateIdFontSize,
+          // Kept for compatibility with older certificate rendering code.
+          'normalFontSize': _eventFontSize,
           'textColor': _textColor,
           'isConfigured': true,
           'updatedAt': FieldValue.serverTimestamp(),
@@ -181,8 +306,10 @@ class _CertificateTemplateSetupScreenState
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Certificate template saved successfully.'),
+        SnackBar(
+          content: Text(
+            '$_selectedRoleLabel certificate template saved successfully.',
+          ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.green,
         ),
@@ -256,9 +383,11 @@ Widget _header() {
         color: AppColors.namaNavyBlue,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: const Text(
-        'Upload the final certificate design as PNG/JPG. The app will place participant name, event name, date, and certificate ID on top of this template.',
-        style: TextStyle(
+      child: Text(
+        'Upload the final $_selectedRoleLabel certificate design as PNG/JPG. '
+        'The app will place the recipient name, event name, date, and '
+        'certificate ID on top of this template.',
+        style: const TextStyle(
           color: Colors.white70,
           fontSize: 11.5,
           height: 1.35,
@@ -268,14 +397,104 @@ Widget _header() {
     );
   }
 
-  Widget _previewCard() {
+  Widget _roleSelector() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Certificate User Type',
+            style: TextStyle(
+              color: AppColors.namaNavyBlue,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Each user type has its own independent certificate template.',
+            style: TextStyle(
+              color: AppColors.namaMediumGray,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _supportedRoles.map((role) {
+              final selected = role == _selectedRole;
+
+              String label;
+              IconData icon;
+
+              switch (role) {
+                case 'speaker':
+                  label = 'Speaker';
+                  icon = Icons.record_voice_over_rounded;
+                  break;
+                case 'moderator':
+                  label = 'Moderator';
+                  icon = Icons.forum_rounded;
+                  break;
+                case 'staff':
+                  label = 'Staff / Volunteer';
+                  icon = Icons.groups_rounded;
+                  break;
+                case 'attendee':
+                default:
+                  label = 'Attendee';
+                  icon = Icons.person_rounded;
+                  break;
+              }
+
+              return ChoiceChip(
+                selected: selected,
+                onSelected: _isSaving ? null : (_) => _changeRole(role),
+                avatar: Icon(
+                  icon,
+                  size: 17,
+                  color: selected ? Colors.white : AppColors.namaNavyBlue,
+                ),
+                label: Text(
+                  label,
+                  style: TextStyle(
+                    color: selected ? Colors.white : AppColors.namaNavyBlue,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                selectedColor: AppColors.namaNavyBlue,
+                backgroundColor: const Color(0xFFF4F2FB),
+                side: BorderSide(
+                  color: selected
+                      ? AppColors.namaNavyBlue
+                      : const Color(0xFFE4E0F2),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                showCheckmark: false,
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+Widget _previewCard() {
   final textColor = _parseColor(_textColor);
-  final aspectRatio = _orientation == 'portrait' ? 0.707 : 1.414;
   final hasTemplate =
       _selectedImageBytes != null || _templateUrl.trim().isNotEmpty;
 
   return Container(
     width: double.infinity,
+    height: double.infinity,
     padding: const EdgeInsets.all(12),
     decoration: _cardDecoration(),
     child: Column(
@@ -290,95 +509,101 @@ Widget _header() {
           ),
         ),
         const SizedBox(height: 10),
-        AspectRatio(
-          aspectRatio: aspectRatio,
-          child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF4F2FB),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE4E0F2)),
-            ),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                return Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    if (_selectedImageBytes != null)
-                      Image.memory(
-                        _selectedImageBytes!,
-                        fit: BoxFit.cover,
-                      )
-                    else if (_templateUrl.trim().isNotEmpty)
-                      Image.network(
-                        _templateUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) {
-                          return const Center(
+        Expanded(
+          child: Center(
+            child: AspectRatio(
+              aspectRatio: _orientation == 'portrait' ? 0.707 : 1.414,
+              child: Container(
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4F2FB),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: const Color(0xFFE4E0F2),
+                  ),
+                ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (_selectedImageBytes != null)
+                          Image.memory(
+                            _selectedImageBytes!,
+                            fit: BoxFit.cover,
+                          )
+                        else if (_templateUrl.trim().isNotEmpty)
+                          Image.network(
+                            _templateUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) {
+                              return const Center(
+                                child: Text(
+                                  'Template image could not load',
+                                  style: TextStyle(
+                                    color: AppColors.namaMediumGray,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              );
+                            },
+                          )
+                        else
+                          const Center(
                             child: Text(
-                              'Template image could not load',
+                              'No template uploaded yet',
                               style: TextStyle(
                                 color: AppColors.namaMediumGray,
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
-                          );
-                        },
-                      )
-                    else
-                      const Center(
-                        child: Text(
-                          'No template uploaded yet',
-                          style: TextStyle(
-                            color: AppColors.namaMediumGray,
-                            fontSize: 12,
+                          ),
+
+                        if (hasTemplate) ...[
+                          _PreviewText(
+                            x: _nameX,
+                            y: _nameY,
+                            width: constraints.maxWidth,
+                            text: _previewPersonName,
+                            color: textColor,
+                            fontSize: _nameFontSize * 0.28,
+                            fontWeight: FontWeight.w900,
+                          ),
+                          _PreviewText(
+                            x: _eventX,
+                            y: _eventY,
+                            width: constraints.maxWidth,
+                            text: widget.eventName,
+                            color: textColor,
+                            fontSize: _eventFontSize * 0.28,
+                            fontWeight: FontWeight.w800,
+                          ),
+                          _PreviewText(
+                            x: _dateX,
+                            y: _dateY,
+                            width: constraints.maxWidth,
+                            text: '11 Jun 2026',
+                            color: textColor,
+                            fontSize: _dateFontSize * 0.26,
                             fontWeight: FontWeight.w700,
                           ),
-                        ),
-                      ),
-
-                    if (hasTemplate) ...[
-                      _PreviewText(
-                        x: _nameX,
-                        y: _nameY,
-                        width: constraints.maxWidth,
-                        text: 'Participant Name',
-                        color: textColor,
-                        fontSize: _nameFontSize * 0.28,
-                        fontWeight: FontWeight.w900,
-                      ),
-                      _PreviewText(
-                        x: _eventX,
-                        y: _eventY,
-                        width: constraints.maxWidth,
-                        text: widget.eventName,
-                        color: textColor,
-                        fontSize: _normalFontSize * 0.28,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      _PreviewText(
-                        x: _dateX,
-                        y: _dateY,
-                        width: constraints.maxWidth,
-                        text: '11 Jun 2026',
-                        color: textColor,
-                        fontSize: _normalFontSize * 0.26,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      _PreviewText(
-                        x: _certificateIdX,
-                        y: _certificateIdY,
-                        width: constraints.maxWidth,
-                        text: 'NAMA-PART-2026-0001',
-                        color: textColor,
-                        fontSize: _normalFontSize * 0.24,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ],
-                  ],
-                );
-              },
+                          _PreviewText(
+                            x: _certificateIdX,
+                            y: _certificateIdY,
+                            width: constraints.maxWidth,
+                            text: _previewCertificateId,
+                            color: textColor,
+                            fontSize: _certificateIdFontSize * 0.24,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ),
             ),
           ),
         ),
@@ -386,7 +611,6 @@ Widget _header() {
     ),
   );
 }
-
   Widget _uploadButton() {
     return SizedBox(
       height: 44,
@@ -396,7 +620,7 @@ Widget _header() {
         icon: const Icon(Icons.upload_file_rounded, size: 18),
         label: Text(
           _selectedImage == null
-              ? 'Upload Template Image'
+              ? 'Upload $_selectedRoleLabel Template'
               : 'Change Selected Image',
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
         ),
@@ -455,49 +679,65 @@ Widget _header() {
               fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 12),
-          _SliderPair(
-            title: 'Participant Name',
+          const SizedBox(height: 6),
+          const Text(
+            'Drag each slider or type an exact number in the box.',
+            style: TextStyle(
+              color: AppColors.namaMediumGray,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _PositionEditorCard(
+            title: 'Recipient Name',
             x: _nameX,
             y: _nameY,
+            fontSize: _nameFontSize,
+            fontMin: 18,
+            fontMax: 72,
             onXChanged: (value) => setState(() => _nameX = value),
             onYChanged: (value) => setState(() => _nameY = value),
+            onFontSizeChanged: (value) =>
+                setState(() => _nameFontSize = value),
           ),
-          _SliderPair(
+          _PositionEditorCard(
             title: 'Event Name',
             x: _eventX,
             y: _eventY,
+            fontSize: _eventFontSize,
+            fontMin: 8,
+            fontMax: 48,
             onXChanged: (value) => setState(() => _eventX = value),
             onYChanged: (value) => setState(() => _eventY = value),
+            onFontSizeChanged: (value) =>
+                setState(() => _eventFontSize = value),
           ),
-          _SliderPair(
+          _PositionEditorCard(
             title: 'Event Date',
             x: _dateX,
             y: _dateY,
+            fontSize: _dateFontSize,
+            fontMin: 8,
+            fontMax: 48,
             onXChanged: (value) => setState(() => _dateX = value),
             onYChanged: (value) => setState(() => _dateY = value),
+            onFontSizeChanged: (value) =>
+                setState(() => _dateFontSize = value),
           ),
-          _SliderPair(
+          _PositionEditorCard(
             title: 'Certificate ID',
             x: _certificateIdX,
             y: _certificateIdY,
-            onXChanged: (value) => setState(() => _certificateIdX = value),
-            onYChanged: (value) => setState(() => _certificateIdY = value),
-          ),
-          const SizedBox(height: 8),
-          _SingleSlider(
-            title: 'Name font size',
-            value: _nameFontSize,
-            min: 18,
-            max: 56,
-            onChanged: (value) => setState(() => _nameFontSize = value),
-          ),
-          _SingleSlider(
-            title: 'Normal font size',
-            value: _normalFontSize,
-            min: 10,
-            max: 28,
-            onChanged: (value) => setState(() => _normalFontSize = value),
+            fontSize: _certificateIdFontSize,
+            fontMin: 8,
+            fontMax: 48,
+            onXChanged: (value) =>
+                setState(() => _certificateIdX = value),
+            onYChanged: (value) =>
+                setState(() => _certificateIdY = value),
+            onFontSizeChanged: (value) =>
+                setState(() => _certificateIdFontSize = value),
           ),
         ],
       ),
@@ -521,7 +761,9 @@ Widget _header() {
               )
             : const Icon(Icons.save_rounded, size: 18),
         label: Text(
-          _isSaving ? 'Saving Template...' : 'Save Certificate Template',
+          _isSaving
+              ? 'Saving Template...'
+              : 'Save $_selectedRoleLabel Template',
           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
         ),
         style: ElevatedButton.styleFrom(
@@ -539,33 +781,124 @@ Widget _header() {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+
+// Page horizontal padding: 16 + 16
+// Preview card internal padding: 12 + 12
+final previewImageWidth = screenWidth - 56;
+
+final previewAspectRatio =
+    _orientation == 'portrait' ? 0.707 : 1.414;
+
+final previewImageHeight =
+    previewImageWidth / previewAspectRatio;
+
+// Includes:
+// preview title
+// title spacing
+// card padding
+// bottom spacing around pinned header
+final previewHeight = previewImageHeight + 72;
+
     return Scaffold(
       backgroundColor: AppColors.namaLightGray,
       body: SafeArea(
         child: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(color: AppColors.namaNavyBlue),
+                child: CircularProgressIndicator(
+                  color: AppColors.namaNavyBlue,
+                ),
               )
-            : ListView(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
-                children: [
-                  _header(),
-                  const SizedBox(height: 18),
-                  _infoCard(),
-                  const SizedBox(height: 14),
-                  _uploadButton(),
-                  const SizedBox(height: 12),
-                  _orientationSelector(),
-                  const SizedBox(height: 14),
-                  _previewCard(),
-                  const SizedBox(height: 14),
-                  _positionControls(),
-                  const SizedBox(height: 16),
-                  _saveButton(),
+            : CustomScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate(
+                        [
+                          _header(),
+                          const SizedBox(height: 18),
+                          _infoCard(),
+                          const SizedBox(height: 14),
+                          _roleSelector(),
+                          const SizedBox(height: 14),
+                          _uploadButton(),
+                          const SizedBox(height: 12),
+                          _orientationSelector(),
+                          const SizedBox(height: 14),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _PinnedPreviewDelegate(
+                      height: previewHeight,
+                      backgroundColor: AppColors.namaLightGray,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                        child: _previewCard(),
+                      ),
+                    ),
+                  ),
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate(
+                        [
+                          _positionControls(),
+                          const SizedBox(height: 16),
+                          _saveButton(),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
       ),
     );
+  }
+
+}
+
+class _PinnedPreviewDelegate extends SliverPersistentHeaderDelegate {
+  final double height;
+  final Color backgroundColor;
+  final Widget child;
+
+  const _PinnedPreviewDelegate({
+    required this.height,
+    required this.backgroundColor,
+    required this.child,
+  });
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return SizedBox.expand(
+      child: Material(
+        color: backgroundColor,
+        elevation: overlapsContent ? 3 : 0,
+        child: child,
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedPreviewDelegate oldDelegate) {
+    return oldDelegate.height != height ||
+        oldDelegate.backgroundColor != backgroundColor;
   }
 }
 
@@ -651,25 +984,39 @@ class _SegmentButton extends StatelessWidget {
   }
 }
 
-class _SliderPair extends StatelessWidget {
+class _PositionEditorCard extends StatelessWidget {
   final String title;
   final double x;
   final double y;
+  final double fontSize;
+  final double fontMin;
+  final double fontMax;
   final ValueChanged<double> onXChanged;
   final ValueChanged<double> onYChanged;
+  final ValueChanged<double> onFontSizeChanged;
 
-  const _SliderPair({
+  const _PositionEditorCard({
     required this.title,
     required this.x,
     required this.y,
+    required this.fontSize,
+    required this.fontMin,
+    required this.fontMax,
     required this.onXChanged,
     required this.onYChanged,
+    required this.onFontSizeChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAF9FD),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE7E2F1)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -677,81 +1024,207 @@ class _SliderPair extends StatelessWidget {
             title,
             style: const TextStyle(
               color: AppColors.namaDarkGray,
-              fontSize: 12,
+              fontSize: 12.5,
               fontWeight: FontWeight.w900,
             ),
           ),
-          _SingleSlider(title: 'Horizontal', value: x, onChanged: onXChanged),
-          _SingleSlider(title: 'Vertical', value: y, onChanged: onYChanged),
+          const SizedBox(height: 8),
+          _EditableSlider(
+            title: 'Horizontal',
+            value: x,
+            min: 0,
+            max: 1,
+            decimals: 3,
+            onChanged: onXChanged,
+          ),
+          _EditableSlider(
+            title: 'Vertical',
+            value: y,
+            min: 0,
+            max: 1,
+            decimals: 3,
+            onChanged: onYChanged,
+          ),
+          _EditableSlider(
+            title: 'Font size',
+            value: fontSize,
+            min: fontMin,
+            max: fontMax,
+            decimals: 0,
+            onChanged: onFontSizeChanged,
+          ),
         ],
       ),
     );
   }
 }
 
-class _SingleSlider extends StatelessWidget {
+class _EditableSlider extends StatefulWidget {
   final String title;
   final double value;
   final double min;
   final double max;
+  final int decimals;
   final ValueChanged<double> onChanged;
 
-  const _SingleSlider({
+  const _EditableSlider({
     required this.title,
     required this.value,
+    required this.min,
+    required this.max,
+    required this.decimals,
     required this.onChanged,
-    this.min = 0,
-    this.max = 1,
   });
 
   @override
+  State<_EditableSlider> createState() => _EditableSliderState();
+}
+
+class _EditableSliderState extends State<_EditableSlider> {
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+
+  String _formatted(double value) => value.toStringAsFixed(widget.decimals);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: _formatted(widget.value));
+    _focusNode = FocusNode();
+    _focusNode.addListener(_handleFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant _EditableSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (!_focusNode.hasFocus && oldWidget.value != widget.value) {
+      _controller.text = _formatted(widget.value);
+    }
+  }
+
+  void _handleFocusChange() {
+    if (!_focusNode.hasFocus) {
+      _commitText();
+    }
+  }
+
+  void _commitText() {
+    final parsed = double.tryParse(_controller.text.trim());
+
+    if (parsed == null) {
+      _controller.text = _formatted(widget.value);
+      return;
+    }
+
+    final safeValue = parsed.clamp(widget.min, widget.max).toDouble();
+    _controller.text = _formatted(safeValue);
+    widget.onChanged(safeValue);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_handleFocusChange);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 86,
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.namaMediumGray,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-        Expanded(
-          child: SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: AppColors.namaNavyBlue,
-              inactiveTrackColor: AppColors.namaGoldenYellow.withOpacity(0.65),
-              thumbColor: AppColors.namaNavyBlue,
-              overlayColor: AppColors.namaGoldenYellow.withOpacity(0.20),
-              trackHeight: 6,
-              thumbShape: const RoundSliderThumbShape(
-                enabledThumbRadius: 10,
+    final sliderValue =
+        widget.value.clamp(widget.min, widget.max).toDouble();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 76,
+            child: Text(
+              widget.title,
+              style: const TextStyle(
+                color: AppColors.namaMediumGray,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            child: Slider(
-              value: value.clamp(min, max).toDouble(),
-              min: min,
-              max: max,
-              onChanged: onChanged,
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: AppColors.namaNavyBlue,
+                inactiveTrackColor:
+                    AppColors.namaGoldenYellow.withOpacity(0.65),
+                thumbColor: AppColors.namaNavyBlue,
+                overlayColor:
+                    AppColors.namaGoldenYellow.withOpacity(0.20),
+                trackHeight: 6,
+                thumbShape: const RoundSliderThumbShape(
+                  enabledThumbRadius: 9,
+                ),
+              ),
+              child: Slider(
+                value: sliderValue,
+                min: widget.min,
+                max: widget.max,
+                onChanged: (value) {
+                  _controller.text = _formatted(value);
+                  widget.onChanged(value);
+                },
+              ),
             ),
           ),
-        ),
-        SizedBox(
-          width: 38,
-          child: Text(
-            value.toStringAsFixed(min == 0 && max == 1 ? 2 : 0),
-            textAlign: TextAlign.right,
-            style: const TextStyle(
-              color: AppColors.namaDarkGray,
-              fontSize: 10.5,
-              fontWeight: FontWeight.w800,
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 68,
+            height: 36,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+                signed: false,
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(r'^\d*\.?\d{0,3}'),
+                ),
+              ],
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: AppColors.namaDarkGray,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+              decoration: InputDecoration(
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 8),
+                filled: true,
+                fillColor: Colors.white,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFDCD6EA),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(9),
+                  borderSide: const BorderSide(
+                    color: AppColors.namaNavyBlue,
+                    width: 1.4,
+                  ),
+                ),
+              ),
+              onSubmitted: (_) => _commitText(),
+              onEditingComplete: () {
+                _commitText();
+                FocusScope.of(context).unfocus();
+              },
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

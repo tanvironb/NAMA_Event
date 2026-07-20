@@ -20,7 +20,8 @@ service cloud.firestore {
       allow delete: if isAdmin();
 
       match /notifications/{notificationId} {
-        allow read, write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+        allow read, write: if isSignedIn()
+          && (request.auth.uid == userId || isAdmin());
       }
     }
 
@@ -30,13 +31,55 @@ service cloud.firestore {
 
       match /registrations/{userId} {
         allow read: if isSignedIn();
-        allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+
+        allow create, update: if isSignedIn()
+          && (request.auth.uid == userId || isAdmin());
+
         allow delete: if isAdmin();
       }
 
+      // New role-based certificate templates:
+      // attendee, speaker, moderator and staff.
+      match /certificateTemplates/{role} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isAdmin();
+      }
+
+      // Backward compatibility with the old template path:
+      // events/{eventId}/certificateTemplate/main
+      match /certificateTemplate/{templateId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isAdmin();
+      }
+
+      // Only admins may create, edit or delete certificates.
+      // A user may read only their own certificate.
+      match /certificates/{certificateId} {
+        allow read: if isAdmin()
+          || (
+            isSignedIn()
+            && resource.data.userId == request.auth.uid
+          );
+
+        allow create, update, delete: if isAdmin();
+      }
+
+      // Controls whether certificates have been generated/published.
+      match /certificateSettings/{settingsId} {
+        allow read: if isSignedIn();
+        allow create, update, delete: if isAdmin();
+      }
+
+      // Existing event subcollection behavior remains unchanged,
+      // except for the protected certificate collections above.
       match /{subCollection}/{docId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn();
+
+        allow write: if isSignedIn()
+          && subCollection != "certificateTemplates"
+          && subCollection != "certificateTemplate"
+          && subCollection != "certificates"
+          && subCollection != "certificateSettings";
       }
     }
 
@@ -47,10 +90,6 @@ service cloud.firestore {
       match /{subCollection}/{docId} {
         allow read, write: if isSignedIn();
       }
-    }
-
-    match /{document=**} {
-      allow read, write: if isSignedIn();
     }
   }
 }

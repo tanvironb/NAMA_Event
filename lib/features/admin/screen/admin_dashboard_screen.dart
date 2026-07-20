@@ -13,6 +13,7 @@ import 'admin_session_management_screen.dart';
 import 'certificate_template_setup_screen.dart';
 import 'check_registration_screen.dart';
 import 'create_event_screen.dart';
+import 'event_attendance_report_screen.dart';
 import 'event_photos_screen.dart';
 import 'event_report_dashboard_screen.dart' as event_report;
 import 'notification_management_screen.dart';
@@ -2204,16 +2205,33 @@ Widget _buildAdminTools({
       Row(
         children: [
           Expanded(
-            child: _ModernAdminToolCard(
-              icon: Icons.workspace_premium_rounded,
-              title: 'Certificate Template',
-              subtitle: 'Upload certificate design',
-              onTap: () {
-                _openScreen(
-                  CertificateTemplateSetupScreen(
-                    eventId: eventId,
-                    eventName: eventName,
-                  ),
+            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('events')
+                  .doc(eventId)
+                  .collection('certificateTemplates')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                final configuredRoles = snapshot.data?.docs.where((doc) {
+                      final templateUrl =
+                          (doc.data()['templateUrl'] ?? '').toString().trim();
+                      return templateUrl.isNotEmpty;
+                    }).length ??
+                    0;
+
+                return _ModernAdminToolCard(
+                  icon: Icons.workspace_premium_rounded,
+                  title: 'Certificate Templates',
+                  subtitle: '$configuredRoles/4 role templates ready',
+                  badgeCount: configuredRoles,
+                  onTap: () {
+                    _openScreen(
+                      CertificateTemplateSetupScreen(
+                        eventId: eventId,
+                        eventName: eventName,
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -2221,14 +2239,29 @@ Widget _buildAdminTools({
           const SizedBox(width: 8),
           Expanded(
             child: _ModernAdminToolCard(
-              icon: Icons.delete_forever_rounded,
-              title: _isDeletingEvent ? 'Checking...' : 'Delete Event',
-              subtitle: 'Only for empty/test events',
-              danger: true,
-              onTap: _isDeletingEvent ? () {} : _confirmDeleteEventFromTools,
+              icon: Icons.fact_check_outlined,
+              title: 'Attendance & Certificates',
+              subtitle: 'Review attendance and publish certificates',
+              onTap: () {
+                _openScreen(
+                  EventAttendanceReportScreen(
+                    eventId: eventId,
+                    eventName: eventName,
+                  ),
+                );
+              },
             ),
           ),
         ],
+      ),
+      const SizedBox(height: 8),
+      _ModernAdminToolCard(
+        icon: Icons.delete_forever_rounded,
+        title: _isDeletingEvent ? 'Checking...' : 'Delete Event',
+        subtitle: 'Only for empty/test events',
+        danger: true,
+        fullWidth: true,
+        onTap: _isDeletingEvent ? () {} : _confirmDeleteEventFromTools,
       ),
     ],
   );

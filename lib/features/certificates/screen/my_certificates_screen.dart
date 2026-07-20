@@ -248,7 +248,8 @@ class _MyCertificatesScreenState extends State<MyCertificatesScreen> {
           ),
           SizedBox(height: 6),
           Text(
-            'Your certificates will appear here after the admin generates them and the event is over.',
+            'Your attendee, speaker, moderator, and staff certificates will '
+            'appear here after the admin generates them and the event is over.',
             style: TextStyle(
               color: Colors.white70,
               fontSize: 11.5,
@@ -284,7 +285,8 @@ class _MyCertificatesScreenState extends State<MyCertificatesScreen> {
           ),
           SizedBox(height: 6),
           Text(
-            'Your certificate will appear here after the event ends and the admin generates it.',
+            'Your certificates will appear here after the relevant events end '
+            'and the admin generates them.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.namaMediumGray,
@@ -429,31 +431,58 @@ class _MyCertificatesScreenState extends State<MyCertificatesScreen> {
                     _lockedInfoCard(locked.length),
                     const SizedBox(height: 16),
                   ],
-                  if (available.isEmpty)
+                  if (available.isEmpty && locked.isEmpty)
                     _emptyState()
-                  else
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Available Certificates',
-                          style: TextStyle(
-                            color: AppColors.namaNavyBlue,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w900,
+                  else ...[
+                    if (available.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Available Certificates',
+                            style: TextStyle(
+                              color: AppColors.namaNavyBlue,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        ...available.map((item) {
-                          return _CertificateCard(
-                            item: item,
-                            locked: false,
-                            onView: () => _viewCertificate(item),
-                            onDownload: () => _downloadCertificate(item),
-                          );
-                        }),
-                      ],
-                    ),
+                          const SizedBox(height: 10),
+                          ...available.map((item) {
+                            return _CertificateCard(
+                              item: item,
+                              locked: false,
+                              onView: () => _viewCertificate(item),
+                              onDownload: () => _downloadCertificate(item),
+                            );
+                          }),
+                        ],
+                      ),
+                    if (available.isNotEmpty && locked.isNotEmpty)
+                      const SizedBox(height: 8),
+                    if (locked.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Locked Certificates',
+                            style: TextStyle(
+                              color: AppColors.namaNavyBlue,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          ...locked.map((item) {
+                            return _CertificateCard(
+                              item: item,
+                              locked: true,
+                              onView: () => _viewCertificate(item),
+                              onDownload: () => _downloadCertificate(item),
+                            );
+                          }),
+                        ],
+                      ),
+                  ],
                 ],
               ),
             );
@@ -480,11 +509,8 @@ class _CertificateCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final certificate = item.certificate;
-    final isSpeaker = certificate.userRole.toLowerCase() == 'speaker';
-
-    final certificateTitle = isSpeaker
-        ? 'Certificate of Appreciation'
-        : 'Certificate of Participation';
+    final certificateTitle = certificate.displayTitle;
+    final roleIcon = _certificateRoleIcon(certificate);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -501,11 +527,7 @@ class _CertificateCard extends StatelessWidget {
                     ? Colors.grey.withOpacity(0.12)
                     : AppColors.namaGoldenYellow.withOpacity(0.16),
                 child: Icon(
-                  locked
-                      ? Icons.lock_outline_rounded
-                      : isSpeaker
-                          ? Icons.record_voice_over_rounded
-                          : Icons.workspace_premium_rounded,
+                  locked ? Icons.lock_outline_rounded : roleIcon,
                   color: locked ? Colors.grey : AppColors.namaGoldenYellow,
                   size: 22,
                 ),
@@ -522,6 +544,17 @@ class _CertificateCard extends StatelessWidget {
                       style: const TextStyle(
                         color: AppColors.namaNavyBlue,
                         fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      certificate.roleDisplayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.namaGoldenYellow,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -545,6 +578,11 @@ class _CertificateCard extends StatelessWidget {
           _InfoLine(
             icon: Icons.confirmation_number_outlined,
             text: 'Certificate ID: ${certificate.certificateId}',
+          ),
+          const SizedBox(height: 6),
+          _InfoLine(
+            icon: _certificateRoleIcon(certificate),
+            text: 'Certificate type: ${certificate.roleDisplayName}',
           ),
           if (item.eventStartDate != null) ...[
             const SizedBox(height: 6),
@@ -715,6 +753,22 @@ class _CertificateWithEvent {
     required this.eventEndDate,
     required this.eventIsOver,
   });
+}
+
+IconData _certificateRoleIcon(CertificateModel certificate) {
+  if (certificate.isSpeakerCertificate) {
+    return Icons.record_voice_over_rounded;
+  }
+
+  if (certificate.isModeratorCertificate) {
+    return Icons.forum_rounded;
+  }
+
+  if (certificate.isStaffCertificate) {
+    return Icons.groups_rounded;
+  }
+
+  return Icons.workspace_premium_rounded;
 }
 
 BoxDecoration _cardDecoration() {

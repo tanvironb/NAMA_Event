@@ -143,6 +143,11 @@ class _EventAttendanceReportScreenState
           'isGenerated': true,
           'generatedAt': FieldValue.serverTimestamp(),
           'generatedBy': 'admin',
+          'attendeeCount': result['attendees'] ?? 0,
+          'speakerCount': result['speakers'] ?? 0,
+          'moderatorCount': result['moderators'] ?? 0,
+          'staffCount': result['staff'] ?? 0,
+          'totalGenerated': result['total'] ?? 0,
           'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
@@ -153,7 +158,11 @@ class _EventAttendanceReportScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'Certificates generated: ${result['total']} total (${result['attendees']} attendees, ${result['speakers']} speakers).',
+            'Certificates generated: ${result['total'] ?? 0} total '
+            '(${result['attendees'] ?? 0} attendees, '
+            '${result['speakers'] ?? 0} speakers, '
+            '${result['moderators'] ?? 0} moderators, '
+            '${result['staff'] ?? 0} staff/volunteers).',
           ),
           behavior: SnackBarBehavior.floating,
         ),
@@ -196,7 +205,16 @@ class _EventAttendanceReportScreenState
       );
     }
 
-    return participant.generatedCertificates.first;
+    final certificate = participant.generatedCertificate;
+
+    if (certificate == null) {
+      throw Exception(
+        'Certificate document for ${participant.displayRole} was not found. '
+        'Click Generate Certificates again.',
+      );
+    }
+
+    return certificate;
   }
 
   Future<void> _openCertificate(
@@ -392,7 +410,10 @@ class _EventAttendanceReportScreenState
           ),
           SizedBox(height: 10),
           Text(
-            'Certificates stay locked until admin clicks Generate Certificates. Present attendees and assigned speakers are eligible. Absent attendees are not eligible.',
+            'Certificates stay locked until admin clicks Generate '
+            'Certificates. Present attendees and assigned speakers, '
+            'moderators, and staff/volunteers are eligible. Absent attendees '
+            'are not eligible.',
             style: TextStyle(
               color: Colors.white70,
               fontSize: 11.5,
@@ -725,8 +746,27 @@ class _EventAttendanceReportScreenState
                 )
                 .toList();
 
-            final otherUsers =
-                filteredParticipants.where((p) => !p.isAttendee).toList();
+            final speakers = filteredParticipants
+                .where((participant) => participant.isSpeaker)
+                .toList();
+
+            final moderators = filteredParticipants
+                .where((participant) => participant.isModerator)
+                .toList();
+
+            final staffUsers = filteredParticipants
+                .where((participant) => participant.isStaff)
+                .toList();
+
+            final otherUsers = filteredParticipants
+                .where(
+                  (participant) =>
+                      !participant.isAttendee &&
+                      !participant.isSpeaker &&
+                      !participant.isModerator &&
+                      !participant.isStaff,
+                )
+                .toList();
 
             return RefreshIndicator(
               color: AppColors.namaNavyBlue,
@@ -769,15 +809,50 @@ class _EventAttendanceReportScreenState
                   ),
                   const SizedBox(height: 18),
                   _participantsSection(
-                    title: 'Speakers, Staff & Admins',
-                    participants: otherUsers,
-                    icon: Icons.badge_outlined,
+                    title: 'Speakers',
+                    participants: speakers,
+                    icon: Icons.record_voice_over_rounded,
                     color: AppColors.namaNavyBlue,
                     showAttendanceStatus: false,
                     showCertificateActions: true,
                     certificateGenerationUnlocked:
                         data.certificateGenerationUnlocked,
                   ),
+                  const SizedBox(height: 18),
+                  _participantsSection(
+                    title: 'Moderators',
+                    participants: moderators,
+                    icon: Icons.forum_rounded,
+                    color: AppColors.namaNavyBlue,
+                    showAttendanceStatus: false,
+                    showCertificateActions: true,
+                    certificateGenerationUnlocked:
+                        data.certificateGenerationUnlocked,
+                  ),
+                  const SizedBox(height: 18),
+                  _participantsSection(
+                    title: 'Staff / Volunteers',
+                    participants: staffUsers,
+                    icon: Icons.groups_rounded,
+                    color: AppColors.namaNavyBlue,
+                    showAttendanceStatus: false,
+                    showCertificateActions: true,
+                    certificateGenerationUnlocked:
+                        data.certificateGenerationUnlocked,
+                  ),
+                  if (otherUsers.isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    _participantsSection(
+                      title: 'Other Users',
+                      participants: otherUsers,
+                      icon: Icons.badge_outlined,
+                      color: AppColors.namaNavyBlue,
+                      showAttendanceStatus: false,
+                      showCertificateActions: false,
+                      certificateGenerationUnlocked:
+                          data.certificateGenerationUnlocked,
+                    ),
+                  ],
                 ],
               ),
             );
@@ -871,7 +946,8 @@ class _AttendanceReportRepository {
     }
 
     final sessionJoinedByUserId = <String, List<String>>{};
-    final speakerSessionsByUserId = <String, List<_SpeakerSessionItem>>{};
+    final assignedSessionsByUserId = <String, List<_AssignedSessionItem>>{};
+    final assignedRoleByUserId = <String, String>{};
 
     for (final sessionDoc in mergedSessions.values) {
       final sessionData = sessionDoc.data();
@@ -880,33 +956,38 @@ class _AttendanceReportRepository {
       final sessionTitle =
           (sessionData['title'] ?? 'Untitled Session').toString();
 
-      final speakerIds = List<String>.from(
-        sessionData['speakerIds'] as List? ?? [],
+      _collectAssignedUsers(
+        sessionData: sessionData,
+        sessionId: sessionId,
+        sessionTitle: sessionTitle,
+        role: 'speaker',
+        listKeys: const ['speakerIds'],
+        singleKeys: const ['speakerId'],
+        assignedSessionsByUserId: assignedSessionsByUserId,
+        assignedRoleByUserId: assignedRoleByUserId,
       );
 
-      for (final speakerId in speakerIds) {
-        final cleanSpeakerId = speakerId.toString().trim();
+      _collectAssignedUsers(
+        sessionData: sessionData,
+        sessionId: sessionId,
+        sessionTitle: sessionTitle,
+        role: 'moderator',
+        listKeys: const ['moderatorIds'],
+        singleKeys: const ['moderatorId'],
+        assignedSessionsByUserId: assignedSessionsByUserId,
+        assignedRoleByUserId: assignedRoleByUserId,
+      );
 
-        if (cleanSpeakerId.isEmpty) continue;
-
-        speakerSessionsByUserId.putIfAbsent(
-          cleanSpeakerId,
-          () => <_SpeakerSessionItem>[],
-        );
-
-        final alreadyAdded = speakerSessionsByUserId[cleanSpeakerId]!.any(
-          (session) => session.sessionId == sessionId,
-        );
-
-        if (!alreadyAdded) {
-          speakerSessionsByUserId[cleanSpeakerId]!.add(
-            _SpeakerSessionItem(
-              sessionId: sessionId,
-              sessionTitle: sessionTitle,
-            ),
-          );
-        }
-      }
+      _collectAssignedUsers(
+        sessionData: sessionData,
+        sessionId: sessionId,
+        sessionTitle: sessionTitle,
+        role: 'staff',
+        listKeys: const ['staffIds', 'volunteerIds'],
+        singleKeys: const ['staffId', 'volunteerId'],
+        assignedSessionsByUserId: assignedSessionsByUserId,
+        assignedRoleByUserId: assignedRoleByUserId,
+      );
 
       final checkedInAttendees =
           List<String>.from(sessionData['checkedInAttendees'] as List? ?? []);
@@ -941,31 +1022,33 @@ class _AttendanceReportRepository {
         userDoc: userDoc,
         eventCheckInsByUserId: eventCheckInsByUserId,
         sessionJoinedByUserId: sessionJoinedByUserId,
-        speakerSessionsByUserId: speakerSessionsByUserId,
+        assignedSessionsByUserId: assignedSessionsByUserId,
+        assignedRoleByUserId: assignedRoleByUserId,
         generatedCertificatesByUserId: generatedCertificatesByUserId,
       );
 
       participantsMap[item.userId] = item;
     }
+    
+for (final assignedUserId in assignedRoleByUserId.keys) {
+  if (participantsMap.containsKey(assignedUserId)) continue;
 
-    for (final speakerId in speakerSessionsByUserId.keys) {
-      if (participantsMap.containsKey(speakerId)) continue;
+  final assignedUserDoc =
+      await _firestore.collection('users').doc(assignedUserId).get();
 
-      final speakerDoc =
-          await _firestore.collection('users').doc(speakerId).get();
+  if (!assignedUserDoc.exists) continue;
 
-      if (!speakerDoc.exists) continue;
+  final item = _participantFromUserDoc(
+    userDoc: assignedUserDoc,
+    eventCheckInsByUserId: eventCheckInsByUserId,
+    sessionJoinedByUserId: sessionJoinedByUserId,
+    assignedSessionsByUserId: assignedSessionsByUserId,
+    assignedRoleByUserId: assignedRoleByUserId,
+    generatedCertificatesByUserId: generatedCertificatesByUserId,
+  );
 
-      final item = _participantFromUserDoc(
-        userDoc: speakerDoc,
-        eventCheckInsByUserId: eventCheckInsByUserId,
-        sessionJoinedByUserId: sessionJoinedByUserId,
-        speakerSessionsByUserId: speakerSessionsByUserId,
-        generatedCertificatesByUserId: generatedCertificatesByUserId,
-      );
-
-      participantsMap[item.userId] = item;
-    }
+  participantsMap[item.userId] = item;
+}
 
     final participants = participantsMap.values.toList();
 
@@ -999,7 +1082,8 @@ class _AttendanceReportRepository {
     required DocumentSnapshot<Map<String, dynamic>> userDoc,
     required Map<String, DateTime?> eventCheckInsByUserId,
     required Map<String, List<String>> sessionJoinedByUserId,
-    required Map<String, List<_SpeakerSessionItem>> speakerSessionsByUserId,
+    required Map<String, List<_AssignedSessionItem>> assignedSessionsByUserId,
+    required Map<String, String> assignedRoleByUserId,
     required Map<String, List<CertificateModel>> generatedCertificatesByUserId,
   }) {
     final data = userDoc.data() ?? {};
@@ -1014,11 +1098,12 @@ class _AttendanceReportRepository {
     final email = (data['email'] ?? '').toString();
 
     final rawRole = (data['role'] ?? 'attendee').toString();
-    final role = rawRole.trim().isEmpty ? 'attendee' : rawRole.trim();
+    final savedRole = rawRole.trim().isEmpty ? 'attendee' : rawRole.trim();
+    final role = assignedRoleByUserId[userId] ?? savedRole;
 
     final sessionsJoined = sessionJoinedByUserId[userId] ?? <String>[];
-    final speakerSessions =
-        speakerSessionsByUserId[userId] ?? <_SpeakerSessionItem>[];
+    final assignedSessions =
+        assignedSessionsByUserId[userId] ?? <_AssignedSessionItem>[];
 
     final generatedCertificates =
         generatedCertificatesByUserId[userId] ?? <CertificateModel>[];
@@ -1031,9 +1116,60 @@ class _AttendanceReportRepository {
       hasEventCheckIn: eventCheckInsByUserId.containsKey(userId),
       eventCheckInAt: eventCheckInsByUserId[userId],
       sessionsJoined: sessionsJoined,
-      speakerSessions: speakerSessions,
+      assignedSessions: assignedSessions,
       generatedCertificates: generatedCertificates,
     );
+  }
+
+  void _collectAssignedUsers({
+    required Map<String, dynamic> sessionData,
+    required String sessionId,
+    required String sessionTitle,
+    required String role,
+    required List<String> listKeys,
+    required List<String> singleKeys,
+    required Map<String, List<_AssignedSessionItem>> assignedSessionsByUserId,
+    required Map<String, String> assignedRoleByUserId,
+  }) {
+    final userIds = <String>{};
+
+    for (final key in listKeys) {
+      final value = sessionData[key];
+
+      if (value is List) {
+        for (final item in value) {
+          final userId = item.toString().trim();
+          if (userId.isNotEmpty) userIds.add(userId);
+        }
+      }
+    }
+
+    for (final key in singleKeys) {
+      final userId = (sessionData[key] ?? '').toString().trim();
+      if (userId.isNotEmpty) userIds.add(userId);
+    }
+
+    for (final userId in userIds) {
+      assignedRoleByUserId[userId] = role;
+      assignedSessionsByUserId.putIfAbsent(
+        userId,
+        () => <_AssignedSessionItem>[],
+      );
+
+      final alreadyAdded = assignedSessionsByUserId[userId]!.any(
+        (session) => session.sessionId == sessionId,
+      );
+
+      if (!alreadyAdded) {
+        assignedSessionsByUserId[userId]!.add(
+          _AssignedSessionItem(
+            sessionId: sessionId,
+            sessionTitle: sessionTitle,
+            role: role,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _readSessionCheckins({
@@ -1102,13 +1238,16 @@ class _AttendanceReportData {
   }
 }
 
-class _SpeakerSessionItem {
+class _AssignedSessionItem {
   final String sessionId;
   final String sessionTitle;
 
-  const _SpeakerSessionItem({
+  final String role;
+
+  const _AssignedSessionItem({
     required this.sessionId,
     required this.sessionTitle,
+    required this.role,
   });
 }
 
@@ -1120,7 +1259,7 @@ class _ParticipantAttendanceItem {
   final bool hasEventCheckIn;
   final DateTime? eventCheckInAt;
   final List<String> sessionsJoined;
-  final List<_SpeakerSessionItem> speakerSessions;
+  final List<_AssignedSessionItem> assignedSessions;
   final List<CertificateModel> generatedCertificates;
 
   const _ParticipantAttendanceItem({
@@ -1131,32 +1270,72 @@ class _ParticipantAttendanceItem {
     required this.hasEventCheckIn,
     required this.eventCheckInAt,
     required this.sessionsJoined,
-    this.speakerSessions = const [],
+    this.assignedSessions = const [],
     this.generatedCertificates = const [],
   });
 
-  bool get isAttendee {
-    return role.trim().toLowerCase() == 'attendee';
+  bool get isAttendee => normalizedRole == 'attendee';
+
+  String get normalizedRole {
+    final value = role.trim().toLowerCase();
+
+    if (value == 'delegate' ||
+        value == 'participant' ||
+        value == 'user') {
+      return 'attendee';
+    }
+
+    if (value == 'volunteer' ||
+        value == 'employee' ||
+        value == 'crew') {
+      return 'staff';
+    }
+
+    return value;
   }
 
-  bool get isSpeaker {
-    return role.trim().toLowerCase() == 'speaker';
-  }
+  bool get isSpeaker => normalizedRole == 'speaker';
+
+  bool get isModerator => normalizedRole == 'moderator';
+
+  bool get isStaff => normalizedRole == 'staff';
 
   bool get isCertificateEligible {
-    return (isAttendee && hasEventCheckIn) || isSpeaker;
+    return (isAttendee && hasEventCheckIn) ||
+        isSpeaker ||
+        isModerator ||
+        isStaff;
   }
 
-  bool get hasGeneratedCertificate {
-    return generatedCertificates.isNotEmpty;
+  CertificateModel? get generatedCertificate {
+    for (final certificate in generatedCertificates) {
+      if (certificate.normalizedRole == normalizedRole ||
+          certificate.normalizedTemplateRole == normalizedRole) {
+        return certificate;
+      }
+    }
+
+    return generatedCertificates.isEmpty ? null : generatedCertificates.first;
   }
+
+  bool get hasGeneratedCertificate => generatedCertificate != null;
 
   String get displayRole {
-    final cleanRole = role.trim();
-
-    if (cleanRole.isEmpty) return 'User';
-
-    return cleanRole[0].toUpperCase() + cleanRole.substring(1).toLowerCase();
+    switch (normalizedRole) {
+      case 'attendee':
+        return 'Attendee';
+      case 'speaker':
+        return 'Speaker';
+      case 'moderator':
+        return 'Moderator';
+      case 'staff':
+        return 'Staff / Volunteer';
+      default:
+        final cleanRole = role.trim();
+        if (cleanRole.isEmpty) return 'User';
+        return cleanRole[0].toUpperCase() +
+            cleanRole.substring(1).toLowerCase();
+    }
   }
 }
 
@@ -1322,26 +1501,26 @@ class _ParticipantCard extends StatelessWidget {
               }).toList(),
             ),
           ],
-          if (participant.isSpeaker && participant.speakerSessions.isNotEmpty)
-            ...[
-              const SizedBox(height: 10),
-              const Text(
-                'Speaker sessions:',
-                style: TextStyle(
-                  color: AppColors.namaDarkGray,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
+          if (!participant.isAttendee &&
+              participant.assignedSessions.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              '${participant.displayRole} sessions:',
+              style: const TextStyle(
+                color: AppColors.namaDarkGray,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
               ),
-              const SizedBox(height: 6),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: participant.speakerSessions.map((session) {
-                  return _SmallChip(text: session.sessionTitle);
-                }).toList(),
-              ),
-            ],
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: participant.assignedSessions.map((session) {
+                return _SmallChip(text: session.sessionTitle);
+              }).toList(),
+            ),
+          ],
           if (showCertificateActions) ...[
             const SizedBox(height: 12),
             if (participant.isCertificateEligible &&

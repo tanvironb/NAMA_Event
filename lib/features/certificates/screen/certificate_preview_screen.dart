@@ -26,7 +26,7 @@ class CertificatePreviewScreen extends StatelessWidget {
     required String eventName,
     DateTime? eventDate,
   }) async {
-    final template = await _loadTemplate(certificate.eventId);
+    final template = await _loadTemplate(certificate);
 
     final bytes = await _buildCertificatePdf(
       certificate: certificate,
@@ -35,10 +35,15 @@ class CertificatePreviewScreen extends StatelessWidget {
       template: template,
     );
 
-    final safeName = certificate.userName
+    var safeName = certificate.userName
         .trim()
         .replaceAll(RegExp(r'[^A-Za-z0-9]+'), '_')
-        .replaceAll(RegExp(r'_+'), '_');
+        .replaceAll(RegExp(r'_+'), '_')
+        .replaceAll(RegExp(r'^_|_$'), '');
+
+    if (safeName.isEmpty) {
+      safeName = 'certificate';
+    }
 
     await Printing.sharePdf(
       bytes: bytes,
@@ -55,22 +60,80 @@ class CertificatePreviewScreen extends StatelessWidget {
     );
   }
 
-  static Future<_CertificateTemplate?> _loadTemplate(String eventId) async {
-    final doc = await FirebaseFirestore.instance
+  static Future<_CertificateTemplate?> _loadTemplate(
+    CertificateModel certificate,
+  ) async {
+    // Prefer the template snapshot saved with the certificate. This ensures
+    // already-generated certificates do not change when the admin edits the
+    // role template later.
+    if (certificate.templateSettings.isNotEmpty) {
+      final snapshotTemplate = _CertificateTemplate.fromMap(
+        certificate.templateSettings,
+        fallbackTemplateUrl: certificate.resolvedTemplateUrl,
+      );
+
+      if (snapshotTemplate.templateUrl.trim().isNotEmpty) {
+        return snapshotTemplate;
+      }
+    }
+
+    final role = certificate.normalizedTemplateRole.isNotEmpty
+        ? certificate.normalizedTemplateRole
+        : certificate.normalizedRole;
+
+    final roleDoc = await FirebaseFirestore.instance
         .collection('events')
-        .doc(eventId)
-        .collection('certificateTemplate')
-        .doc('main')
+        .doc(certificate.eventId)
+        .collection('certificateTemplates')
+        .doc(role)
         .get();
 
-    if (!doc.exists) return null;
+    if (roleDoc.exists) {
+      final data = roleDoc.data() ?? <String, dynamic>{};
+      final roleTemplate = _CertificateTemplate.fromMap(
+        data,
+        fallbackTemplateUrl: certificate.resolvedTemplateUrl,
+      );
 
-    final data = doc.data() ?? {};
-    final templateUrl = (data['templateUrl'] ?? '').toString().trim();
+      if (roleTemplate.templateUrl.trim().isNotEmpty) {
+        return roleTemplate;
+      }
+    }
 
-    if (templateUrl.isEmpty) return null;
+    // Backward compatibility for older attendee certificates that used the
+    // previous single-template document.
+    if (role == 'attendee') {
+      final legacyDoc = await FirebaseFirestore.instance
+          .collection('events')
+          .doc(certificate.eventId)
+          .collection('certificateTemplate')
+          .doc('main')
+          .get();
 
-    return _CertificateTemplate.fromMap(data);
+      if (legacyDoc.exists) {
+        final data = legacyDoc.data() ?? <String, dynamic>{};
+        final legacyTemplate = _CertificateTemplate.fromMap(
+          data,
+          fallbackTemplateUrl: certificate.resolvedTemplateUrl,
+        );
+
+        if (legacyTemplate.templateUrl.trim().isNotEmpty) {
+          return legacyTemplate;
+        }
+      }
+    }
+
+    final directTemplateUrl = certificate.resolvedTemplateUrl;
+
+    if (directTemplateUrl != null && directTemplateUrl.trim().isNotEmpty) {
+      return _CertificateTemplate.fromMap(
+        <String, dynamic>{
+          'templateUrl': directTemplateUrl,
+        },
+      );
+    }
+
+    return null;
   }
 
   @override
@@ -79,7 +142,7 @@ class CertificatePreviewScreen extends StatelessWidget {
       backgroundColor: AppColors.namaLightGray,
       body: SafeArea(
         child: FutureBuilder<_CertificateTemplate?>(
-          future: _loadTemplate(certificate.eventId),
+          future: _loadTemplate(certificate),
           builder: (context, snapshot) {
             final template = snapshot.data;
 
@@ -257,14 +320,11 @@ class CertificatePreviewScreen extends StatelessWidget {
       return pdf.save();
     }
 
-    final isSpeaker = certificate.userRole.toLowerCase() == 'speaker';
-    final title = isSpeaker
-        ? 'Certificate of Appreciation'
-        : 'Certificate of Participation';
-
-    final bodyText = isSpeaker
-        ? 'This certificate is proudly presented to ${certificate.userName} in appreciation of their valuable contribution during $eventName.'
-        : 'This certificate is proudly presented to ${certificate.userName} for attending $eventName.';
+    final title = _fallbackTitle(certificate);
+    final bodyText = _fallbackBodyText(
+      certificate: certificate,
+      eventName: eventName,
+    );
 
     pdf.addPage(
       pw.Page(
@@ -335,6 +395,16 @@ class CertificatePreviewScreen extends StatelessWidget {
                       fontSize: 14,
                       lineSpacing: 4,
                     ),
+                  ),
+                ),
+                pw.SizedBox(height: 18),
+                pw.Text(
+                  certificate.roleDisplayName,
+                  textAlign: pw.TextAlign.center,
+                  style: pw.TextStyle(
+                    color: PdfColors.grey700,
+                    fontSize: 11,
+                    fontWeight: pw.FontWeight.bold,
                   ),
                 ),
                 pw.SizedBox(height: 28),
@@ -555,14 +625,11 @@ class _FallbackCertificatePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSpeaker = certificate.userRole.toLowerCase() == 'speaker';
-    final title = isSpeaker
-        ? 'Certificate of Appreciation'
-        : 'Certificate of Participation';
-
-    final bodyText = isSpeaker
-        ? 'This certificate is proudly presented to ${certificate.userName} in appreciation of their valuable contribution during $eventName.'
-        : 'This certificate is proudly presented to ${certificate.userName} for attending $eventName.';
+    final title = _fallbackTitle(certificate);
+    final bodyText = _fallbackBodyText(
+      certificate: certificate,
+      eventName: eventName,
+    );
 
     return Container(
       width: double.infinity,
@@ -635,6 +702,10 @@ class _FallbackCertificatePreview extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            _InfoRow(
+              label: 'Certificate For',
+              value: certificate.roleDisplayName,
+            ),
             _InfoRow(label: 'Event', value: eventName),
             if (eventDate != null)
               _InfoRow(label: 'Event Date', value: _formatDate(eventDate!)),
@@ -774,9 +845,17 @@ class _CertificateTemplate {
     required this.textColor,
   });
 
-  factory _CertificateTemplate.fromMap(Map<String, dynamic> data) {
+  factory _CertificateTemplate.fromMap(
+    Map<String, dynamic> data, {
+    String? fallbackTemplateUrl,
+  }) {
     return _CertificateTemplate(
-      templateUrl: (data['templateUrl'] ?? '').toString(),
+      templateUrl: (
+        data['templateUrl'] ??
+        data['certificateTemplateUrl'] ??
+        fallbackTemplateUrl ??
+        ''
+      ).toString(),
       orientation: (data['orientation'] ?? 'landscape').toString(),
       nameX: _readDouble(data['nameX'], 0.50),
       nameY: _readDouble(data['nameY'], 0.48),
@@ -791,6 +870,60 @@ class _CertificateTemplate {
       textColor: (data['textColor'] ?? '#111827').toString(),
     );
   }
+}
+
+String _fallbackTitle(CertificateModel certificate) {
+  if (certificate.isAttendeeCertificate ||
+      certificate.isParticipationCertificate) {
+    return 'Certificate of Participation';
+  }
+
+  if (certificate.isSpeakerCertificate) {
+    return 'Certificate of Appreciation';
+  }
+
+  if (certificate.isModeratorCertificate) {
+    return 'Certificate of Appreciation';
+  }
+
+  if (certificate.isStaffCertificate) {
+    return 'Certificate of Appreciation';
+  }
+
+  return certificate.displayTitle;
+}
+
+String _fallbackBodyText({
+  required CertificateModel certificate,
+  required String eventName,
+}) {
+  if (certificate.isAttendeeCertificate ||
+      certificate.isParticipationCertificate) {
+    return 'This certificate is proudly presented to '
+        '${certificate.userName} for participating in $eventName.';
+  }
+
+  if (certificate.isSpeakerCertificate) {
+    return 'This certificate is proudly presented to '
+        '${certificate.userName} in appreciation of their valuable '
+        'contribution as a speaker during $eventName.';
+  }
+
+  if (certificate.isModeratorCertificate) {
+    return 'This certificate is proudly presented to '
+        '${certificate.userName} in appreciation of their valuable '
+        'contribution as a moderator during $eventName.';
+  }
+
+  if (certificate.isStaffCertificate) {
+    return 'This certificate is proudly presented to '
+        '${certificate.userName} in appreciation of their valuable '
+        'service and contribution during $eventName.';
+  }
+
+  return 'This certificate is proudly presented to '
+      '${certificate.userName} in recognition of their contribution '
+      'during $eventName.';
 }
 
 double _readDouble(dynamic value, double fallback) {
