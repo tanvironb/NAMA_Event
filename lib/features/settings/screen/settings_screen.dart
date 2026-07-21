@@ -6,7 +6,6 @@ import 'package:events_app_trueattempt/features/auth/screen/auth_gate.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/features/certificates/screen/my_certificates_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
-import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/settings/screen/about_event_screen.dart';
 import 'package:flutter/material.dart';
@@ -83,12 +82,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         cleanRole == 'speaker';
   }
 
-  bool _canSeeHelpCentre(String? role) {
-    final cleanRole = (role ?? '').trim().toLowerCase();
-
-    return cleanRole != 'admin';
-  }
-
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -99,7 +92,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final userRole = userAsync.asData?.value?.role;
     final showCertificates = _canSeeCertificates(userRole);
     final showConnections = _canSeeConnections(userRole);
-    final showHelpCentre = _canSeeHelpCentre(userRole);
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surface,
@@ -137,6 +129,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 24),
 
               if (showCertificates)
@@ -188,19 +181,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   );
                 },
               ),
-
-              if (showHelpCentre)
-                _buildItem(
-                  icon: Icons.help_outline,
-                  title: 'Help Centre',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const HelpCenterScreen(),
-                      ),
-                    );
-                  },
-                ),
 
               const Spacer(),
 

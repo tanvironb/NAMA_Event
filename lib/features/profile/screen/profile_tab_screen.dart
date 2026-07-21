@@ -1,5 +1,8 @@
+// lib/features/profile/screen/profile_tab_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -8,6 +11,7 @@ import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_scre
 import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/settings/screen/settings_screen.dart';
+import 'package:events_app_trueattempt/features/help/screen/help_center_screen.dart';
 
 class ProfileTabScreen extends ConsumerWidget {
   final bool hideCalendarAndMeetings;
@@ -42,7 +46,7 @@ class ProfileTabScreen extends ConsumerWidget {
 
             final userRole = appUser.role.toLowerCase().trim();
 
-            // Admin and staff should NOT see My Calendar or My Meetings.
+            // Admin and staff should not see My Calendar or My Meetings.
             final shouldHideCalendarAndMeetings =
                 hideCalendarAndMeetings ||
                 userRole == 'staff' ||
@@ -77,11 +81,12 @@ class ProfileTabScreen extends ConsumerWidget {
                       ],
                       Text(
                         'Profile',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 19,
-                              color: primaryColor,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 19,
+                                  color: primaryColor,
+                                ),
                       ),
                     ],
                   ),
@@ -93,7 +98,10 @@ class ProfileTabScreen extends ConsumerWidget {
                       children: [
                         GestureDetector(
                           onTap: () {
-                            _showProfileImage(context, profileImageUrl);
+                            _showProfileImage(
+                              context,
+                              profileImageUrl,
+                            );
                           },
                           child: Container(
                             decoration: BoxDecoration(
@@ -108,18 +116,19 @@ class ProfileTabScreen extends ConsumerWidget {
                               backgroundImage: profileImageUrl.isNotEmpty
                                   ? NetworkImage(profileImageUrl)
                                   : null,
-                              backgroundColor: AppColors.avatarPlaceholder,
+                              backgroundColor:
+                                  AppColors.avatarPlaceholder,
                               child: profileImageUrl.isEmpty
                                   ? const Icon(
                                       Icons.person,
                                       size: 54,
-                                      color: AppColors.avatarPlaceholderText,
+                                      color:
+                                          AppColors.avatarPlaceholderText,
                                     )
                                   : null,
                             ),
                           ),
                         ),
-                        
                         const SizedBox(height: 18),
                         Text(
                           appUser.name,
@@ -151,12 +160,16 @@ class ProfileTabScreen extends ConsumerWidget {
                               context,
                               MaterialPageRoute(
                                 builder: (context) =>
-                                    UserDetailsScreen(userId: appUser.uid),
+                                    UserDetailsScreen(
+                                  userId: appUser.uid,
+                                ),
                               ),
                             );
                           },
                         ),
+
                         const SizedBox(height: 14),
+
                         _buildMenuItem(
                           context,
                           icon: Icons.notifications_outlined,
@@ -195,7 +208,8 @@ class ProfileTabScreen extends ConsumerWidget {
                             context,
                             icon: Icons.groups_2_outlined,
                             title: 'My Meetings',
-                            subtitle: 'View meeting requests and schedule',
+                            subtitle:
+                                'View meeting requests and schedule',
                             onTap: () {
                               Navigator.push(
                                 context,
@@ -209,6 +223,7 @@ class ProfileTabScreen extends ConsumerWidget {
                         ],
 
                         const SizedBox(height: 14),
+
                         _buildMenuItem(
                           context,
                           icon: Icons.settings_outlined,
@@ -218,11 +233,32 @@ class ProfileTabScreen extends ConsumerWidget {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (_) => const SettingsScreen(),
+                                builder: (_) =>
+                                    const SettingsScreen(),
                               ),
                             );
                           },
                         ),
+
+                        const SizedBox(height: 14),
+
+                        _buildMenuItem(
+                          context,
+                          icon: Icons.help_outline_rounded,
+                          title: 'Help Centre',
+                          subtitle:
+                              'Contact support and submit a help ticket',
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    const HelpCenterScreen(),
+                              ),
+                            );
+                          },
+                        ),
+
                         const SizedBox(height: 20),
                       ],
                     ),
@@ -253,7 +289,10 @@ class ProfileTabScreen extends ConsumerWidget {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.25),
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceVariant
+            .withOpacity(0.25),
         borderRadius: BorderRadius.circular(15),
       ),
       child: ListTile(
@@ -275,20 +314,22 @@ class ProfileTabScreen extends ConsumerWidget {
         ),
         title: Text(
           title,
-          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-                color: AppColors.textPrimary,
-              ),
+          style:
+              Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: AppColors.textPrimary,
+                  ),
         ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 3),
           child: Text(
             subtitle,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 10.8,
-                  color: AppColors.textSecondary,
-                ),
+            style:
+                Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 10.8,
+                      color: AppColors.textSecondary,
+                    ),
           ),
         ),
         trailing: const Icon(
@@ -301,7 +342,10 @@ class ProfileTabScreen extends ConsumerWidget {
     );
   }
 
-  void _showProfileImage(BuildContext context, String imageUrl) {
+  void _showProfileImage(
+    BuildContext context,
+    String imageUrl,
+  ) {
     if (imageUrl.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -318,11 +362,15 @@ class ProfileTabScreen extends ConsumerWidget {
       context: context,
       barrierColor: Colors.black.withOpacity(0.55),
       builder: (context) {
-        final screenWidth = MediaQuery.of(context).size.width;
-        final previewSize = screenWidth > 420 ? 320.0 : screenWidth * 0.78;
+        final screenWidth =
+            MediaQuery.of(context).size.width;
+
+        final previewSize =
+            screenWidth > 420 ? 320.0 : screenWidth * 0.78;
 
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 24),
           backgroundColor: Colors.transparent,
           elevation: 0,
           child: Center(
@@ -349,20 +397,34 @@ class ProfileTabScreen extends ConsumerWidget {
                       child: Image.network(
                         imageUrl,
                         fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
+                        loadingBuilder: (
+                          context,
+                          child,
+                          loadingProgress,
+                        ) {
+                          if (loadingProgress == null) {
+                            return child;
+                          }
 
                           return const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
                           );
                         },
-                        errorBuilder: (context, error, stackTrace) {
+                        errorBuilder: (
+                          context,
+                          error,
+                          stackTrace,
+                        ) {
                           return Container(
-                            color: AppColors.avatarPlaceholder,
+                            color:
+                                AppColors.avatarPlaceholder,
                             child: const Icon(
                               Icons.person,
                               size: 70,
-                              color: AppColors.avatarPlaceholderText,
+                              color:
+                                  AppColors.avatarPlaceholderText,
                             ),
                           );
                         },
@@ -373,13 +435,15 @@ class ProfileTabScreen extends ConsumerWidget {
                     top: 8,
                     right: 8,
                     child: InkWell(
-                      onTap: () => Navigator.of(context).pop(),
+                      onTap: () =>
+                          Navigator.of(context).pop(),
                       borderRadius: BorderRadius.circular(50),
                       child: Container(
                         height: 30,
                         width: 30,
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.45),
+                          color:
+                              Colors.black.withOpacity(0.45),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(

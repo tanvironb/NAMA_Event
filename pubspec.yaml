@@ -3,7 +3,7 @@ description: "A new Flutter project."
 
 publish_to: "none"
 
-version: 0.1.5+9
+version: 0.1.5+10
 
 environment:
   sdk: ^3.7.2
@@ -46,6 +46,7 @@ dependencies:
   # QR Code
   qr_flutter: ^4.1.0
   mobile_scanner: 3.5.7
+  screen_brightness: ^2.1.11
 
   # Media and links
   url_launcher: ^6.2.1

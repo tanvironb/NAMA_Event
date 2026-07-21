@@ -1,6 +1,5 @@
 // lib/features/admin/screen/user_management_screen.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
@@ -37,45 +36,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   static const Color _textMuted = Color(0xFF6B7280);
   static const Color _borderColor = Color(0xFFE8E4F8);
 
-  static const String _correctAdminUid =
-      'VrlP3OXt8eSYNf0p2ZR2xVKCy613';
-
-  @override
-  void initState() {
-    super.initState();
-    _ensureCorrectAdminDocument();
-  }
-
-  Future<void> _ensureCorrectAdminDocument() async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-
-    if (currentUser == null || currentUser.uid != _correctAdminUid) {
-      return;
-    }
-
-    try {
-      final data = <String, dynamic>{
-        'uid': currentUser.uid,
-        'email': currentUser.email ?? '',
-        'role': 'admin',
-        'status': 'approved',
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      final displayName = currentUser.displayName?.trim() ?? '';
-
-      if (displayName.isNotEmpty) {
-        data['name'] = displayName;
-      }
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_correctAdminUid)
-          .set(data, SetOptions(merge: true));
-    } catch (e) {
-      debugPrint('Failed to ensure correct admin document: $e');
-    }
-  }
 
   @override
   void dispose() {
@@ -138,19 +98,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     required Map<String, dynamic> userData,
     required Set<String> eventUserIds,
   }) {
-    final role =
-        (userData['role'] ?? '').toString().trim().toLowerCase();
-
-    // Hide all old/incorrect admin documents.
-    if (role == 'admin' && userId != _correctAdminUid) {
-      return false;
-    }
-
-    // Always show the correct administrator.
-    if (userId == _correctAdminUid) {
-      return true;
-    }
-
     if (!widget.isEventSpecific) {
       return true;
     }
@@ -268,7 +215,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     return status[0].toUpperCase() + status.substring(1).toLowerCase();
   }
 
- Widget _buildHeader() {
+  Widget _buildHeader() {
   return Padding(
     padding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
     child: Row(

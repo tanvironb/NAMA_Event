@@ -4,11 +4,13 @@ import 'dart:convert';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -33,6 +35,7 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
   bool _isProcessing = false;
   String _processingMessage = 'Processing...';
   String? _lastScannedPayload;
+  bool _isFullScreenQROpen = false;
 
   bool _isAdminRole(String role) {
     return role.toLowerCase().trim() == 'admin';
@@ -95,6 +98,171 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
       'v': 3,
       'ts': DateTime.now().millisecondsSinceEpoch,
     });
+  }
+
+  Future<void> _showFullScreenQR(String qrPayload) async {
+    if (_isFullScreenQROpen || !mounted) return;
+
+    setState(() {
+      _isFullScreenQROpen = true;
+    });
+
+    double? previousBrightness;
+
+    // The screen_brightness plugin has no Web implementation.
+    // On Web, the QR still opens in a full-screen route, but brightness
+    // adjustment is skipped to prevent MissingPluginException.
+    if (!kIsWeb) {
+      try {
+        previousBrightness = await ScreenBrightness.instance.application;
+        await ScreenBrightness.instance
+            .setApplicationScreenBrightness(1.0);
+      } catch (error) {
+        debugPrint('Could not increase screen brightness: $error');
+      }
+    }
+
+    if (!mounted) {
+      if (!kIsWeb) {
+        try {
+          if (previousBrightness != null) {
+            await ScreenBrightness.instance
+                .setApplicationScreenBrightness(previousBrightness);
+          } else {
+            await ScreenBrightness.instance
+                .resetApplicationScreenBrightness();
+          }
+        } catch (error) {
+          debugPrint('Could not restore screen brightness: $error');
+        }
+      }
+
+      _isFullScreenQROpen = false;
+      return;
+    }
+
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (context) {
+            return Scaffold(
+              backgroundColor: Colors.white,
+              body: SafeArea(
+                child: Stack(
+                  children: [
+                    Center(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 28,
+                          vertical: 70,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text(
+                              'Scan Me',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.namaNavyBlue,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'To connect with others',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            Container(
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.10),
+                                    blurRadius: 24,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: QrImageView(
+                                data: qrPayload,
+                                version: QrVersions.auto,
+                                size: 285,
+                                backgroundColor: Colors.white,
+                                foregroundColor: AppColors.namaNavyBlue,
+                                eyeStyle: const QrEyeStyle(
+                                  eyeShape: QrEyeShape.square,
+                                  color: AppColors.namaNavyBlue,
+                                ),
+                                dataModuleStyle: const QrDataModuleStyle(
+                                  dataModuleShape: QrDataModuleShape.square,
+                                  color: AppColors.namaNavyBlue,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            Text(
+                              'Ask another user to scan this QR code.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 12,
+                      right: 16,
+                      child: Material(
+                        color: const Color(0xFFF0F0F5),
+                        shape: const CircleBorder(),
+                        child: IconButton(
+                          tooltip: 'Close',
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                          color: AppColors.namaNavyBlue,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    } finally {
+      if (!kIsWeb) {
+        try {
+          if (previousBrightness != null) {
+            await ScreenBrightness.instance
+                .setApplicationScreenBrightness(previousBrightness);
+          } else {
+            await ScreenBrightness.instance
+                .resetApplicationScreenBrightness();
+          }
+        } catch (error) {
+          debugPrint('Could not restore screen brightness: $error');
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _isFullScreenQROpen = false;
+        });
+      } else {
+        _isFullScreenQROpen = false;
+      }
+    }
   }
 
   void _switchTab(int index) {
@@ -732,7 +900,15 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
                         color: AppColors.namaNavyBlue,
                       ),
                     ),
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 4),
+                    Text(
+                      'To connect with others',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
                     _buildSegmentedSelector(),
                   ],
                 ),
@@ -884,32 +1060,39 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
             ),
             child: Column(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.namaNavyBlue.withOpacity(0.10),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
+                Semantics(
+                  button: true,
+                  label: 'Open QR code full screen',
+                  child: GestureDetector(
+                    onTap: () => _showFullScreenQR(qrPayload),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.namaNavyBlue.withOpacity(0.10),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: QrImageView(
-                    data: qrPayload,
-                    version: QrVersions.auto,
-                    size: 150,
-                    backgroundColor: Colors.white,
-                    foregroundColor: AppColors.namaNavyBlue,
-                    eyeStyle: const QrEyeStyle(
-                      eyeShape: QrEyeShape.square,
-                      color: AppColors.namaNavyBlue,
-                    ),
-                    dataModuleStyle: const QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square,
-                      color: AppColors.namaNavyBlue,
+                      child: QrImageView(
+                        data: qrPayload,
+                        version: QrVersions.auto,
+                        size: 150,
+                        backgroundColor: Colors.white,
+                        foregroundColor: AppColors.namaNavyBlue,
+                        eyeStyle: const QrEyeStyle(
+                          eyeShape: QrEyeShape.square,
+                          color: AppColors.namaNavyBlue,
+                        ),
+                        dataModuleStyle: const QrDataModuleStyle(
+                          dataModuleShape: QrDataModuleShape.square,
+                          color: AppColors.namaNavyBlue,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1124,6 +1307,12 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
     try {
       _scannerController.stop();
     } catch (_) {}
+
+    if (!kIsWeb && _isFullScreenQROpen) {
+      ScreenBrightness.instance
+          .resetApplicationScreenBrightness()
+          .catchError((_) {});
+    }
 
     _scannerController.dispose();
     super.dispose();
