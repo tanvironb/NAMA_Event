@@ -1,15 +1,37 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/models/event_model.dart';
 import 'package:events_app_trueattempt/core/models/sponsor_model.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class EventRepository {
   final FirestoreService _firestoreService;
 
   EventRepository(this._firestoreService);
 
+  /// Used by attendee, admin and staff interfaces.
   Future<Event> getActiveEvent() async {
     final doc = await _firestoreService.getActiveEventDocument();
+    return Event.fromFirestore(doc);
+  }
+
+  /// Loads a specific event, including an inactive event assigned to a
+  /// speaker or moderator.
+  Future<Event?> getEventById(String eventId) async {
+    final cleanEventId = eventId.trim();
+
+    if (cleanEventId.isEmpty) {
+      return null;
+    }
+
+    final doc = await FirebaseFirestore.instance
+        .collection('events')
+        .doc(cleanEventId)
+        .get();
+
+    if (!doc.exists || doc.data() == null) {
+      return null;
+    }
+
     return Event.fromFirestore(doc);
   }
 }
@@ -55,7 +77,8 @@ class SponsorRepository {
           description: (partner['description'] ?? '').toString(),
         );
       }).where((sponsor) {
-        return sponsor.name.trim().isNotEmpty || sponsor.logoUrl.trim().isNotEmpty;
+        return sponsor.name.trim().isNotEmpty ||
+            sponsor.logoUrl.trim().isNotEmpty;
       }).toList();
     });
   }

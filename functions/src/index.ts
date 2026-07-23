@@ -6,6 +6,8 @@
 import {onDocumentCreated, onDocumentWritten} from "firebase-functions/v2/firestore";
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import {onSchedule} from "firebase-functions/v2/scheduler";
+import {defineSecret} from "firebase-functions/params";
+import {Resend} from "resend";
 import * as functionsV1 from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
@@ -16,6 +18,7 @@ const db = admin.firestore();
 
 // Region configuration - must match your Firestore region
 const FUNCTION_REGION = "asia-southeast1";
+const resendApiKey = defineSecret("RESEND_API_KEY");
 
 // ============================================================================
 // USER QR GENERATION
@@ -62,6 +65,444 @@ export const handleUserWrite = onDocumentWritten(
     return null;
   }
 );
+
+
+// ============================================================================
+// ADMIN-CREATED SPEAKER / MODERATOR ACCOUNTS
+// ============================================================================
+
+type EventRole = "speaker" | "moderator";
+
+interface EventRoleAccountRequest {
+  name: string;
+  email: string;
+  company: string;
+  role: EventRole;
+  eventId: string;
+  eventName: string;
+}
+
+function cleanRequiredString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function generateTemporaryPassword(): string {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnopqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%";
+  const all = `${upper}${lower}${digits}${symbols}`;
+
+  const pick = (characters: string): string => {
+    const index = crypto.randomInt(0, characters.length);
+    return characters[index];
+  };
+
+  const passwordCharacters = [
+    pick(upper),
+    pick(lower),
+    pick(digits),
+    pick(symbols),
+  ];
+
+  while (passwordCharacters.length < 14) {
+    passwordCharacters.push(pick(all));
+  }
+
+  for (let i = passwordCharacters.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(0, i + 1);
+    [passwordCharacters[i], passwordCharacters[j]] =
+      [passwordCharacters[j], passwordCharacters[i]];
+  }
+
+  return passwordCharacters.join("");
+}
+
+function buildEventInvitationHtml({
+  name,
+  eventName,
+  role,
+  email,
+  temporaryPassword,
+  verificationLink,
+}: {
+  name: string;
+  eventName: string;
+  role: EventRole;
+  email: string;
+  temporaryPassword: string;
+  verificationLink: string;
+}): string {
+  const safeName = escapeHtml(name);
+  const safeEventName = escapeHtml(eventName);
+  const safeEmail = escapeHtml(email);
+  const safePassword = escapeHtml(temporaryPassword);
+  const safeVerificationLink = escapeHtml(verificationLink);
+  const roleLabel = role === "moderator" ? "Moderator" : "Speaker";
+
+  return `
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NAMA Event Invitation</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#f5f6f8;font-family:Arial,Helvetica,sans-serif;color:#222222;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background-color:#f5f6f8;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="620" cellspacing="0" cellpadding="0" border="0" align="center"
+            style="width:100%;max-width:620px;margin:0 auto;background-color:#ffffff;border:1px solid #e7e7e7;border-radius:18px;overflow:hidden;">
+            <tr>
+              <td align="center" style="background-color:#ffffff;padding:40px 30px;border-bottom:1px solid #ececec;">
+                <img
+                  src="https://firebasestorage.googleapis.com/v0/b/events-app3.firebasestorage.app/o/email%2Ftextlogo.png?alt=media&amp;token=20aa68bf-7cf1-4121-9504-768399ef0dbb"
+                  width="180"
+                  alt="NAMA Foundation"
+                  style="display:block;width:180px;max-width:100%;height:auto;margin:0 auto 24px;border:0;"
+                >
+                <h1 style="margin:0;color:#17105f;font-size:30px;line-height:1.3;font-weight:700;">
+                  NAMA Event Invitation
+                </h1>
+                <p style="margin:14px 0 0;color:#d49b00;font-size:18px;line-height:1.5;font-weight:600;">
+                  ${safeEventName}
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:34px 30px;">
+                <p style="margin:0 0 18px;font-size:17px;line-height:1.6;">
+                  Dear <strong>${safeName}</strong>,
+                </p>
+                <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:#3f3f46;">
+                  You have been invited to join <strong>${safeEventName}</strong>
+                  as a <strong>${roleLabel}</strong>.
+                </p>
+                <p style="margin:0 0 22px;font-size:15px;line-height:1.7;color:#3f3f46;">
+                  Your NAMA Events account has been created successfully.
+                  Please verify your email address first, then sign in using
+                  the temporary password below.
+                </p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+                  style="width:100%;background-color:#fffaf0;border:1px solid #ead18a;border-radius:14px;margin:0 0 26px;">
+                  <tr>
+                    <td style="padding:22px;">
+                      <p style="margin:0 0 14px;font-size:14px;color:#222222;">
+                        <strong>Event:</strong> ${safeEventName}
+                      </p>
+                      <p style="margin:0 0 14px;font-size:14px;color:#222222;">
+                        <strong>Role:</strong> ${roleLabel}
+                      </p>
+                      <p style="margin:0 0 14px;font-size:14px;color:#222222;word-break:break-word;">
+                        <strong>Email:</strong> ${safeEmail}
+                      </p>
+                      <p style="margin:0;font-size:14px;color:#222222;word-break:break-word;">
+                        <strong>Temporary password:</strong> ${safePassword}
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 24px;font-size:14px;line-height:1.7;color:#4b5563;">
+                  Please verify your email address before signing in to the NAMA Events app.
+                </p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                  <tr>
+                    <td align="center" style="padding:4px 0 28px;">
+                      <a href="${safeVerificationLink}"
+                        style="display:inline-block;background-color:#17105f;color:#ffffff;text-decoration:none;padding:15px 30px;border-radius:10px;font-size:15px;font-weight:bold;">
+                        Verify Email Address
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 10px;font-size:13px;line-height:1.6;color:#6b7280;">
+                  After verification, open the NAMA Events app and sign in using
+                  the email address and temporary password shown above.
+                </p>
+                <p style="margin:0 0 24px;font-size:13px;line-height:1.6;color:#6b7280;">
+                  For security, please change your password after your first successful login.
+                </p>
+                <p style="margin:0;font-size:14px;line-height:1.7;color:#222222;">
+                  Best regards,<br><strong>NAMA Events Team</strong>
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="background-color:#faf8f1;padding:18px 24px;border-top:1px solid #eee7d3;">
+                <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.6;">
+                  This email was sent by NAMA Foundation.
+                </p>
+                <p style="margin:4px 0 0;color:#6b7280;font-size:12px;line-height:1.6;">
+                  Please do not share your temporary password with anyone.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+function buildEventInvitationText({
+  name,
+  eventName,
+  role,
+  email,
+  temporaryPassword,
+  verificationLink,
+}: {
+  name: string;
+  eventName: string;
+  role: EventRole;
+  email: string;
+  temporaryPassword: string;
+  verificationLink: string;
+}): string {
+  const roleLabel = role === "moderator" ? "Moderator" : "Speaker";
+
+  return [
+    `Dear ${name},`,
+    "",
+    `You have been invited to join ${eventName} as a ${roleLabel}.`,
+    "",
+    "Your NAMA Events account has been created successfully.",
+    `Email: ${email}`,
+    `Temporary password: ${temporaryPassword}`,
+    "",
+    `Verify your email: ${verificationLink}`,
+    "",
+    "After verification, sign in to the NAMA Events app and change your password.",
+    "",
+    "Best regards,",
+    "NAMA Events Team",
+  ].join("\n");
+}
+
+export const createEventRoleAccount = onCall(
+  {
+    region: FUNCTION_REGION,
+    secrets: [resendApiKey],
+  },
+  async (request) => {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "Please sign in first.");
+    }
+
+    await assertAdminUser(request.auth.uid);
+
+    const payload: EventRoleAccountRequest = {
+      name: cleanRequiredString(request.data?.name),
+      email: cleanRequiredString(request.data?.email).toLowerCase(),
+      company: cleanRequiredString(request.data?.company),
+      role: cleanRequiredString(request.data?.role) as EventRole,
+      eventId: cleanRequiredString(request.data?.eventId),
+      eventName: cleanRequiredString(request.data?.eventName),
+    };
+
+    if (!payload.name || !payload.email || !payload.eventId || !payload.eventName) {
+      throw new HttpsError(
+        "invalid-argument",
+        "name, email, eventId, and eventName are required."
+      );
+    }
+
+    if (!payload.email.includes("@") || !payload.email.includes(".")) {
+      throw new HttpsError("invalid-argument", "A valid email is required.");
+    }
+
+    if (payload.role !== "speaker" && payload.role !== "moderator") {
+      throw new HttpsError(
+        "invalid-argument",
+        "role must be either speaker or moderator."
+      );
+    }
+
+    const eventDoc = await db.collection("events").doc(payload.eventId).get();
+
+    if (!eventDoc.exists) {
+      throw new HttpsError("not-found", "The selected event does not exist.");
+    }
+
+    let authUser: admin.auth.UserRecord | null = null;
+    let accountCreated = false;
+    let temporaryPassword = "";
+
+    try {
+      authUser = await admin.auth().getUserByEmail(payload.email);
+    } catch (error: any) {
+      if (error?.code !== "auth/user-not-found") {
+        console.error("Failed to look up Auth user:", error);
+        throw new HttpsError("internal", "Unable to check the user account.");
+      }
+    }
+
+    if (!authUser) {
+      temporaryPassword = generateTemporaryPassword();
+
+      try {
+        authUser = await admin.auth().createUser({
+          email: payload.email,
+          password: temporaryPassword,
+          displayName: payload.name,
+          emailVerified: false,
+          disabled: false,
+        });
+        accountCreated = true;
+      } catch (error: any) {
+        console.error("Failed to create Auth user:", error);
+
+        if (error?.code === "auth/email-already-exists") {
+          throw new HttpsError(
+            "already-exists",
+            "An authentication account already exists for this email."
+          );
+        }
+
+        throw new HttpsError("internal", "Failed to create the user account.");
+      }
+    } else if (authUser.displayName !== payload.name) {
+      authUser = await admin.auth().updateUser(authUser.uid, {
+        displayName: payload.name,
+      });
+    }
+
+    const userRef = db.collection("users").doc(authUser.uid);
+    const existingUserDoc = await userRef.get();
+    const existingData = existingUserDoc.data() || {};
+
+    await userRef.set(
+      {
+        uid: authUser.uid,
+        name: payload.name,
+        email: payload.email,
+        role: payload.role,
+        company: payload.company,
+        title: payload.role === "moderator" ? "Moderator" : "Speaker",
+        position: existingData.position || "",
+        bio: existingData.bio || "",
+        profileImageUrl: existingData.profileImageUrl || "",
+        status: "approved",
+        points: existingData.points || 0,
+        eventIds: admin.firestore.FieldValue.arrayUnion(payload.eventId),
+        activeEventId: payload.eventId,
+        currentEventId: payload.eventId,
+        profileVisibility: existingData.profileVisibility || "full",
+        needsPrivacySelection: false,
+        createdByAdmin: true,
+        authAccountCreated: true,
+        emailVerificationRequired: true,
+        emailVerified: authUser.emailVerified,
+        invitationManagedByCallable: true,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:
+          existingData.createdAt ||
+          admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true}
+    );
+
+    let invitationSent = false;
+
+    if (accountCreated) {
+      try {
+        const verificationLink =
+          await admin.auth().generateEmailVerificationLink(payload.email);
+
+        const resend = new Resend(resendApiKey.value());
+        const roleLabel =
+          payload.role === "moderator" ? "Moderator" : "Speaker";
+
+        const sendResult = await resend.emails.send({
+          from: "NAMA Events <apps@namafoundation.org>",
+          to: [payload.email],
+          replyTo: "apps@namafoundation.org",
+          subject:
+            `You're Invited to Join ${payload.eventName} as a ${roleLabel}`,
+          html: buildEventInvitationHtml({
+            name: payload.name,
+            eventName: payload.eventName,
+            role: payload.role,
+            email: payload.email,
+            temporaryPassword,
+            verificationLink,
+          }),
+          text: buildEventInvitationText({
+            name: payload.name,
+            eventName: payload.eventName,
+            role: payload.role,
+            email: payload.email,
+            temporaryPassword,
+            verificationLink,
+          }),
+        });
+
+        if (sendResult.error) {
+          throw new Error(sendResult.error.message);
+        }
+
+        invitationSent = true;
+
+        await userRef.set(
+          {
+            invitationEmailSent: true,
+            invitationEmailSentAt:
+              admin.firestore.FieldValue.serverTimestamp(),
+            invitationEmailProvider: "resend",
+            invitationEmailId: sendResult.data?.id || "",
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          {merge: true}
+        );
+      } catch (error) {
+        console.error("Failed to send invitation email:", error);
+
+        await userRef.set(
+          {
+            invitationEmailSent: false,
+            invitationEmailError:
+              error instanceof Error ? error.message : String(error),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          {merge: true}
+        );
+
+        try {
+          await admin.auth().deleteUser(authUser.uid);
+          await userRef.delete();
+        } catch (rollbackError) {
+          console.error("Failed to roll back new account:", rollbackError);
+        }
+
+        throw new HttpsError(
+          "internal",
+          "The account could not be completed because the invitation email failed."
+        );
+      }
+    }
+
+    return {
+      success: true,
+      uid: authUser.uid,
+      accountCreated,
+      invitationSent,
+      email: payload.email,
+      role: payload.role,
+    };
+  }
+);
+
 
 // ============================================================================
 // SPEAKER / MODERATOR ROLE EMAIL
@@ -160,6 +601,13 @@ export const sendSpeakerOrModeratorRoleEmail = onDocumentWritten(
       null;
 
     if (!after) return null;
+
+    if (after.invitationManagedByCallable === true) {
+      console.log(
+        `Skipping legacy role email for ${userId}: managed by callable invitation.`
+      );
+      return null;
+    }
 
     const beforeRole = normalizeRoleValue(before?.role);
     const afterRole = normalizeRoleValue(after.role);

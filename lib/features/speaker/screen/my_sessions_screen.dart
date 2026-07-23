@@ -19,13 +19,12 @@ class MySessionsScreen extends ConsumerWidget {
       body: SafeArea(
         child: Column(
           children: [
-            // Custom header without AppBar
             Padding(
               padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
               child: Row(
                 children: [
                   IconButton(
-                    icon: Icon(
+                    icon: const Icon(
                       Icons.arrow_back,
                       color: AppColors.namaNavyBlue,
                       size: 22,
@@ -44,13 +43,17 @@ class MySessionsScreen extends ConsumerWidget {
                 ],
               ),
             ),
-
             Expanded(
               child: allSessionsAsync.when(
                 data: (allSessions) {
                   final mySessions = allSessions
-                      .where((s) => s.speakerIds.contains(userId))
-                      .toList();
+                      .where(
+                        (session) =>
+                            session.speakerIds.contains(userId) ||
+                            session.moderatorIds.contains(userId),
+                      )
+                      .toList()
+                    ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
                   if (mySessions.isEmpty) {
                     return Center(
@@ -75,7 +78,7 @@ class MySessionsScreen extends ConsumerWidget {
                         child: Align(
                           alignment: Alignment.topCenter,
                           child: Transform.scale(
-                            scale: 0.96, // Bigger card + bigger content
+                            scale: 0.96,
                             alignment: Alignment.topCenter,
                             child: SizedBox(
                               width: MediaQuery.of(context).size.width * 0.94,

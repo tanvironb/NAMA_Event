@@ -158,9 +158,10 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
     final venueMapsAsync = ref.watch(venueMapsStreamProvider);
     final sponsorsAsync = ref.watch(sponsorsStreamProvider);
 
-    final eventName = eventAsync.maybeWhen(
+    final eventName = eventAsync.when(
       data: (event) => event.name.toString(),
-      orElse: () => 'Philanthropy Learning Forum',
+      loading: () => 'Loading event...',
+      error: (_, __) => 'Assigned event unavailable',
     );
 
     final userName = (user?.name ?? 'Speaker').toString().trim().isEmpty
@@ -248,10 +249,32 @@ class SpeakerHomeQuickActionsPage extends ConsumerWidget {
                     color: AppColors.namaMediumGray,
                   ),
             ),
+            if (eventAsync.hasError) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF4F4),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: const Color(0xFFFFC9C9),
+                  ),
+                ),
+                child: Text(
+                  'This account is not currently linked to a valid event. Please ask an admin to assign the speaker again.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: const Color(0xFF9B1C1C),
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
+                      ),
+                ),
+              ),
+            ],
             const SizedBox(height: 38),
             _buildSectionTitle(
               icon: Icons.bolt,
-              title: 'Speaker Tools',
+              title: 'Tools',
             ),
             const SizedBox(height: 18),
             GridView(

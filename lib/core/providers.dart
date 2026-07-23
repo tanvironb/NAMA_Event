@@ -90,9 +90,106 @@ final notificationServiceProvider =
 
 // --- App Data Providers ---
 final activeEventFutureProvider = FutureProvider<Event>((ref) async {
+  final auth = ref.watch(firebaseAuthProvider);
   final repo = ref.watch(eventRepositoryProvider);
-  return await repo.getActiveEvent();
+  final currentUser = auth.currentUser;
+
+  if (currentUser == null) {
+    throw StateError('No signed-in user found.');
+  }
+
+  final userDoc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(currentUser.uid)
+      .get();
+
+  final userData = userDoc.data();
+
+  if (userData == null) {
+    throw StateError('User profile was not found.');
+  }
+
+  final role = _normalizeEventRole(
+    userData['role'] ??
+        userData['userRole'] ??
+        userData['userType'] ??
+        userData['type'],
+  );
+
+  if (role == 'speaker' || role == 'moderator') {
+    final candidateEventIds = <String>[];
+
+    void addCandidate(dynamic value) {
+      final eventId = (value ?? '').toString().trim();
+
+      if (eventId.isNotEmpty && !candidateEventIds.contains(eventId)) {
+        candidateEventIds.add(eventId);
+      }
+    }
+
+    // Prefer the event most recently assigned by the backend.
+    addCandidate(userData['currentEventId']);
+    addCandidate(userData['activeEventId']);
+
+    final rawEventIds = userData['eventIds'];
+
+    if (rawEventIds is List) {
+      for (final value in rawEventIds.reversed) {
+        addCandidate(value);
+      }
+    }
+
+    for (final eventId in candidateEventIds) {
+      final assignedEvent = await repo.getEventById(eventId);
+
+      if (assignedEvent != null) {
+        return assignedEvent;
+      }
+    }
+
+    // Never send a speaker/moderator to an unrelated global event.
+    throw StateError(
+      'No valid assigned event was found for this ${role == 'speaker' ? 'speaker' : 'moderator'}.',
+    );
+  }
+
+  // Admin, staff and attendees continue to use the global active event.
+  return repo.getActiveEvent();
 });
+
+String _normalizeEventRole(dynamic value) {
+  final role = (value ?? '').toString().trim().toLowerCase();
+
+  if (role == 'speaker_user' ||
+      role == 'speaker user' ||
+      role == 'speaker-user') {
+    return 'speaker';
+  }
+
+  if (role == 'moderator_user' ||
+      role == 'moderator user' ||
+      role == 'moderator-user' ||
+      role == 'mod') {
+    return 'moderator';
+  }
+
+  if (role == 'administrator' || role == 'admins') {
+    return 'admin';
+  }
+
+  if (role == 'staff_user' ||
+      role == 'staff user' ||
+      role == 'staff-user') {
+    return 'staff';
+  }
+
+  if (role == 'delegate' || role == 'delegates' || role == 'user') {
+    return 'attendee';
+  }
+
+  return role;
+}
+
 
 final userAppProfileStreamProvider =
     StreamProvider.autoDispose<AppUser?>((ref) {
@@ -130,16 +227,20 @@ final sessionStreamProvider =
 
 final speakerSessionsProvider =
     Provider.autoDispose.family<AsyncValue<List<Session>>, String>(
-  (ref, speakerId) {
+  (ref, userId) {
     final allSessionsAsync = ref.watch(sessionsStreamProvider);
 
     return allSessionsAsync.when(
       data: (sessions) {
-        final speakerSessions = sessions
-            .where((session) => session.speakerIds.contains(speakerId))
+        final assignedSessions = sessions
+            .where(
+              (session) =>
+                  session.speakerIds.contains(userId) ||
+                  session.moderatorIds.contains(userId),
+            )
             .toList();
 
-        return AsyncValue.data(speakerSessions);
+        return AsyncValue.data(assignedSessions);
       },
       loading: () => const AsyncValue.loading(),
       error: (error, stack) => AsyncValue.error(error, stack),
@@ -252,17 +353,18 @@ final featuredSpeakersFutureProvider =
         return a.startTime.compareTo(b.startTime);
       });
 
-      final Set<String> speakerIds = {};
+      final Set<String> featuredUserIds = {};
 
       for (final session in currentOrUpcomingSessions.take(10)) {
-        speakerIds.addAll(session.speakerIds);
+        featuredUserIds.addAll(session.speakerIds);
+        featuredUserIds.addAll(session.moderatorIds);
       }
 
-      if (speakerIds.isEmpty) return [];
+      if (featuredUserIds.isEmpty) return [];
 
       final repo = ref.watch(userProfileRepositoryProvider);
 
-      return await repo.getUsersByIds(speakerIds.toList());
+      return await repo.getUsersByIds(featuredUserIds.toList());
     },
     loading: () => <AppUser>[],
     error: (err, stack) => <AppUser>[],

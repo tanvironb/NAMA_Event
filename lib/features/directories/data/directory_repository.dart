@@ -7,7 +7,6 @@ class DirectoryRepository {
 
   DirectoryRepository(this._firestoreService);
 
-  // Fetches attendees only for the currently active event.
   Future<List<AppUser>> getAttendees(String eventId) async {
     final docs = await _firestoreService.getUsersByRoleAndEventId(
       role: 'attendee',
@@ -23,17 +22,14 @@ class DirectoryRepository {
     return attendees;
   }
 
-  // Fetches speakers for the currently active event.
-  //
-  // Main source:
-  // sessions where eventId == activeEvent.id, then collect speakerIds.
-  //
-  // This is better than only checking users.eventIds because speakers are
-  // assigned through sessions.
+  /// Returns both speakers and moderators for the selected event.
+  ///
+  /// Sources:
+  /// - speakerIds and moderatorIds assigned to event sessions
+  /// - users linked directly to the event with speaker/moderator role
   Future<List<AppUser>> getSpeakers(String eventId) async {
-    final Set<String> speakerIds = {};
+    final Set<String> userIds = {};
 
-    // 1. Get speakers from sessions of the active event.
     final sessionsSnapshot = await FirebaseFirestore.instance
         .collection('sessions')
         .where('eventId', isEqualTo: eventId)
@@ -41,52 +37,65 @@ class DirectoryRepository {
 
     for (final sessionDoc in sessionsSnapshot.docs) {
       final data = sessionDoc.data();
-      final rawSpeakerIds = data['speakerIds'];
 
+      final rawSpeakerIds = data['speakerIds'];
       if (rawSpeakerIds is List) {
         for (final id in rawSpeakerIds) {
-          final speakerId = id.toString().trim();
+          final cleanId = id.toString().trim();
+          if (cleanId.isNotEmpty) userIds.add(cleanId);
+        }
+      }
 
-          if (speakerId.isNotEmpty) {
-            speakerIds.add(speakerId);
-          }
+      final rawModeratorIds = data['moderatorIds'];
+      if (rawModeratorIds is List) {
+        for (final id in rawModeratorIds) {
+          final cleanId = id.toString().trim();
+          if (cleanId.isNotEmpty) userIds.add(cleanId);
         }
       }
     }
 
-    // 2. Also include users directly linked to this event as speaker.
-    // This helps if some speakers were created directly in users collection.
     final directSpeakerDocs = await _firestoreService.getUsersByRoleAndEventId(
       role: 'speaker',
       eventId: eventId,
     );
 
-    for (final doc in directSpeakerDocs) {
-      speakerIds.add(doc.id);
-    }
-
-    if (speakerIds.isEmpty) return [];
-
-    final docs = await _firestoreService.getUserDocumentsByIds(
-      speakerIds.toList(),
+    final directModeratorDocs =
+        await _firestoreService.getUsersByRoleAndEventId(
+      role: 'moderator',
+      eventId: eventId,
     );
 
-    final speakers = <AppUser>[];
+    for (final doc in directSpeakerDocs) {
+      userIds.add(doc.id);
+    }
+
+    for (final doc in directModeratorDocs) {
+      userIds.add(doc.id);
+    }
+
+    if (userIds.isEmpty) return [];
+
+    final docs = await _firestoreService.getUserDocumentsByIds(
+      userIds.toList(),
+    );
+
+    final users = <AppUser>[];
 
     for (final doc in docs) {
       try {
         if (doc.exists) {
-          speakers.add(AppUser.fromFirestore(doc));
+          users.add(AppUser.fromFirestore(doc));
         }
       } catch (_) {
-        // Skip broken/incomplete old speaker documents.
+        // Skip incomplete legacy documents.
       }
     }
 
-    speakers.sort(
+    users.sort(
       (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
     );
 
-    return speakers;
+    return users;
   }
 }

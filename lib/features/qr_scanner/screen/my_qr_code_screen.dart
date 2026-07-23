@@ -46,7 +46,8 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
   }
 
   bool _isSpeakerRole(String role) {
-    return role.toLowerCase().trim() == 'speaker';
+    final normalizedRole = role.toLowerCase().trim();
+    return normalizedRole == 'speaker' || normalizedRole == 'moderator';
   }
 
   bool _isAttendeeRole(String role) {
@@ -59,6 +60,7 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
       case 'staff':
         return AppColors.qrStaffBackground;
       case 'speaker':
+      case 'moderator':
         return AppColors.qrSpeakerBackground;
       case 'user':
       case 'attendee':
@@ -73,6 +75,10 @@ class _MyQRCodeScreenState extends ConsumerState<MyQRCodeScreen> {
         return 'Staff Member';
       case 'speaker':
         return 'Speaker';
+      case 'moderator':
+        return 'Moderator';
+      case 'admin':
+        return 'Admin';
       case 'user':
       case 'attendee':
       default:

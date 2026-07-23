@@ -68,6 +68,26 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
     return speakers;
   }
 
+  Future<List<Map<String, dynamic>>> _loadModerators() async {
+    if (widget.session.moderatorIds.isEmpty) return [];
+
+    final firestore = FirebaseFirestore.instance;
+    final moderators = <Map<String, dynamic>>[];
+
+    for (final moderatorId in widget.session.moderatorIds) {
+      final doc = await firestore.collection('users').doc(moderatorId).get();
+
+      if (doc.exists && doc.data() != null) {
+        final data = Map<String, dynamic>.from(doc.data()!);
+        data['id'] = doc.id;
+        data['uid'] = doc.id;
+        moderators.add(data);
+      }
+    }
+
+    return moderators;
+  }
+
   Future<bool> _hasUserJoinedSession(String userId) async {
     if (widget.session.checkedInAttendees.contains(userId)) {
       return true;
@@ -1127,6 +1147,45 @@ class _SessionDetailScreenState extends ConsumerState<SessionDetailScreen> {
                         child: _speakerCard(
                           context: context,
                           speaker: speaker,
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Moderators',
+                style: TextStyle(
+                  fontSize: 20,
+                  color: AppColors.namaNavyBlue,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 14),
+              FutureBuilder<List<Map<String, dynamic>>>(
+                future: _loadModerators(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final moderators = snapshot.data ?? [];
+
+                  if (moderators.isEmpty) {
+                    return const Text(
+                      'No moderators listed for this session.',
+                      style: TextStyle(fontSize: 13),
+                    );
+                  }
+
+                  return Column(
+                    children: moderators.map((moderator) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _speakerCard(
+                          context: context,
+                          speaker: moderator,
                         ),
                       );
                     }).toList(),

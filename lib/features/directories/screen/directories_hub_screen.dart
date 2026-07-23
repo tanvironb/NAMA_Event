@@ -43,7 +43,7 @@ class _DirectoriesHubContent extends StatelessWidget {
             const SizedBox(height: 10),
             Center(
               child: Container(
-                width: 200,
+                width: 220,
                 height: 38,
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(

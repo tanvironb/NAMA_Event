@@ -9,6 +9,7 @@ class Session {
   final DateTime endTime;
   final String location;
   final List<String> speakerIds;
+  final List<String> moderatorIds;
   final String liveStreamUrl;
   final String qrCodePayload;
   final String category;
@@ -43,6 +44,7 @@ class Session {
     required this.endTime,
     required this.location,
     required this.speakerIds,
+    this.moderatorIds = const [],
     this.liveStreamUrl = '',
     this.qrCodePayload = '',
     this.category = '',
@@ -82,6 +84,7 @@ class Session {
       endTime: _dateTimeFromValue(data['endTime']),
       location: data['location'] as String? ?? 'Unknown Room',
       speakerIds: List<String>.from(data['speakerIds'] as List? ?? []),
+      moderatorIds: List<String>.from(data['moderatorIds'] as List? ?? []),
       liveStreamUrl: data['liveStreamUrl'] as String? ?? '',
       qrCodePayload: data['qrCodePayload'] as String? ?? '',
       category: data['category'] as String? ?? '',
@@ -187,8 +190,12 @@ class Session {
 
   bool isUserMuted(String userId) => mutedUsers.contains(userId);
 
+  bool isAssignedUser(String userId) {
+    return speakerIds.contains(userId) || moderatorIds.contains(userId);
+  }
+
   bool canSpeakerSendAfterEnd(String userId) {
-    return speakerIds.contains(userId) && isWithinGracePeriod;
+    return isAssignedUser(userId) && isWithinGracePeriod;
   }
 
   double get averageMessagesPerParticipant {

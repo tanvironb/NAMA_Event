@@ -2,9 +2,8 @@
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:events_app_trueattempt/features/admin/screen/create_session_screen.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -205,7 +204,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             name: (data['name'] ?? '').toString(),
             email: (data['email'] ?? '').toString(),
             company: (data['company'] ?? '').toString(),
-            savedPassword: _readSavedSpeakerPassword(data),
           ),
         );
       }
@@ -254,7 +252,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
             name: (data['name'] ?? '').toString(),
             email: (data['email'] ?? '').toString(),
             company: (data['company'] ?? '').toString(),
-            savedPassword: _readSavedModeratorPassword(data),
           ),
         );
       }
@@ -448,27 +445,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     return '$hour:$minute $period';
   }
 
-  String _readSavedSpeakerPassword(Map<String, dynamic> data) {
-    final password = (data['speakerPassword'] ??
-            data['plainPassword'] ??
-            data['password'] ??
-            '')
-        .toString()
-        .trim();
-
-    return password;
-  }
-
-  String _readSavedModeratorPassword(Map<String, dynamic> data) {
-    final password = (data['moderatorPassword'] ??
-            data['plainPassword'] ??
-            data['password'] ??
-            '')
-        .toString()
-        .trim();
-
-    return password;
-  }
 
   void _addPartner() {
     setState(() {
@@ -583,10 +559,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       final name = speaker.nameController.text.trim();
       final email = speaker.emailController.text.trim().toLowerCase();
       final company = speaker.companyController.text.trim();
-      final password = speaker.passwordController.text.trim();
 
       final isCompletelyEmpty =
-          name.isEmpty && email.isEmpty && company.isEmpty && password.isEmpty;
+          name.isEmpty && email.isEmpty && company.isEmpty;
 
       if (isCompletelyEmpty) continue;
 
@@ -611,15 +586,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
 
       usedEmails.add(email);
-
-      final isNewSpeaker = speaker.existingUserId == null ||
-          speaker.existingUserId!.trim().isEmpty ||
-          speaker.existingAuthAccountCreated == false;
-
-      if (isNewSpeaker && password.length < 6) {
-        _showMessage('Password for $name must be at least 6 characters.');
-        return false;
-      }
     }
 
     return true;
@@ -634,10 +600,9 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       final name = moderator.nameController.text.trim();
       final email = moderator.emailController.text.trim().toLowerCase();
       final company = moderator.companyController.text.trim();
-      final password = moderator.passwordController.text.trim();
 
       final isCompletelyEmpty =
-          name.isEmpty && email.isEmpty && company.isEmpty && password.isEmpty;
+          name.isEmpty && email.isEmpty && company.isEmpty;
 
       if (isCompletelyEmpty) continue;
 
@@ -673,15 +638,6 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
       }
 
       usedEmails.add(email);
-
-      final isNewModerator = moderator.existingUserId == null ||
-          moderator.existingUserId!.trim().isEmpty ||
-          moderator.existingAuthAccountCreated == false;
-
-      if (isNewModerator && password.length < 6) {
-        _showMessage('Password for $name must be at least 6 characters.');
-        return false;
-      }
     }
 
     return true;
@@ -733,274 +689,87 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
     return partnersData;
   }
 
-  Future<String> _createAuthAccountForSpeaker({
+  Future<Map<String, dynamic>> _createOrUpdateRoleAccount({
     required String name,
     required String email,
-    required String password,
+    required String company,
+    required String role,
+    required String eventId,
+    required String eventName,
   }) async {
-    FirebaseApp? secondaryApp;
+    final callable = FirebaseFunctions.instanceFor(
+      region: 'asia-southeast1',
+    ).httpsCallable('createEventRoleAccount');
 
     try {
-      final appName =
-          'speaker_creation_${DateTime.now().millisecondsSinceEpoch}';
+      final result = await callable.call<Map<String, dynamic>>({
+        'name': name,
+        'email': email,
+        'company': company,
+        'role': role,
+        'eventId': eventId,
+        'eventName': eventName,
+      });
 
-      secondaryApp = await Firebase.initializeApp(
-        name: appName,
-        options: Firebase.app().options,
-      );
-
-      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-
-      final credential = await secondaryAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      final createdUser = credential.user;
-
-      if (createdUser == null || createdUser.uid.isEmpty) {
-        throw Exception('Speaker user ID was not created.');
-      }
-
-      await createdUser.updateDisplayName(name);
-      await createdUser.sendEmailVerification();
-
-      await secondaryAuth.signOut();
-
-      return createdUser.uid;
-    } finally {
-      if (secondaryApp != null) {
-        await secondaryApp.delete();
-      }
+      return Map<String, dynamic>.from(result.data);
+    } on FirebaseFunctionsException catch (e) {
+      throw Exception(e.message ?? 'Failed to create $role account.');
     }
   }
 
-  Future<String> _createAuthAccountForModerator({
-    required String name,
-    required String email,
-    required String password,
+  Future<void> _createOrUpdateSpeakers({
+    required String eventId,
+    required String eventName,
   }) async {
-    FirebaseApp? secondaryApp;
-
-    try {
-      final appName =
-          'moderator_creation_${DateTime.now().millisecondsSinceEpoch}';
-
-      secondaryApp = await Firebase.initializeApp(
-        name: appName,
-        options: Firebase.app().options,
-      );
-
-      final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-
-      final credential = await secondaryAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      final createdUser = credential.user;
-
-      if (createdUser == null || createdUser.uid.isEmpty) {
-        throw Exception('Moderator user ID was not created.');
-      }
-
-      await createdUser.updateDisplayName(name);
-      await createdUser.sendEmailVerification();
-      await secondaryAuth.signOut();
-
-      return createdUser.uid;
-    } finally {
-      if (secondaryApp != null) {
-        await secondaryApp.delete();
-      }
-    }
-  }
-
-  Future<void> _createOrUpdateSpeakers(String eventId) async {
     for (final speaker in _speakers) {
       final name = speaker.nameController.text.trim();
       final email = speaker.emailController.text.trim().toLowerCase();
       final company = speaker.companyController.text.trim();
-      final password = speaker.passwordController.text.trim();
 
       final isCompletelyEmpty =
-          name.isEmpty && email.isEmpty && company.isEmpty && password.isEmpty;
+          name.isEmpty && email.isEmpty && company.isEmpty;
 
       if (isCompletelyEmpty) continue;
 
-      String uid = speaker.existingUserId ?? '';
-      bool authAccountCreated = speaker.existingAuthAccountCreated;
-      Map<String, dynamic> existingSpeakerData = {};
-
-      if (uid.isNotEmpty) {
-        final currentSpeakerDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .get();
-
-        if (currentSpeakerDoc.exists) {
-          existingSpeakerData = currentSpeakerDoc.data() ?? {};
-          authAccountCreated =
-              existingSpeakerData['authAccountCreated'] == true;
-        }
-      }
-
-      if (uid.isEmpty) {
-        final existingSpeaker = await FirebaseFirestore.instance
-            .collection('users')
-            .where('email', isEqualTo: email)
-            .limit(1)
-            .get();
-
-        if (existingSpeaker.docs.isNotEmpty) {
-          uid = existingSpeaker.docs.first.id;
-          existingSpeakerData = existingSpeaker.docs.first.data();
-          authAccountCreated =
-              existingSpeakerData['authAccountCreated'] == true;
-        }
-      }
-
-      if (uid.isEmpty) {
-        uid = await _createAuthAccountForSpeaker(
-          name: name,
-          email: email,
-          password: password,
-        );
-        authAccountCreated = true;
-      }
-
-      final savedPassword = password.isNotEmpty
-          ? password
-          : _readSavedSpeakerPassword(existingSpeakerData);
-
-      final existingEmailVerified =
-          existingSpeakerData['emailVerified'] == true;
-
-      await FirebaseFirestore.instance.collection('users').doc(uid).set(
-        {
-          'uid': uid,
-          'name': name,
-          'email': email,
-          'role': 'speaker',
-          'company': company,
-          'title': 'Speaker',
-          'position': existingSpeakerData['position'] ?? '',
-          'bio': existingSpeakerData['bio'] ?? '',
-          'profileImageUrl': existingSpeakerData['profileImageUrl'] ?? '',
-          'status': 'approved',
-          'points': existingSpeakerData['points'] ?? 0,
-          'eventIds': FieldValue.arrayUnion([eventId]),
-          'activeEventId': eventId,
-          'currentEventId': eventId,
-          'profileVisibility':
-              existingSpeakerData['profileVisibility'] ?? 'full',
-          'needsPrivacySelection': false,
-          'createdByAdmin': true,
-          'authAccountCreated': authAccountCreated,
-          'emailVerificationRequired': true,
-          'emailVerified': existingEmailVerified,
-          if (savedPassword.isNotEmpty) 'speakerPassword': savedPassword,
-          if (savedPassword.isNotEmpty) 'plainPassword': savedPassword,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'createdAt':
-              existingSpeakerData['createdAt'] ?? FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
+      final result = await _createOrUpdateRoleAccount(
+        name: name,
+        email: email,
+        company: company,
+        role: 'speaker',
+        eventId: eventId,
+        eventName: eventName,
       );
+
+      speaker.existingUserId = (result['uid'] ?? '').toString();
+      speaker.existingAuthAccountCreated = true;
     }
   }
 
-  Future<void> _createOrUpdateModerators(String eventId) async {
+  Future<void> _createOrUpdateModerators({
+    required String eventId,
+    required String eventName,
+  }) async {
     for (final moderator in _moderators) {
       final name = moderator.nameController.text.trim();
       final email = moderator.emailController.text.trim().toLowerCase();
       final company = moderator.companyController.text.trim();
-      final password = moderator.passwordController.text.trim();
 
       final isCompletelyEmpty =
-          name.isEmpty && email.isEmpty && company.isEmpty && password.isEmpty;
+          name.isEmpty && email.isEmpty && company.isEmpty;
 
       if (isCompletelyEmpty) continue;
 
-      String uid = moderator.existingUserId ?? '';
-      bool authAccountCreated = moderator.existingAuthAccountCreated;
-      Map<String, dynamic> existingModeratorData = {};
-
-      if (uid.isNotEmpty) {
-        final currentModeratorDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .get();
-
-        if (currentModeratorDoc.exists) {
-          existingModeratorData = currentModeratorDoc.data() ?? {};
-          authAccountCreated =
-              existingModeratorData['authAccountCreated'] == true;
-        }
-      }
-
-      if (uid.isEmpty) {
-        final existingModerator = await FirebaseFirestore.instance
-            .collection('users')
-            .where('email', isEqualTo: email)
-            .limit(1)
-            .get();
-
-        if (existingModerator.docs.isNotEmpty) {
-          uid = existingModerator.docs.first.id;
-          existingModeratorData = existingModerator.docs.first.data();
-          authAccountCreated =
-              existingModeratorData['authAccountCreated'] == true;
-        }
-      }
-
-      if (uid.isEmpty) {
-        uid = await _createAuthAccountForModerator(
-          name: name,
-          email: email,
-          password: password,
-        );
-        authAccountCreated = true;
-      }
-
-      final savedPassword = password.isNotEmpty
-          ? password
-          : _readSavedModeratorPassword(existingModeratorData);
-
-      final existingEmailVerified =
-          existingModeratorData['emailVerified'] == true;
-
-      await FirebaseFirestore.instance.collection('users').doc(uid).set(
-        {
-          'uid': uid,
-          'name': name,
-          'email': email,
-          'role': 'moderator',
-          'company': company,
-          'title': 'Moderator',
-          'position': existingModeratorData['position'] ?? '',
-          'bio': existingModeratorData['bio'] ?? '',
-          'profileImageUrl': existingModeratorData['profileImageUrl'] ?? '',
-          'status': 'approved',
-          'points': existingModeratorData['points'] ?? 0,
-          'eventIds': FieldValue.arrayUnion([eventId]),
-          'activeEventId': eventId,
-          'currentEventId': eventId,
-          'profileVisibility':
-              existingModeratorData['profileVisibility'] ?? 'full',
-          'needsPrivacySelection': false,
-          'createdByAdmin': true,
-          'authAccountCreated': authAccountCreated,
-          'emailVerificationRequired': true,
-          'emailVerified': existingEmailVerified,
-          if (savedPassword.isNotEmpty) 'moderatorPassword': savedPassword,
-          if (savedPassword.isNotEmpty) 'plainPassword': savedPassword,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'createdAt': existingModeratorData['createdAt'] ??
-              FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
+      final result = await _createOrUpdateRoleAccount(
+        name: name,
+        email: email,
+        company: company,
+        role: 'moderator',
+        eventId: eventId,
+        eventName: eventName,
       );
+
+      moderator.existingUserId = (result['uid'] ?? '').toString();
+      moderator.existingAuthAccountCreated = true;
     }
   }
 
@@ -1092,8 +861,14 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
         });
       }
 
-      await _createOrUpdateSpeakers(docId);
-      await _createOrUpdateModerators(docId);
+      await _createOrUpdateSpeakers(
+        eventId: docId,
+        eventName: name,
+      );
+      await _createOrUpdateModerators(
+        eventId: docId,
+        eventName: name,
+      );
 
       return docId;
     } catch (e) {
@@ -1415,7 +1190,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 _SectionHeader(
                   title: 'Speaker Accounts',
                   subtitle:
-                      'Admin creates speaker accounts here. Verification email will be sent to new speakers.',
+                      'Enter the speaker details. Login credentials and verification will be emailed automatically.',
                   onAdd: _addSpeaker,
                 ),
                 const SizedBox(height: 15),
@@ -1454,7 +1229,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                 _SectionHeader(
                   title: 'Moderator Accounts',
                   subtitle:
-                      'Admin creates moderator accounts here. Verification email will be sent to new moderators.',
+                      'Enter the moderator details. Login credentials and verification will be emailed automatically.',
                   onAdd: _addModerator,
                 ),
                 const SizedBox(height: 15),
@@ -1817,12 +1592,11 @@ class _PartnerInput {
 }
 
 class _SpeakerInput {
-  final String? existingUserId;
-  final bool existingAuthAccountCreated;
+  String? existingUserId;
+  bool existingAuthAccountCreated;
   final TextEditingController nameController;
   final TextEditingController emailController;
   final TextEditingController companyController;
-  final TextEditingController passwordController;
 
   _SpeakerInput({
     this.existingUserId,
@@ -1830,33 +1604,31 @@ class _SpeakerInput {
     String name = '',
     String email = '',
     String company = '',
-    String savedPassword = '',
   })  : nameController = TextEditingController(text: name),
         emailController = TextEditingController(text: email),
-        companyController = TextEditingController(text: company),
-        passwordController = TextEditingController(text: savedPassword);
+        companyController = TextEditingController(text: company);
 
   void clear() {
+    existingUserId = null;
+    existingAuthAccountCreated = false;
     nameController.clear();
     emailController.clear();
     companyController.clear();
-    passwordController.clear();
   }
 
   void dispose() {
     nameController.dispose();
     emailController.dispose();
     companyController.dispose();
-    passwordController.dispose();
   }
 }
+
 class _ModeratorInput {
-  final String? existingUserId;
-  final bool existingAuthAccountCreated;
+  String? existingUserId;
+  bool existingAuthAccountCreated;
   final TextEditingController nameController;
   final TextEditingController emailController;
   final TextEditingController companyController;
-  final TextEditingController passwordController;
 
   _ModeratorInput({
     this.existingUserId,
@@ -1864,24 +1636,22 @@ class _ModeratorInput {
     String name = '',
     String email = '',
     String company = '',
-    String savedPassword = '',
   })  : nameController = TextEditingController(text: name),
         emailController = TextEditingController(text: email),
-        companyController = TextEditingController(text: company),
-        passwordController = TextEditingController(text: savedPassword);
+        companyController = TextEditingController(text: company);
 
   void clear() {
+    existingUserId = null;
+    existingAuthAccountCreated = false;
     nameController.clear();
     emailController.clear();
     companyController.clear();
-    passwordController.clear();
   }
 
   void dispose() {
     nameController.dispose();
     emailController.dispose();
     companyController.dispose();
-    passwordController.dispose();
   }
 }
 
@@ -2613,7 +2383,7 @@ class _FooterCredit extends StatelessWidget {
     );
   }
 }
-class _SpeakerAccountCard extends StatefulWidget {
+class _SpeakerAccountCard extends StatelessWidget {
   final int index;
   final _SpeakerInput speaker;
   final VoidCallback onRemove;
@@ -2624,37 +2394,24 @@ class _SpeakerAccountCard extends StatefulWidget {
     required this.onRemove,
   });
 
-  @override
-  State<_SpeakerAccountCard> createState() => _SpeakerAccountCardState();
-}
-
-class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
-  bool _obscurePassword = true;
-
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _fieldBorder = Color(0xFFEADAA3);
-  static const Color _textMuted = Color(0xFF6B7280);
 
   @override
   Widget build(BuildContext context) {
-    final isExisting = widget.speaker.existingUserId != null &&
-        widget.speaker.existingUserId!.isNotEmpty;
-
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFFCF4),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: _fieldBorder,
-        ),
+        border: Border.all(color: _fieldBorder),
       ),
       child: Column(
         children: [
           Row(
             children: [
               Text(
-                'Speaker ${widget.index + 1}',
+                'Speaker ${index + 1}',
                 style: const TextStyle(
                   color: _primaryColor,
                   fontSize: 12.5,
@@ -2682,7 +2439,7 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
               ),
               const Spacer(),
               InkWell(
-                onTap: widget.onRemove,
+                onTap: onRemove,
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
                   height: 30,
@@ -2706,14 +2463,14 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
           const SizedBox(height: 12),
           _InputField(
             label: 'Speaker Name',
-            controller: widget.speaker.nameController,
+            controller: speaker.nameController,
             hint: 'Enter speaker name',
             icon: Icons.person_outline_rounded,
           ),
           const SizedBox(height: 12),
           _InputField(
             label: 'Speaker Email',
-            controller: widget.speaker.emailController,
+            controller: speaker.emailController,
             hint: 'Enter speaker email',
             icon: Icons.mail_outline_rounded,
             keyboardType: TextInputType.emailAddress,
@@ -2721,84 +2478,27 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
           const SizedBox(height: 12),
           _InputField(
             label: 'Company',
-            controller: widget.speaker.companyController,
+            controller: speaker.companyController,
             hint: 'Company / organization optional',
             icon: Icons.business_outlined,
           ),
-          const SizedBox(height: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 10),
+          const Row(
             children: [
-              Text(
-                isExisting ? 'Password (saved for this speaker)' : 'Password',
-                style: const TextStyle(
-                  color: _primaryColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
+              Icon(
+                Icons.password_rounded,
+                color: Color(0xFFE4B544),
+                size: 17,
               ),
-              const SizedBox(height: 6),
-              SizedBox(
-                height: 48,
-                child: TextFormField(
-                  controller: widget.speaker.passwordController,
-                  obscureText: _obscurePassword,
-                  cursorColor: _primaryColor,
-                  style: const TextStyle(
-                    color: Color(0xFF1F2937),
-                    fontSize: 12.5,
+              SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'A secure temporary password will be generated and emailed automatically.',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 11.3,
                     fontWeight: FontWeight.w500,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: isExisting
-                        ? 'Saved speaker password'
-                        : 'Set speaker password',
-                    hintStyle: const TextStyle(
-                      color: _textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.lock_outline_rounded,
-                      color: _primaryColor,
-                      size: 19,
-                    ),
-                    prefixIconConstraints: const BoxConstraints(
-                      minWidth: 40,
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        color: _primaryColor,
-                        size: 19,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 12,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(13),
-                      borderSide: const BorderSide(
-                        color: _fieldBorder,
-                      ),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(13),
-                      borderSide: const BorderSide(
-                        color: _primaryColor,
-                        width: 1.1,
-                      ),
-                    ),
+                    height: 1.35,
                   ),
                 ),
               ),
@@ -2810,7 +2510,7 @@ class _SpeakerAccountCardState extends State<_SpeakerAccountCard> {
   }
 }
 
-class _ModeratorAccountCard extends StatefulWidget {
+class _ModeratorAccountCard extends StatelessWidget {
   final int index;
   final _ModeratorInput moderator;
   final VoidCallback onRemove;
@@ -2821,23 +2521,11 @@ class _ModeratorAccountCard extends StatefulWidget {
     required this.onRemove,
   });
 
-  @override
-  State<_ModeratorAccountCard> createState() =>
-      _ModeratorAccountCardState();
-}
-
-class _ModeratorAccountCardState extends State<_ModeratorAccountCard> {
-  bool _obscurePassword = true;
-
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _fieldBorder = Color(0xFFEADAA3);
-  static const Color _textMuted = Color(0xFF6B7280);
 
   @override
   Widget build(BuildContext context) {
-    final isExisting = widget.moderator.existingUserId != null &&
-        widget.moderator.existingUserId!.isNotEmpty;
-
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -2850,7 +2538,7 @@ class _ModeratorAccountCardState extends State<_ModeratorAccountCard> {
           Row(
             children: [
               Text(
-                'Moderator ${widget.index + 1}',
+                'Moderator ${index + 1}',
                 style: const TextStyle(
                   color: _primaryColor,
                   fontSize: 12.5,
@@ -2859,7 +2547,10 @@ class _ModeratorAccountCardState extends State<_ModeratorAccountCard> {
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFFF3CC),
                   borderRadius: BorderRadius.circular(20),
@@ -2875,7 +2566,7 @@ class _ModeratorAccountCardState extends State<_ModeratorAccountCard> {
               ),
               const Spacer(),
               InkWell(
-                onTap: widget.onRemove,
+                onTap: onRemove,
                 borderRadius: BorderRadius.circular(10),
                 child: Container(
                   height: 30,
@@ -2883,7 +2574,9 @@ class _ModeratorAccountCardState extends State<_ModeratorAccountCard> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFE8E4F8)),
+                    border: Border.all(
+                      color: const Color(0xFFE8E4F8),
+                    ),
                   ),
                   child: const Icon(
                     Icons.delete_outline_rounded,
@@ -2897,14 +2590,14 @@ class _ModeratorAccountCardState extends State<_ModeratorAccountCard> {
           const SizedBox(height: 12),
           _InputField(
             label: 'Moderator Name',
-            controller: widget.moderator.nameController,
+            controller: moderator.nameController,
             hint: 'Enter moderator name',
             icon: Icons.person_outline_rounded,
           ),
           const SizedBox(height: 12),
           _InputField(
             label: 'Moderator Email',
-            controller: widget.moderator.emailController,
+            controller: moderator.emailController,
             hint: 'Enter moderator email',
             icon: Icons.mail_outline_rounded,
             keyboardType: TextInputType.emailAddress,
@@ -2912,80 +2605,27 @@ class _ModeratorAccountCardState extends State<_ModeratorAccountCard> {
           const SizedBox(height: 12),
           _InputField(
             label: 'Company',
-            controller: widget.moderator.companyController,
+            controller: moderator.companyController,
             hint: 'Company / organization optional',
             icon: Icons.business_outlined,
           ),
-          const SizedBox(height: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 10),
+          const Row(
             children: [
-              Text(
-                isExisting ? 'Password (saved for this moderator)' : 'Password',
-                style: const TextStyle(
-                  color: _primaryColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
+              Icon(
+                Icons.password_rounded,
+                color: Color(0xFFE4B544),
+                size: 17,
               ),
-              const SizedBox(height: 6),
-              SizedBox(
-                height: 48,
-                child: TextFormField(
-                  controller: widget.moderator.passwordController,
-                  obscureText: _obscurePassword,
-                  cursorColor: _primaryColor,
-                  style: const TextStyle(
-                    color: Color(0xFF1F2937),
-                    fontSize: 12.5,
+              SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'A secure temporary password will be generated and emailed automatically.',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 11.3,
                     fontWeight: FontWeight.w500,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: isExisting
-                        ? 'Saved moderator password'
-                        : 'Set moderator password',
-                    hintStyle: const TextStyle(
-                      color: _textMuted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    prefixIcon: const Icon(
-                      Icons.lock_outline_rounded,
-                      color: _primaryColor,
-                      size: 19,
-                    ),
-                    prefixIconConstraints: const BoxConstraints(minWidth: 40),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off_outlined
-                            : Icons.visibility_outlined,
-                        color: _primaryColor,
-                        size: 19,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                    filled: true,
-                    fillColor: Colors.white,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 12,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(13),
-                      borderSide: const BorderSide(color: _fieldBorder),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(13),
-                      borderSide: const BorderSide(
-                        color: _primaryColor,
-                        width: 1.1,
-                      ),
-                    ),
+                    height: 1.35,
                   ),
                 ),
               ),

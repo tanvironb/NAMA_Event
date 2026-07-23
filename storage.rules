@@ -1,10 +1,111 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.role == 'admin';
+    }
+
+    function isStaff() {
+      return isSignedIn() &&
+        firestore.get(
+          /databases/(default)/documents/users/$(request.auth.uid)
+        ).data.role == 'staff';
+    }
+
+    function isAdminOrStaff() {
+      return isAdmin() || isStaff();
+    }
+
+    function isImageUnder10MB() {
+      return request.resource == null ||
+        (
+          request.resource.size < 10 * 1024 * 1024 &&
+          request.resource.contentType.matches('image/.*')
+        );
+    }
+
+    // ------------------------------------------------------------
+    // EMAIL ASSETS
+    // Publicly readable because email clients must load the logo
+    // without being signed into Firebase.
+    // Only admins can upload or modify them.
+    // ------------------------------------------------------------
+    match /email/{fileName} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isImageUnder10MB();
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------
+    // EVENT FILES
+    // Includes:
+    // events/{eventId}/partners/...
+    // events/{eventId}/venueMaps/...
+    // events/{eventId}/images/...
+    // ------------------------------------------------------------
+    match /events/{eventId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin() && isImageUnder10MB();
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------
+    // SESSION FILES
+    // Admins and staff may manage session-related images.
+    // ------------------------------------------------------------
+    match /sessions/{sessionId}/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdminOrStaff() && isImageUnder10MB();
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------
+    // USER PROFILE IMAGES
+    // Each user can manage files inside their own UID folder.
+    // Admins can also manage them.
+    // ------------------------------------------------------------
+    match /users/{userId}/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update: if
+        (request.auth.uid == userId || isAdmin()) &&
+        isImageUnder10MB();
+
+      allow delete: if request.auth.uid == userId || isAdmin();
+    }
+
+    // Common alternative profile image path.
+    match /profile_images/{userId}/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update: if
+        (request.auth.uid == userId || isAdmin()) &&
+        isImageUnder10MB();
+
+      allow delete: if request.auth.uid == userId || isAdmin();
+    }
+
+    // ------------------------------------------------------------
+    // CERTIFICATE FILES
+    // ------------------------------------------------------------
+    match /certificates/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------
+    // EVERYTHING ELSE
+    // Denied unless a specific rule above allows it.
+    // ------------------------------------------------------------
     match /{allPaths=**} {
       allow read, write: if false;
     }
