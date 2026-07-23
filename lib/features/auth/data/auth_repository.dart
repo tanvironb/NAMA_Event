@@ -1,11 +1,11 @@
 // lib/features/auth/data/auth_repository.dart
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
-import 'package:events_app_trueattempt/core/services/firestore_service.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/core/services/firestore_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class AuthRepository {
   final FirebaseAuth _firebaseAuth;
@@ -16,7 +16,9 @@ class AuthRepository {
   Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
 
   /// Gets the currently active event ID.
-  /// If no active event exists, it returns null and does not block login/register.
+  ///
+  /// If no active event exists, this returns null and does not block
+  /// login or registration.
   Future<String?> _getActiveEventIdSafely() async {
     try {
       final activeEventDoc = await _firestoreService.getActiveEventDocument();
@@ -27,50 +29,153 @@ class AuthRepository {
     }
   }
 
-  /// Ensures the current user is linked to the active event.
-  /// This is important for Networking page filtering.
-  Future<void> _attachUserToActiveEvent(String uid) async {
+  /// Synchronizes a signed-in user with the currently active event.
+  ///
+  /// This method:
+  /// - links the user to the active event through eventIds
+  /// - updates currentEventId and activeEventId for attendee/staff accounts
+  /// - creates or updates the event registration document
+  /// - refreshes the registration profile details on every login
+  ///
+  /// Speaker and moderator event assignment is not overwritten because those
+  /// roles may be assigned to a specific inactive event by an admin.
+  Future<void> _syncUserWithActiveEvent(String uid) async {
     final activeEventId = await _getActiveEventIdSafely();
 
-    if (activeEventId == null || activeEventId.isEmpty) return;
+    if (activeEventId == null || activeEventId.trim().isEmpty) {
+      debugPrint(
+        'AuthRepository: No active event found for user synchronization.',
+      );
+      return;
+    }
 
-    await _firestoreService.updateUserDocument(
-      uid,
-      {
+    final firestore = FirebaseFirestore.instance;
+    final userRef = firestore.collection('users').doc(uid);
+    final registrationRef = firestore
+        .collection('events')
+        .doc(activeEventId)
+        .collection('registrations')
+        .doc(uid);
+
+    await firestore.runTransaction((transaction) async {
+      final userSnapshot = await transaction.get(userRef);
+
+      if (!userSnapshot.exists) {
+        throw FirebaseException(
+          plugin: 'cloud_firestore',
+          code: 'user-not-found',
+          message: 'User profile does not exist.',
+        );
+      }
+
+      final userData = userSnapshot.data() ?? <String, dynamic>{};
+
+      final rawRole = (userData['role'] ??
+              userData['userRole'] ??
+              userData['userType'] ??
+              userData['type'] ??
+              'attendee')
+          .toString()
+          .trim()
+          .toLowerCase();
+
+      final normalizedRole = _normalizeRole(rawRole);
+
+      final shouldFollowGlobalActiveEvent =
+          normalizedRole == 'attendee' || normalizedRole == 'staff';
+
+      final userUpdates = <String, dynamic>{
         'eventIds': FieldValue.arrayUnion([activeEventId]),
+        'lastSeen': FieldValue.serverTimestamp(),
+        'lastLoginAt': FieldValue.serverTimestamp(),
+        'isOnline': true,
         'updatedAt': FieldValue.serverTimestamp(),
-      },
-    );
-  }
+      };
 
-  /// Creates/updates a registration record for the active event.
-  /// This is used by Admin -> Check Registration page.
-  Future<void> _registerUserForActiveEvent(String uid) async {
-    final activeEventId = await _getActiveEventIdSafely();
+      if (shouldFollowGlobalActiveEvent) {
+        userUpdates['currentEventId'] = activeEventId;
+        userUpdates['activeEventId'] = activeEventId;
+      }
 
-    if (activeEventId == null || activeEventId.isEmpty) return;
+      transaction.set(
+        userRef,
+        userUpdates,
+        SetOptions(merge: true),
+      );
 
-    final userDoc = await _firestoreService.getUserDocument(uid);
+      final registrationSnapshot = await transaction.get(registrationRef);
 
-    if (!userDoc.exists) return;
-
-    final userData = userDoc.data() as Map<String, dynamic>? ?? {};
-
-    await _firestoreService.createOrUpdateEventRegistration(
-      eventId: activeEventId,
-      userId: uid,
-      registrationData: {
+      final registrationData = <String, dynamic>{
         'userId': uid,
-        'name': (userData['name'] ?? '').toString(),
+        'eventId': activeEventId,
+        'name': (userData['name'] ??
+                userData['fullName'] ??
+                userData['displayName'] ??
+                '')
+            .toString(),
         'email': (userData['email'] ?? '').toString(),
-        'role': (userData['role'] ?? '').toString(),
+        'role': normalizedRole,
+        'company': (userData['company'] ?? '').toString(),
+        'title': (userData['title'] ?? '').toString(),
+        'profileImageUrl': (userData['profileImageUrl'] ?? '').toString(),
         'status': 'registered',
         'source': 'app_login',
-        'includedInReport': false,
-        'registeredAt': FieldValue.serverTimestamp(),
+        'lastJoinedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-      },
-    );
+      };
+
+      if (!registrationSnapshot.exists) {
+        registrationData.addAll({
+          'registeredAt': FieldValue.serverTimestamp(),
+          'includedInReport': false,
+        });
+      }
+
+      transaction.set(
+        registrationRef,
+        registrationData,
+        SetOptions(merge: true),
+      );
+    });
+  }
+
+  String _normalizeRole(String role) {
+    final cleanRole = role.trim().toLowerCase();
+
+    if (cleanRole == 'administrator' || cleanRole == 'admins') {
+      return 'admin';
+    }
+
+    if (cleanRole == 'speaker_user' ||
+        cleanRole == 'speaker user' ||
+        cleanRole == 'speaker-user') {
+      return 'speaker';
+    }
+
+    if (cleanRole == 'moderator_user' ||
+        cleanRole == 'moderator user' ||
+        cleanRole == 'moderator-user' ||
+        cleanRole == 'mod') {
+      return 'moderator';
+    }
+
+    if (cleanRole == 'staff_user' ||
+        cleanRole == 'staff user' ||
+        cleanRole == 'staff-user') {
+      return 'staff';
+    }
+
+    if (cleanRole == 'delegate' ||
+        cleanRole == 'delegates' ||
+        cleanRole == 'user') {
+      return 'attendee';
+    }
+
+    if (cleanRole.isEmpty) {
+      return 'attendee';
+    }
+
+    return cleanRole;
   }
 
   Future<UserCredential> signInWithEmailAndPassword(
@@ -93,14 +198,7 @@ class AuthRepository {
       );
     }
 
-    /*
-      IMPORTANT FIX:
-      After email verification, Firebase can still keep the old cached user
-      where emailVerified is false.
-
-      So we MUST reload the user first, then read the refreshed user from
-      FirebaseAuth.instance.currentUser.
-    */
+    // Refresh Firebase Auth so emailVerified is not read from stale cache.
     await signedInUser.reload();
 
     final refreshedUser = _firebaseAuth.currentUser;
@@ -135,24 +233,29 @@ class AuthRepository {
     }
 
     try {
-      await _firestoreService.updateUserDocument(
-        refreshedUser.uid,
-        {
-          'lastSeen': FieldValue.serverTimestamp(),
-          'isOnline': true,
-        },
+      await _syncUserWithActiveEvent(refreshedUser.uid);
+    } catch (e) {
+      debugPrint(
+        'AuthRepository: Failed to synchronize user with active event: $e',
       );
 
-      // Automatically connect attendee/user to the active event on login.
-      // This makes the user appear in Networking for the active event.
-      await _attachUserToActiveEvent(refreshedUser.uid);
-
-      // NEW:
-      // Automatically register the user for the active event on login.
-      // This makes the user appear in Admin -> Check Registration.
-      await _registerUserForActiveEvent(refreshedUser.uid);
-    } catch (e) {
-      debugPrint('Warning: Failed to update user login data: $e');
+      // Do not block login because of a registration synchronization issue.
+      try {
+        await _firestoreService.updateUserDocument(
+          refreshedUser.uid,
+          {
+            'lastSeen': FieldValue.serverTimestamp(),
+            'lastLoginAt': FieldValue.serverTimestamp(),
+            'isOnline': true,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+        );
+      } catch (statusError) {
+        debugPrint(
+          'AuthRepository: Failed to update fallback login status: '
+          '$statusError',
+        );
+      }
     }
 
     return userCredential;
@@ -171,17 +274,24 @@ class AuthRepository {
 
       final activeEventId = await _getActiveEventIdSafely();
 
-      final userData = {
+      final userData = <String, dynamic>{
         'email': email.trim(),
-        'name': name ?? email.trim().split('@')[0],
+        'name': name?.trim().isNotEmpty == true
+            ? name!.trim()
+            : email.trim().split('@')[0],
         'role': 'attendee',
         'status': 'approved',
-
-        // Automatically connect new attendee to current active event.
         'eventIds': activeEventId != null && activeEventId.isNotEmpty
             ? [activeEventId]
-            : [],
-
+            : <String>[],
+        'currentEventId':
+            activeEventId != null && activeEventId.isNotEmpty
+                ? activeEventId
+                : '',
+        'activeEventId':
+            activeEventId != null && activeEventId.isNotEmpty
+                ? activeEventId
+                : '',
         'profileVisibility': 'minimal',
         'qrCodePayload': '',
         'profileImageUrl': '',
@@ -203,9 +313,13 @@ class AuthRepository {
         userData: userData,
       );
 
-      // NEW:
-      // Automatically register new attendee for the active event.
-      await _registerUserForActiveEvent(userCredential.user!.uid);
+      try {
+        await _syncUserWithActiveEvent(userCredential.user!.uid);
+      } catch (e) {
+        debugPrint(
+          'AuthRepository: Failed to register new user for active event: $e',
+        );
+      }
 
       return userCredential;
     } on FirebaseAuthException catch (e) {
@@ -213,7 +327,8 @@ class AuthRepository {
         throw FirebaseAuthException(
           code: 'email-already-in-use',
           message:
-              'This email is already registered. Please sign in or use password reset if you forgot your password.',
+              'This email is already registered. Please sign in or use '
+              'password reset if you forgot your password.',
         );
       }
 
@@ -232,6 +347,7 @@ class AuthRepository {
             'fcmToken': FieldValue.delete(),
             'isOnline': false,
             'lastSeen': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
           },
         ).timeout(
           const Duration(seconds: 10),
@@ -260,7 +376,6 @@ class AuthRepository {
   User? get currentUser => _firebaseAuth.currentUser;
 }
 
-// Riverpod provider for AuthRepository
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return AuthRepository(
     ref.watch(firebaseAuthProvider),

@@ -1,25 +1,27 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+// lib/features/help/screen/help_center_screen.dart
+
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/config/app_icons.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/help/data/help_repository.dart';
-
-final helpRepositoryProvider = Provider<HelpRepository>(
-  (ref) => HelpRepository(ref.watch(firestoreProvider)),
-);
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class HelpCenterScreen extends ConsumerStatefulWidget {
   const HelpCenterScreen({super.key});
 
   @override
-  ConsumerState<HelpCenterScreen> createState() => _HelpCenterScreenState();
+  ConsumerState<HelpCenterScreen> createState() =>
+      _HelpCenterScreenState();
 }
 
 class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _subjectController = TextEditingController();
-  final _messageController = TextEditingController();
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _subjectController =
+      TextEditingController();
+  final TextEditingController _messageController =
+      TextEditingController();
+
   bool _isSubmitting = false;
 
   @override
@@ -30,80 +32,111 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
   }
 
   String? _validateSubject(String? value) {
-    if (value == null || value.trim().isEmpty) {
+    final subject = (value ?? '').trim();
+
+    if (subject.isEmpty) {
       return 'Please enter a subject';
     }
-    if (value.trim().length < 3) {
+
+    if (subject.length < 3) {
       return 'Min 3 characters';
     }
+
     return null;
   }
 
   String? _validateMessage(String? value) {
-    if (value == null || value.trim().isEmpty) {
+    final message = (value ?? '').trim();
+
+    if (message.isEmpty) {
       return 'Please enter a message';
     }
-    if (value.trim().length < 10) {
+
+    if (message.length < 10) {
       return 'Min 10 characters';
     }
+
     return null;
   }
 
   Future<void> _submitTicket() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isSubmitting) return;
+
+    final formState = _formKey.currentState;
+
+    if (formState == null || !formState.validate()) {
+      return;
+    }
 
     setState(() => _isSubmitting = true);
 
     try {
-      final userAsync = ref.read(userAppProfileStreamProvider);
-      final user = userAsync.value;
+      final user =
+          await ref.read(userAppProfileStreamProvider.future);
 
-      if (user == null) throw Exception('User not found');
+      if (user == null) {
+        throw StateError('User profile was not found.');
+      }
 
-      final helpRepo = ref.read(helpRepositoryProvider);
+      final activeEvent =
+          await ref.read(activeEventFutureProvider.future);
 
-      final canSubmit = await helpRepo.canSubmitTicket(user.uid);
+      final helpRepository = ref.read(helpRepositoryProvider);
+
+      final canSubmit = await helpRepository.canSubmitTicket(
+        user.uid,
+        eventId: activeEvent.id,
+      );
+
       if (!canSubmit) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Wait 10 minutes before next ticket'),
-              backgroundColor: Colors.orange,
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please wait 10 minutes before submitting another ticket.',
             ),
-          );
-        }
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
         return;
       }
 
-      await helpRepo.submitTicket(
+      await helpRepository.submitTicket(
         userId: user.uid,
         userName: user.name,
         userEmail: user.email,
-        subject: _subjectController.text.trim(),
-        message: _messageController.text.trim(),
+        subject: _subjectController.text,
+        message: _messageController.text,
+        eventId: activeEvent.id,
+        eventName: activeEvent.name,
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ticket submitted'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      if (!mounted) return;
 
-        _subjectController.clear();
-        _messageController.clear();
-        _formKey.currentState!.reset();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      _subjectController.clear();
+      _messageController.clear();
+      formState.reset();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Ticket submitted successfully.'),
+          backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit ticket: $error'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -118,9 +151,11 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // 🔹 Custom Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 10,
+              ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
@@ -128,7 +163,9 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
                     alignment: Alignment.centerLeft,
                     child: IconButton(
                       icon: const Icon(Icons.arrow_back),
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: _isSubmitting
+                          ? null
+                          : () => Navigator.of(context).pop(),
                     ),
                   ),
                   const Text(
@@ -142,8 +179,6 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
                 ],
               ),
             ),
-
-            // 🔹 Content
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -152,26 +187,30 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
-
-                      // Info card
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: AppColors.namaNavyBlue.withOpacity(0.05),
+                          color:
+                              AppColors.namaNavyBlue.withOpacity(0.05),
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(
-                            color: AppColors.namaNavyBlue.withOpacity(0.2),
+                            color:
+                                AppColors.namaNavyBlue.withOpacity(0.2),
                           ),
                         ),
                         child: Row(
                           children: [
-                            Icon(AppIcons.info,
-                                color: AppColors.namaNavyBlue, size: 18),
+                            Icon(
+                              AppIcons.info,
+                              color: AppColors.namaNavyBlue,
+                              size: 18,
+                            ),
                             const SizedBox(width: 8),
-                            Expanded(
+                            const Expanded(
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
                                   Text(
                                     'Need Help?',
                                     style: TextStyle(
@@ -182,7 +221,7 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
                                   ),
                                   SizedBox(height: 2),
                                   Text(
-                                    'Submit a ticket and we will assist you.',
+                                    'Submit a ticket and the event support team will assist you.',
                                     style: TextStyle(
                                       fontSize: 11,
                                       color: AppColors.namaNavyBlue,
@@ -194,15 +233,14 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // Subject
                       TextFormField(
                         controller: _subjectController,
+                        enabled: !_isSubmitting,
                         decoration: InputDecoration(
                           labelText: 'Subject',
-                          prefixIcon: Icon(Icons.title, size: 18),
+                          prefixIcon:
+                              const Icon(Icons.title, size: 18),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -210,17 +248,17 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
                         style: const TextStyle(fontSize: 13),
                         validator: _validateSubject,
                       ),
-
                       const SizedBox(height: 14),
-
-                      // Message
                       TextFormField(
                         controller: _messageController,
+                        enabled: !_isSubmitting,
                         maxLines: 6,
                         decoration: InputDecoration(
                           labelText: 'Message',
-                          prefixIcon:
-                              Icon(Icons.message_outlined, size: 18),
+                          prefixIcon: const Icon(
+                            Icons.message_outlined,
+                            size: 18,
+                          ),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -228,41 +266,40 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
                         style: const TextStyle(fontSize: 13),
                         validator: _validateMessage,
                       ),
-
                       const SizedBox(height: 16),
-
-                      // Rate limit
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
                           color: Colors.orange.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Row(
-                          children: const [
-                            Icon(Icons.timer_outlined,
-                                size: 16, color: Colors.orange),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.timer_outlined,
+                              size: 16,
+                              color: Colors.orange,
+                            ),
                             SizedBox(width: 6),
                             Text(
-                              '1 ticket per 10 minutes',
+                              '1 ticket per 10 minutes for each event',
                               style: TextStyle(fontSize: 11),
                             ),
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 20),
-
-                      // 🔹 Submit Button (reduced width)
                       SizedBox(
-                        width: 220, // 👈 reduced width
+                        width: 220,
                         child: ElevatedButton(
                           onPressed:
                               _isSubmitting ? null : _submitTicket,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.namaNavyBlue,
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(
-                                vertical: 12),
+                              vertical: 12,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),
@@ -285,7 +322,6 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
                                 ),
                         ),
                       ),
-
                       const SizedBox(height: 30),
                     ],
                   ),

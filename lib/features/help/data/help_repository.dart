@@ -1,6 +1,9 @@
+// lib/features/help/data/help_repository.dart
+
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/models/help_ticket_model.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final helpRepositoryProvider = Provider<HelpRepository>((ref) {
   return HelpRepository(FirebaseFirestore.instance);
@@ -11,6 +14,50 @@ class HelpRepository {
 
   HelpRepository(this._firestore);
 
+  Future<DocumentSnapshot<Map<String, dynamic>>?>
+      _getActiveEventDocumentSafely() async {
+    try {
+      final snapshot = await _firestore
+          .collection('events')
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      final activeDocuments = snapshot.docs.where((document) {
+        final data = document.data();
+        final status =
+            (data['status'] ?? '').toString().trim().toLowerCase();
+
+        return status != 'archived';
+      }).toList();
+
+      if (activeDocuments.isEmpty) {
+        return null;
+      }
+
+      return activeDocuments.first;
+    } catch (error) {
+      debugPrint(
+        'HelpRepository: failed to resolve active event: $error',
+      );
+      return null;
+    }
+  }
+
+  String _readEventName(Map<String, dynamic> data) {
+    return (data['name'] ??
+            data['eventName'] ??
+            data['title'] ??
+            'NAMA Event')
+        .toString()
+        .trim();
+  }
+
+  /// Submits a ticket for the user's current event.
+  ///
+  /// When eventId/eventName are not supplied, the repository resolves the
+  /// current active event automatically. This keeps attendee, speaker,
+  /// moderator, staff, and admin submissions linked to the same event that
+  /// the Admin/Staff Help Tickets screen filters by.
   Future<void> submitTicket({
     required String userId,
     required String userName,
@@ -20,29 +67,75 @@ class HelpRepository {
     String? eventId,
     String? eventName,
   }) async {
-    await _firestore.collection('help_tickets').add({
-      'userId': userId,
-      'userName': userName,
-      'userEmail': userEmail,
-      'subject': subject,
-      'message': message,
+    String resolvedEventId = (eventId ?? '').trim();
+    String resolvedEventName = (eventName ?? '').trim();
+
+    if (resolvedEventId.isEmpty) {
+      final activeEvent = await _getActiveEventDocumentSafely();
+
+      if (activeEvent == null) {
+        throw StateError(
+          'No active event was found. The help ticket could not be submitted.',
+        );
+      }
+
+      resolvedEventId = activeEvent.id;
+      resolvedEventName = _readEventName(activeEvent.data() ?? {});
+    } else if (resolvedEventName.isEmpty) {
+      try {
+        final eventDocument =
+            await _firestore.collection('events').doc(resolvedEventId).get();
+
+        if (eventDocument.exists) {
+          resolvedEventName =
+              _readEventName(eventDocument.data() ?? {});
+        }
+      } catch (error) {
+        debugPrint(
+          'HelpRepository: failed to resolve event name: $error',
+        );
+      }
+    }
+
+    final ticketReference = _firestore.collection('help_tickets').doc();
+
+    await ticketReference.set({
+      'id': ticketReference.id,
+      'userId': userId.trim(),
+      'userName': userName.trim(),
+      'userEmail': userEmail.trim(),
+      'subject': subject.trim(),
+      'message': message.trim(),
       'status': TicketStatus.pending,
-      'eventId': eventId ?? '',
-      'eventName': eventName ?? '',
+      'eventId': resolvedEventId,
+      'eventName': resolvedEventName,
       'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': null,
+      'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  Future<bool> canSubmitTicket(String userId) async {
-    final tenMinutesAgo = DateTime.now().subtract(const Duration(minutes: 10));
+  Future<bool> canSubmitTicket(
+    String userId, {
+    String? eventId,
+  }) async {
+    final tenMinutesAgo =
+        DateTime.now().subtract(const Duration(minutes: 10));
 
-    final recentTickets = await _firestore
+    Query<Map<String, dynamic>> query = _firestore
         .collection('help_tickets')
         .where('userId', isEqualTo: userId)
-        .where('createdAt', isGreaterThan: Timestamp.fromDate(tenMinutesAgo))
-        .limit(1)
-        .get();
+        .where(
+          'createdAt',
+          isGreaterThan: Timestamp.fromDate(tenMinutesAgo),
+        );
+
+    final safeEventId = (eventId ?? '').trim();
+
+    if (safeEventId.isNotEmpty) {
+      query = query.where('eventId', isEqualTo: safeEventId);
+    }
+
+    final recentTickets = await query.limit(1).get();
 
     return recentTickets.docs.isEmpty;
   }
@@ -59,10 +152,17 @@ class HelpRepository {
     });
   }
 
+  /// Used by both Admin and Staff event-specific Help Tickets screens.
   Stream<List<HelpTicket>> getTicketsByEventStream(String eventId) {
+    final safeEventId = eventId.trim();
+
+    if (safeEventId.isEmpty) {
+      return Stream.value(const <HelpTicket>[]);
+    }
+
     return _firestore
         .collection('help_tickets')
-        .where('eventId', isEqualTo: eventId)
+        .where('eventId', isEqualTo: safeEventId)
         .snapshots()
         .map((snapshot) {
       final tickets = snapshot.docs
@@ -80,14 +180,19 @@ class HelpRepository {
         .collection('help_tickets')
         .where('status', isEqualTo: TicketStatus.pending);
 
-    if (eventId != null && eventId.isNotEmpty) {
-      query = query.where('eventId', isEqualTo: eventId);
+    final safeEventId = (eventId ?? '').trim();
+
+    if (safeEventId.isNotEmpty) {
+      query = query.where('eventId', isEqualTo: safeEventId);
     }
 
     return query.snapshots().map((snapshot) => snapshot.docs.length);
   }
 
-  Future<void> updateTicketStatus(String ticketId, String status) async {
+  Future<void> updateTicketStatus(
+    String ticketId,
+    String status,
+  ) async {
     await _firestore.collection('help_tickets').doc(ticketId).update({
       'status': status,
       'updatedAt': FieldValue.serverTimestamp(),

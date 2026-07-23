@@ -35,9 +35,6 @@ service firebase.storage {
 
     // ------------------------------------------------------------
     // EMAIL ASSETS
-    // Publicly readable because email clients must load the logo
-    // without being signed into Firebase.
-    // Only admins can upload or modify them.
     // ------------------------------------------------------------
     match /email/{fileName} {
       allow read: if true;
@@ -47,10 +44,6 @@ service firebase.storage {
 
     // ------------------------------------------------------------
     // EVENT FILES
-    // Includes:
-    // events/{eventId}/partners/...
-    // events/{eventId}/venueMaps/...
-    // events/{eventId}/images/...
     // ------------------------------------------------------------
     match /events/{eventId}/{allPaths=**} {
       allow read: if isSignedIn();
@@ -60,7 +53,6 @@ service firebase.storage {
 
     // ------------------------------------------------------------
     // SESSION FILES
-    // Admins and staff may manage session-related images.
     // ------------------------------------------------------------
     match /sessions/{sessionId}/{allPaths=**} {
       allow read: if isSignedIn();
@@ -70,8 +62,7 @@ service firebase.storage {
 
     // ------------------------------------------------------------
     // USER PROFILE IMAGES
-    // Each user can manage files inside their own UID folder.
-    // Admins can also manage them.
+    // users/{userId}/...
     // ------------------------------------------------------------
     match /users/{userId}/{allPaths=**} {
       allow read: if isSignedIn();
@@ -80,10 +71,14 @@ service firebase.storage {
         (request.auth.uid == userId || isAdmin()) &&
         isImageUnder10MB();
 
-      allow delete: if request.auth.uid == userId || isAdmin();
+      allow delete: if
+        request.auth.uid == userId || isAdmin();
     }
 
-    // Common alternative profile image path.
+    // ------------------------------------------------------------
+    // ALTERNATIVE PROFILE IMAGE PATH
+    // profile_images/{userId}/...
+    // ------------------------------------------------------------
     match /profile_images/{userId}/{allPaths=**} {
       allow read: if isSignedIn();
 
@@ -91,7 +86,27 @@ service firebase.storage {
         (request.auth.uid == userId || isAdmin()) &&
         isImageUnder10MB();
 
-      allow delete: if request.auth.uid == userId || isAdmin();
+      allow delete: if
+        request.auth.uid == userId || isAdmin();
+    }
+
+    // ------------------------------------------------------------
+    // CURRENT PROFILE IMAGE PATH USED BY STORAGE SERVICE
+    // profile/{userId}.jpg
+    // ------------------------------------------------------------
+    match /profile/{fileName} {
+      allow read: if isSignedIn();
+
+      allow create, update: if
+        (
+          fileName == request.auth.uid + '.jpg' ||
+          isAdmin()
+        ) &&
+        isImageUnder10MB();
+
+      allow delete: if
+        fileName == request.auth.uid + '.jpg' ||
+        isAdmin();
     }
 
     // ------------------------------------------------------------
@@ -104,7 +119,6 @@ service firebase.storage {
 
     // ------------------------------------------------------------
     // EVERYTHING ELSE
-    // Denied unless a specific rule above allows it.
     // ------------------------------------------------------------
     match /{allPaths=**} {
       allow read, write: if false;

@@ -44,6 +44,9 @@ class _AdminSessionManagementScreenState
     'Networking',
     'Forum',
     'Breakout Session',
+    'Opening',
+    'Break',
+    'Closing',
     'Other',
   ];
 
@@ -181,7 +184,96 @@ class _AdminSessionManagementScreenState
     }
   }
 
+  bool _isNonSpeakingCategory(String category) {
+    final normalized = category.trim().toLowerCase();
+
+    return normalized == 'opening' ||
+        normalized == 'opeaning' ||
+        normalized == 'break' ||
+        normalized == 'closing';
+  }
+
+  Future<List<_AssignableUser>> _loadAssignableUsers({
+    required String role,
+    required String eventId,
+    required List<String> existingIds,
+  }) async {
+    final firestore = FirebaseFirestore.instance;
+    final usersById = <String, _AssignableUser>{};
+
+    final linkedSnapshot = await firestore
+        .collection('users')
+        .where('role', isEqualTo: role)
+        .where('eventIds', arrayContains: eventId)
+        .get();
+
+    for (final doc in linkedSnapshot.docs) {
+      final data = doc.data();
+      usersById[doc.id] = _AssignableUser(
+        id: doc.id,
+        name: (data['name'] ?? data['fullName'] ?? 'Unnamed User').toString(),
+        email: (data['email'] ?? '').toString(),
+        company: (data['company'] ?? '').toString(),
+        role: (data['role'] ?? role).toString(),
+      );
+    }
+
+    for (final id in existingIds) {
+      final cleanId = id.trim();
+      if (cleanId.isEmpty || usersById.containsKey(cleanId)) continue;
+
+      final doc = await firestore.collection('users').doc(cleanId).get();
+      final data = doc.data();
+
+      if (doc.exists && data != null) {
+        usersById[doc.id] = _AssignableUser(
+          id: doc.id,
+          name: (data['name'] ?? data['fullName'] ?? 'Unnamed User').toString(),
+          email: (data['email'] ?? '').toString(),
+          company: (data['company'] ?? '').toString(),
+          role: (data['role'] ?? role).toString(),
+        );
+      }
+    }
+
+    final users = usersById.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    return users;
+  }
+
   Future<void> _showEditSessionSheet(Session session) async {
+    final eventId = session.eventId.trim();
+
+    if (eventId.isEmpty) {
+      _showMessage('This session is not linked to a valid event.', isError: true);
+      return;
+    }
+
+    late final List<_AssignableUser> speakerOptions;
+    late final List<_AssignableUser> moderatorOptions;
+
+    try {
+      final results = await Future.wait([
+        _loadAssignableUsers(
+          role: 'speaker',
+          eventId: eventId,
+          existingIds: session.speakerIds,
+        ),
+        _loadAssignableUsers(
+          role: 'moderator',
+          eventId: eventId,
+          existingIds: session.moderatorIds,
+        ),
+      ]);
+
+      speakerOptions = results[0];
+      moderatorOptions = results[1];
+    } catch (e) {
+      _showMessage('Failed to load speakers and moderators: $e', isError: true);
+      return;
+    }
+
     final titleController = TextEditingController(text: session.title);
     final descriptionController =
     TextEditingController(text: session.description);
@@ -209,6 +301,9 @@ class _AdminSessionManagementScreenState
 
     bool isChatEnabled = session.isChatEnabled;
     bool isSaving = false;
+
+    final selectedSpeakerIds = <String>{...session.speakerIds};
+    final selectedModeratorIds = <String>{...session.moderatorIds};
 
     Future<void> pickDate(StateSetter setSheetState) async {
       final now = DateTime.now();
@@ -315,6 +410,16 @@ class _AdminSessionManagementScreenState
         return;
       }
 
+      final isNonSpeaking = _isNonSpeakingCategory(selectedCategory);
+
+      if (!isNonSpeaking && selectedSpeakerIds.isEmpty) {
+        _showMessage(
+          'Please assign at least one speaker for this session.',
+          isError: true,
+        );
+        return;
+      }
+
       final newStartTime = combineDateAndTime(selectedDate, startTime);
       final newEndTime = combineDateAndTime(selectedDate, endTime);
 
@@ -336,6 +441,12 @@ class _AdminSessionManagementScreenState
           'startTime': Timestamp.fromDate(newStartTime),
           'endTime': Timestamp.fromDate(newEndTime),
           'category': selectedCategory,
+          'speakerIds': _isNonSpeakingCategory(selectedCategory)
+              ? <String>[]
+              : selectedSpeakerIds.toList(),
+          'moderatorIds': _isNonSpeakingCategory(selectedCategory)
+              ? <String>[]
+              : selectedModeratorIds.toList(),
           'priority': selectedPriority,
           'liveStreamUrl': liveStreamUrl,
           'isChatEnabled': isChatEnabled,
@@ -488,7 +599,14 @@ class _AdminSessionManagementScreenState
                           ? null
                           : (value) {
                         if (value == null) return;
-                        setSheetState(() => selectedCategory = value);
+                        setSheetState(() {
+                          selectedCategory = value;
+
+                          if (_isNonSpeakingCategory(value)) {
+                            selectedSpeakerIds.clear();
+                            selectedModeratorIds.clear();
+                          }
+                        });
                       },
                     ),
                     const SizedBox(height: 14),
@@ -508,6 +626,80 @@ class _AdminSessionManagementScreenState
                       hint: 'Optional',
                       icon: Icons.live_tv_outlined,
                     ),
+                    const SizedBox(height: 18),
+                    if (!_isNonSpeakingCategory(selectedCategory)) ...[
+                      _UserAssignmentSection(
+                        title: 'Assign Speakers',
+                        subtitle:
+                            'Select one or more speakers assigned to this event.',
+                        emptyMessage:
+                            'No speaker accounts are linked to this event.',
+                        users: speakerOptions,
+                        selectedIds: selectedSpeakerIds,
+                        isRequired: true,
+                        enabled: !isSaving,
+                        onToggle: (userId, selected) {
+                          setSheetState(() {
+                            if (selected) {
+                              selectedSpeakerIds.add(userId);
+                            } else {
+                              selectedSpeakerIds.remove(userId);
+                            }
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      _UserAssignmentSection(
+                        title: 'Assign Moderators',
+                        subtitle:
+                            'Moderator assignment is optional. Select any applicable moderators.',
+                        emptyMessage:
+                            'No moderator accounts are linked to this event.',
+                        users: moderatorOptions,
+                        selectedIds: selectedModeratorIds,
+                        isRequired: false,
+                        enabled: !isSaving,
+                        onToggle: (userId, selected) {
+                          setSheetState(() {
+                            if (selected) {
+                              selectedModeratorIds.add(userId);
+                            } else {
+                              selectedModeratorIds.remove(userId);
+                            }
+                          });
+                        },
+                      ),
+                    ] else ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFAFAFF),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: _fieldBorder),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              color: _primaryColor,
+                              size: 20,
+                            ),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Opening, Break, and Closing sessions do not require a speaker or moderator.',
+                                style: TextStyle(
+                                  color: _textMuted,
+                                  fontSize: 11.5,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     Container(
                       padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
@@ -902,6 +1094,208 @@ class _AdminSessionManagementScreenState
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _AssignableUser {
+  final String id;
+  final String name;
+  final String email;
+  final String company;
+  final String role;
+
+  const _AssignableUser({
+    required this.id,
+    required this.name,
+    required this.email,
+    required this.company,
+    required this.role,
+  });
+}
+
+class _UserAssignmentSection extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String emptyMessage;
+  final List<_AssignableUser> users;
+  final Set<String> selectedIds;
+  final bool isRequired;
+  final bool enabled;
+  final void Function(String userId, bool selected) onToggle;
+
+  const _UserAssignmentSection({
+    required this.title,
+    required this.subtitle,
+    required this.emptyMessage,
+    required this.users,
+    required this.selectedIds,
+    required this.isRequired,
+    required this.enabled,
+    required this.onToggle,
+  });
+
+  static const Color _primaryColor = Color(0xFF1B0F72);
+  static const Color _textMuted = Color(0xFF6B7280);
+  static const Color _fieldBorder = Color(0xFFE1DDF0);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _fieldBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: _primaryColor,
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: isRequired
+                      ? const Color(0xFFFFF3CD)
+                      : const Color(0xFFF1EEFB),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isRequired ? 'Required' : 'Optional',
+                  style: const TextStyle(
+                    color: _primaryColor,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: const TextStyle(
+              color: _textMuted,
+              fontSize: 11,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (users.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFAFAFF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                emptyMessage,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: _textMuted,
+                  fontSize: 11.5,
+                ),
+              ),
+            )
+          else
+            Column(
+              children: users.map((user) {
+                final selected = selectedIds.contains(user.id);
+                final subtitleParts = <String>[
+                  if (user.company.trim().isNotEmpty) user.company.trim(),
+                  if (user.email.trim().isNotEmpty) user.email.trim(),
+                ];
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: InkWell(
+                    onTap: enabled
+                        ? () => onToggle(user.id, !selected)
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 9,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? const Color(0xFFF1EEFB)
+                            : const Color(0xFFFAFAFA),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: selected ? _primaryColor : _fieldBorder,
+                          width: selected ? 1.2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Checkbox(
+                            value: selected,
+                            onChanged: enabled
+                                ? (value) => onToggle(
+                                      user.id,
+                                      value ?? false,
+                                    )
+                                : null,
+                            activeColor: _primaryColor,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  user.name.trim().isEmpty
+                                      ? 'Unnamed User'
+                                      : user.name.trim(),
+                                  style: const TextStyle(
+                                    color: Color(0xFF1F2937),
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                if (subtitleParts.isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    subtitleParts.join(' • '),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: _textMuted,
+                                      fontSize: 10.5,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+        ],
       ),
     );
   }
