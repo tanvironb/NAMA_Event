@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "266662172572",
+    "project_id": "events-app3",
+    "storage_bucket": "events-app3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:266662172572:android:a126e7dd9d828b258fda59",
+        "android_client_info": {
+          "package_name": "com.example.events_app_trueattempt"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChKRAqK12x6-d_kEYvLHmTZYiVpaKIwRY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:266662172572:android:366e103ff9bcd1a38fda59",
+        "android_client_info": {
+          "package_name": "org.namafoundation.eventapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChKRAqK12x6-d_kEYvLHmTZYiVpaKIwRY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
