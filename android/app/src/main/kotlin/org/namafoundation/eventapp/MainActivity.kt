@@ -1,4 +1,4 @@
-package com.example.events_app_trueattempt
+package org.namafoundation.eventapp
 
 import io.flutter.embedding.android.FlutterActivity
 
