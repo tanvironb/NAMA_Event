@@ -83,9 +83,10 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
 
       final helpRepository = ref.read(helpRepositoryProvider);
 
+      // Previous working cooldown check.
+      // No eventId filter is added to this query.
       final canSubmit = await helpRepository.canSubmitTicket(
         user.uid,
-        eventId: activeEvent.id,
       );
 
       if (!canSubmit) {
@@ -282,7 +283,7 @@ class _HelpCenterScreenState extends ConsumerState<HelpCenterScreen> {
                             ),
                             SizedBox(width: 6),
                             Text(
-                              '1 ticket per 10 minutes for each event',
+                              '1 ticket per 10 minutes',
                               style: TextStyle(fontSize: 11),
                             ),
                           ],

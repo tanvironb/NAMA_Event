@@ -3,6 +3,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
+import 'package:events_app_trueattempt/features/auth/data/account_deletion_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,9 +12,16 @@ class AuthRepository {
   final FirebaseAuth _firebaseAuth;
   final FirestoreService _firestoreService;
 
-  AuthRepository(this._firebaseAuth, this._firestoreService);
+  final AccountDeletionService _accountDeletionService =
+      AccountDeletionService();
 
-  Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
+  AuthRepository(
+    this._firebaseAuth,
+    this._firestoreService,
+  );
+
+  Stream<User?> get authStateChanges =>
+      _firebaseAuth.authStateChanges();
 
   /// Gets the currently active event ID.
   ///
@@ -21,10 +29,15 @@ class AuthRepository {
   /// login or registration.
   Future<String?> _getActiveEventIdSafely() async {
     try {
-      final activeEventDoc = await _firestoreService.getActiveEventDocument();
+      final activeEventDoc =
+          await _firestoreService.getActiveEventDocument();
+
       return activeEventDoc.id;
     } catch (e) {
-      debugPrint('Warning: Failed to get active event ID: $e');
+      debugPrint(
+        'Warning: Failed to get active event ID: $e',
+      );
+
       return null;
     }
   }
@@ -46,11 +59,16 @@ class AuthRepository {
       debugPrint(
         'AuthRepository: No active event found for user synchronization.',
       );
+
       return;
     }
 
     final firestore = FirebaseFirestore.instance;
-    final userRef = firestore.collection('users').doc(uid);
+
+    final userRef = firestore
+        .collection('users')
+        .doc(uid);
+
     final registrationRef = firestore
         .collection('events')
         .doc(activeEventId)
@@ -68,13 +86,16 @@ class AuthRepository {
         );
       }
 
-      final userData = userSnapshot.data() ?? <String, dynamic>{};
+      final userData =
+          userSnapshot.data() ?? <String, dynamic>{};
 
-      final rawRole = (userData['role'] ??
-              userData['userRole'] ??
-              userData['userType'] ??
-              userData['type'] ??
-              'attendee')
+      final rawRole = (
+        userData['role'] ??
+        userData['userRole'] ??
+        userData['userType'] ??
+        userData['type'] ??
+        'attendee'
+      )
           .toString()
           .trim()
           .toLowerCase();
@@ -82,10 +103,13 @@ class AuthRepository {
       final normalizedRole = _normalizeRole(rawRole);
 
       final shouldFollowGlobalActiveEvent =
-          normalizedRole == 'attendee' || normalizedRole == 'staff';
+          normalizedRole == 'attendee' ||
+          normalizedRole == 'staff';
 
       final userUpdates = <String, dynamic>{
-        'eventIds': FieldValue.arrayUnion([activeEventId]),
+        'eventIds': FieldValue.arrayUnion([
+          activeEventId,
+        ]),
         'lastSeen': FieldValue.serverTimestamp(),
         'lastLoginAt': FieldValue.serverTimestamp(),
         'isOnline': true,
@@ -103,21 +127,24 @@ class AuthRepository {
         SetOptions(merge: true),
       );
 
-      final registrationSnapshot = await transaction.get(registrationRef);
+      final registrationSnapshot =
+          await transaction.get(registrationRef);
 
       final registrationData = <String, dynamic>{
         'userId': uid,
         'eventId': activeEventId,
-        'name': (userData['name'] ??
-                userData['fullName'] ??
-                userData['displayName'] ??
-                '')
-            .toString(),
+        'name': (
+          userData['name'] ??
+          userData['fullName'] ??
+          userData['displayName'] ??
+          ''
+        ).toString(),
         'email': (userData['email'] ?? '').toString(),
         'role': normalizedRole,
         'company': (userData['company'] ?? '').toString(),
         'title': (userData['title'] ?? '').toString(),
-        'profileImageUrl': (userData['profileImageUrl'] ?? '').toString(),
+        'profileImageUrl':
+            (userData['profileImageUrl'] ?? '').toString(),
         'status': 'registered',
         'source': 'app_login',
         'lastJoinedAt': FieldValue.serverTimestamp(),
@@ -142,32 +169,43 @@ class AuthRepository {
   String _normalizeRole(String role) {
     final cleanRole = role.trim().toLowerCase();
 
-    if (cleanRole == 'administrator' || cleanRole == 'admins') {
+    if (
+      cleanRole == 'administrator' ||
+      cleanRole == 'admins'
+    ) {
       return 'admin';
     }
 
-    if (cleanRole == 'speaker_user' ||
-        cleanRole == 'speaker user' ||
-        cleanRole == 'speaker-user') {
+    if (
+      cleanRole == 'speaker_user' ||
+      cleanRole == 'speaker user' ||
+      cleanRole == 'speaker-user'
+    ) {
       return 'speaker';
     }
 
-    if (cleanRole == 'moderator_user' ||
-        cleanRole == 'moderator user' ||
-        cleanRole == 'moderator-user' ||
-        cleanRole == 'mod') {
+    if (
+      cleanRole == 'moderator_user' ||
+      cleanRole == 'moderator user' ||
+      cleanRole == 'moderator-user' ||
+      cleanRole == 'mod'
+    ) {
       return 'moderator';
     }
 
-    if (cleanRole == 'staff_user' ||
-        cleanRole == 'staff user' ||
-        cleanRole == 'staff-user') {
+    if (
+      cleanRole == 'staff_user' ||
+      cleanRole == 'staff user' ||
+      cleanRole == 'staff-user'
+    ) {
       return 'staff';
     }
 
-    if (cleanRole == 'delegate' ||
-        cleanRole == 'delegates' ||
-        cleanRole == 'user') {
+    if (
+      cleanRole == 'delegate' ||
+      cleanRole == 'delegates' ||
+      cleanRole == 'user'
+    ) {
       return 'attendee';
     }
 
@@ -182,7 +220,8 @@ class AuthRepository {
     String email,
     String password,
   ) async {
-    final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
+    final userCredential =
+        await _firebaseAuth.signInWithEmailAndPassword(
       email: email.trim(),
       password: password,
     );
@@ -198,7 +237,8 @@ class AuthRepository {
       );
     }
 
-    // Refresh Firebase Auth so emailVerified is not read from stale cache.
+    // Refresh Firebase Auth so emailVerified is not read
+    // from stale cache.
     await signedInUser.reload();
 
     final refreshedUser = _firebaseAuth.currentUser;
@@ -221,7 +261,9 @@ class AuthRepository {
       );
     }
 
-    final userDoc = await _firestoreService.getUserDocument(refreshedUser.uid);
+    final userDoc = await _firestoreService.getUserDocument(
+      refreshedUser.uid,
+    );
 
     if (!userDoc.exists) {
       await _firebaseAuth.signOut();
@@ -233,13 +275,17 @@ class AuthRepository {
     }
 
     try {
-      await _syncUserWithActiveEvent(refreshedUser.uid);
+      await _syncUserWithActiveEvent(
+        refreshedUser.uid,
+      );
     } catch (e) {
       debugPrint(
-        'AuthRepository: Failed to synchronize user with active event: $e',
+        'AuthRepository: Failed to synchronize user '
+        'with active event: $e',
       );
 
-      // Do not block login because of a registration synchronization issue.
+      // Do not block login because of a registration
+      // synchronization issue.
       try {
         await _firestoreService.updateUserDocument(
           refreshedUser.uid,
@@ -252,8 +298,8 @@ class AuthRepository {
         );
       } catch (statusError) {
         debugPrint(
-          'AuthRepository: Failed to update fallback login status: '
-          '$statusError',
+          'AuthRepository: Failed to update fallback '
+          'login status: $statusError',
         );
       }
     }
@@ -267,12 +313,14 @@ class AuthRepository {
     String? name,
   }) async {
     try {
-      final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
+      final userCredential =
+          await _firebaseAuth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
 
-      final activeEventId = await _getActiveEventIdSafely();
+      final activeEventId =
+          await _getActiveEventIdSafely();
 
       final userData = <String, dynamic>{
         'email': email.trim(),
@@ -281,15 +329,19 @@ class AuthRepository {
             : email.trim().split('@')[0],
         'role': 'attendee',
         'status': 'approved',
-        'eventIds': activeEventId != null && activeEventId.isNotEmpty
-            ? [activeEventId]
-            : <String>[],
+        'eventIds':
+            activeEventId != null &&
+                    activeEventId.isNotEmpty
+                ? [activeEventId]
+                : <String>[],
         'currentEventId':
-            activeEventId != null && activeEventId.isNotEmpty
+            activeEventId != null &&
+                    activeEventId.isNotEmpty
                 ? activeEventId
                 : '',
         'activeEventId':
-            activeEventId != null && activeEventId.isNotEmpty
+            activeEventId != null &&
+                    activeEventId.isNotEmpty
                 ? activeEventId
                 : '',
         'profileVisibility': 'minimal',
@@ -314,10 +366,13 @@ class AuthRepository {
       );
 
       try {
-        await _syncUserWithActiveEvent(userCredential.user!.uid);
+        await _syncUserWithActiveEvent(
+          userCredential.user!.uid,
+        );
       } catch (e) {
         debugPrint(
-          'AuthRepository: Failed to register new user for active event: $e',
+          'AuthRepository: Failed to register new user '
+          'for active event: $e',
         );
       }
 
@@ -352,17 +407,42 @@ class AuthRepository {
         ).timeout(
           const Duration(seconds: 10),
           onTimeout: () {
-            debugPrint('Warning: Firestore update timed out during sign-out');
+            debugPrint(
+              'Warning: Firestore update timed out during sign-out',
+            );
           },
         );
       } catch (e) {
         debugPrint(
-          'Warning: Failed to update user session data on sign-out: $e',
+          'Warning: Failed to update user session data '
+          'on sign-out: $e',
         );
       }
     }
 
     await _firebaseAuth.signOut();
+  }
+
+  /// Reauthenticates the current user and calls the secure
+  /// deleteMyAccount Cloud Function.
+  ///
+  /// The Cloud Function performs all Firestore, Storage,
+  /// report-data anonymization, and Firebase Authentication cleanup.
+  Future<void> deleteCurrentAccount({
+    required String password,
+  }) async {
+    final user = _firebaseAuth.currentUser;
+
+    if (user == null) {
+      throw FirebaseAuthException(
+        code: 'user-not-found',
+        message: 'No authenticated user was found.',
+      );
+    }
+
+    await _accountDeletionService.deleteCurrentAccount(
+      password: password,
+    );
   }
 
   Future<void> sendEmailVerification() async {
@@ -376,7 +456,8 @@ class AuthRepository {
   User? get currentUser => _firebaseAuth.currentUser;
 }
 
-final authRepositoryProvider = Provider<AuthRepository>((ref) {
+final authRepositoryProvider =
+    Provider<AuthRepository>((ref) {
   return AuthRepository(
     ref.watch(firebaseAuthProvider),
     ref.watch(firestoreServiceProvider),

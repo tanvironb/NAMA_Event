@@ -8,6 +8,7 @@ import 'package:events_app_trueattempt/features/certificates/screen/my_certifica
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/settings/screen/about_event_screen.dart';
+import 'package:events_app_trueattempt/features/settings/screen/delete_account_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,20 +20,36 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  final ValueNotifier<double> _scale = ValueNotifier<double>(1);
-
   bool _isLoggingOut = false;
 
-  @override
-  void dispose() {
-    _scale.dispose();
-    super.dispose();
+  bool _canSeeCertificates(String? role) {
+    final cleanRole = (role ?? '').trim().toLowerCase();
+
+    return cleanRole == 'attendee' || cleanRole == 'speaker';
+  }
+
+  bool _canSeeConnections(String? role) {
+    final cleanRole = (role ?? '').trim().toLowerCase();
+
+    return cleanRole == 'attendee' ||
+        cleanRole == 'speaker' ||
+        cleanRole == 'staff';
+  }
+
+  Future<void> _openDeleteAccount() async {
+    if (_isLoggingOut) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const DeleteAccountScreen(),
+      ),
+    );
   }
 
   Future<void> _logout() async {
     if (_isLoggingOut) return;
 
-    final confirmed = await _showLogoutDialog(context);
+    final confirmed = await _showLogoutDialog();
 
     if (confirmed != true || !mounted) return;
 
@@ -49,262 +66,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         MaterialPageRoute<void>(
           builder: (_) => const AuthGate(),
         ),
-        (route) => false,
+        (_) => false,
       );
-    } catch (e) {
+    } catch (error) {
       if (!mounted) return;
 
       setState(() {
         _isLoggingOut = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Logout failed: $e'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text('Logout failed: $error'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
     }
   }
 
-  bool _canSeeCertificates(String? role) {
-    final cleanRole = (role ?? '').trim().toLowerCase();
-
-    return cleanRole == 'attendee' || cleanRole == 'speaker';
-  }
-
-  bool _canSeeConnections(String? role) {
-    final cleanRole = (role ?? '').trim().toLowerCase();
-
-    return cleanRole == 'staff' ||
-        cleanRole == 'attendee' ||
-        cleanRole == 'speaker';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final buttonWidth = screenWidth * 0.55;
-
-    final userAsync = ref.watch(userAppProfileStreamProvider);
-
-    final userRole = userAsync.asData?.value?.role;
-    final showCertificates = _canSeeCertificates(userRole);
-    final showConnections = _canSeeConnections(userRole);
-
-    return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 18, 24, 24),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  InkWell(
-                    onTap: _isLoggingOut
-                        ? null
-                        : () {
-                            Navigator.of(context).pop();
-                          },
-                    borderRadius: BorderRadius.circular(10),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(
-                        Icons.arrow_back,
-                        size: 22,
-                        color: AppColors.namaNavyBlue,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Text(
-                    'Settings',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.namaNavyBlue,
-                        ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              if (showCertificates)
-                _buildItem(
-                  icon: Icons.workspace_premium_outlined,
-                  title: 'My Certificates',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const MyCertificatesScreen(),
-                      ),
-                    );
-                  },
-                ),
-
-              if (showConnections)
-                _buildItem(
-                  icon: Icons.people_outline,
-                  title: 'Connections',
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const ConnectionsScreen(),
-                      ),
-                    );
-                  },
-                ),
-
-              _buildItem(
-                icon: Icons.info_outline_rounded,
-                title: 'About Event',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const AboutEventScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              _buildItem(
-                icon: Icons.lock_outline,
-                title: 'Privacy',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const PrivacyScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              const Spacer(),
-
-              Center(
-                child: ValueListenableBuilder<double>(
-                  valueListenable: _scale,
-                  builder: (context, scale, child) {
-                    return Transform.scale(
-                      scale: scale,
-                      child: GestureDetector(
-                        onTapDown: _isLoggingOut
-                            ? null
-                            : (_) {
-                                _scale.value = 0.96;
-                              },
-                        onTapCancel: _isLoggingOut
-                            ? null
-                            : () {
-                                _scale.value = 1;
-                              },
-                        onTapUp: _isLoggingOut
-                            ? null
-                            : (_) {
-                                _scale.value = 1;
-                                _logout();
-                              },
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 180),
-                          width: buttonWidth,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: _isLoggingOut
-                                ? Colors.red.shade300
-                                : Colors.red.shade600,
-                            borderRadius: BorderRadius.circular(22),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.red.withOpacity(0.2),
-                                blurRadius: 18,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          alignment: Alignment.center,
-                          child: _isLoggingOut
-                              ? const SizedBox(
-                                  height: 19,
-                                  width: 19,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
-                                  ),
-                                )
-                              : const Text(
-                                  'Log Out',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 230),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildItem({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: _isLoggingOut ? null : onTap,
-      child: Container(
-        height: 48,
-        decoration: BoxDecoration(
-          color: Colors.transparent,
-          border: Border(
-            bottom: BorderSide(
-              color: AppColors.namaMediumGray.withOpacity(0.25),
-              width: 0.8,
-            ),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: AppColors.namaNavyBlue,
-            ),
-            const SizedBox(width: 18),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ),
-            const Icon(
-              Icons.arrow_forward,
-              size: 22,
-              color: AppColors.textPrimary,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<bool?> _showLogoutDialog(BuildContext context) {
+  Future<bool?> _showLogoutDialog() {
     return showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -316,19 +99,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: const Text(
             'Log Out',
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
               color: AppColors.namaNavyBlue,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
           ),
           content: const Text(
             'Are you sure you want to log out?',
             style: TextStyle(
-              fontSize: 14,
               color: AppColors.textPrimary,
+              fontSize: 14,
             ),
           ),
-          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          actionsPadding: const EdgeInsets.fromLTRB(
+            16,
+            0,
+            16,
+            14,
+          ),
           actions: [
             TextButton(
               onPressed: () {
@@ -338,7 +126,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 'Cancel',
                 style: TextStyle(
                   color: AppColors.namaMediumGray,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -357,13 +145,317 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               child: const Text(
                 'Log Out',
                 style: TextStyle(
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
           ],
         );
       },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final userAsync = ref.watch(userAppProfileStreamProvider);
+    final role = userAsync.asData?.value?.role;
+
+    final showCertificates = _canSeeCertificates(role);
+    final showConnections = _canSeeConnections(role);
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 18, 24, 22),
+          child: Column(
+            children: [
+              _buildHeader(),
+              const SizedBox(height: 24),
+              Expanded(
+                child: ListView(
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    if (showCertificates)
+                      _SettingsTile(
+                        icon: Icons.workspace_premium_outlined,
+                        title: 'My Certificates',
+                        onTap: _isLoggingOut
+                            ? null
+                            : () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        const MyCertificatesScreen(),
+                                  ),
+                                );
+                              },
+                      ),
+                    if (showConnections)
+                      _SettingsTile(
+                        icon: Icons.people_outline_rounded,
+                        title: 'Connections',
+                        onTap: _isLoggingOut
+                            ? null
+                            : () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) =>
+                                        const ConnectionsScreen(),
+                                  ),
+                                );
+                              },
+                      ),
+                    _SettingsTile(
+                      icon: Icons.info_outline_rounded,
+                      title: 'About Event',
+                      onTap: _isLoggingOut
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      const AboutEventScreen(),
+                                ),
+                              );
+                            },
+                    ),
+                    _SettingsTile(
+                      icon: Icons.lock_outline_rounded,
+                      title: 'Privacy',
+                      onTap: _isLoggingOut
+                          ? null
+                          : () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      const PrivacyScreen(),
+                                ),
+                              );
+                            },
+                    ),
+                    const SizedBox(height: 28),
+                    const _SectionLabel(
+                      title: 'Account',
+                    ),
+                    const SizedBox(height: 8),
+                    _SettingsTile(
+                      icon: Icons.delete_forever_outlined,
+                      title: 'Delete Account',
+                      subtitle: 'Permanently delete your account and data',
+                      iconColor: Colors.red,
+                      titleColor: Colors.red,
+                      arrowColor: Colors.red,
+                      onTap: _isLoggingOut
+                          ? null
+                          : _openDeleteAccount,
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 10),
+              _buildLogoutButton(),
+              const SizedBox(height: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        InkWell(
+          onTap: _isLoggingOut
+              ? null
+              : () {
+                  Navigator.of(context).pop();
+                },
+          borderRadius: BorderRadius.circular(10),
+          child: const Padding(
+            padding: EdgeInsets.all(4),
+            child: Icon(
+              Icons.arrow_back,
+              size: 22,
+              color: AppColors.namaNavyBlue,
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Text(
+          'Settings',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.namaNavyBlue,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return SizedBox(
+      width: MediaQuery.sizeOf(context).width * 0.55,
+      height: 44,
+      child: ElevatedButton(
+        onPressed: _isLoggingOut ? null : _logout,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.red.shade600,
+          disabledBackgroundColor: Colors.red.shade300,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shadowColor: Colors.red.withOpacity(0.2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+        ),
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: _isLoggingOut
+              ? const SizedBox(
+                  key: ValueKey<String>('loading'),
+                  height: 19,
+                  width: 19,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Text(
+                  'Log Out',
+                  key: ValueKey<String>('text'),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  final String title;
+
+  const _SectionLabel({
+    required this.title,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        title.toUpperCase(),
+        style: const TextStyle(
+          color: AppColors.namaMediumGray,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 1.1,
+        ),
+      ),
+    );
+  }
+}
+
+class _SettingsTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final Color? iconColor;
+  final Color? titleColor;
+  final Color? arrowColor;
+
+  const _SettingsTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.iconColor,
+    this.titleColor,
+    this.arrowColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedIconColor =
+        iconColor ?? AppColors.namaNavyBlue;
+    final resolvedTitleColor =
+        titleColor ?? AppColors.namaMediumGray;
+    final resolvedArrowColor =
+        arrowColor ?? AppColors.namaMediumGray;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        constraints: BoxConstraints(
+          minHeight: subtitle == null ? 48 : 60,
+        ),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: AppColors.namaMediumGray.withOpacity(0.25),
+              width: 0.8,
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: resolvedIconColor,
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 10,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: resolvedTitleColor,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    if (subtitle != null &&
+                        subtitle!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          color: AppColors.namaMediumGray,
+                          fontSize: 10.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward,
+              size: 22,
+              color: resolvedArrowColor,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

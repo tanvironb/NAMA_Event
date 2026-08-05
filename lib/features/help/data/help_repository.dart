@@ -52,12 +52,6 @@ class HelpRepository {
         .trim();
   }
 
-  /// Submits a ticket for the user's current event.
-  ///
-  /// When eventId/eventName are not supplied, the repository resolves the
-  /// current active event automatically. This keeps attendee, speaker,
-  /// moderator, staff, and admin submissions linked to the same event that
-  /// the Admin/Staff Help Tickets screen filters by.
   Future<void> submitTicket({
     required String userId,
     required String userName,
@@ -114,28 +108,23 @@ class HelpRepository {
     });
   }
 
-  Future<bool> canSubmitTicket(
-    String userId, {
-    String? eventId,
-  }) async {
+  /// Previous working cooldown query.
+  ///
+  /// It checks only the user ID and recent creation time, so it does not
+  /// require the additional composite index caused by filtering eventId too.
+  Future<bool> canSubmitTicket(String userId) async {
     final tenMinutesAgo =
         DateTime.now().subtract(const Duration(minutes: 10));
 
-    Query<Map<String, dynamic>> query = _firestore
+    final recentTickets = await _firestore
         .collection('help_tickets')
         .where('userId', isEqualTo: userId)
         .where(
           'createdAt',
           isGreaterThan: Timestamp.fromDate(tenMinutesAgo),
-        );
-
-    final safeEventId = (eventId ?? '').trim();
-
-    if (safeEventId.isNotEmpty) {
-      query = query.where('eventId', isEqualTo: safeEventId);
-    }
-
-    final recentTickets = await query.limit(1).get();
+        )
+        .limit(1)
+        .get();
 
     return recentTickets.docs.isEmpty;
   }
@@ -152,7 +141,6 @@ class HelpRepository {
     });
   }
 
-  /// Used by both Admin and Staff event-specific Help Tickets screens.
   Stream<List<HelpTicket>> getTicketsByEventStream(String eventId) {
     final safeEventId = eventId.trim();
 

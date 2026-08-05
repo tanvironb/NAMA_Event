@@ -29,6 +29,7 @@ service firebase.storage {
       return request.resource == null ||
         (
           request.resource.size < 10 * 1024 * 1024 &&
+          request.resource.contentType != null &&
           request.resource.contentType.matches('image/.*')
         );
     }
@@ -38,25 +39,132 @@ service firebase.storage {
     // ------------------------------------------------------------
     match /email/{fileName} {
       allow read: if true;
-      allow create, update: if isAdmin() && isImageUnder10MB();
+
+      allow create, update:
+        if isAdmin() && isImageUnder10MB();
+
       allow delete: if isAdmin();
     }
 
     // ------------------------------------------------------------
-    // EVENT FILES
+    // SESSION / EVENT PHOTO UPLOAD PATHS
+    //
+    // Signed-in attendees, speakers, moderators, staff and admins
+    // may upload image files to these photo-only folders.
+    // Only admin may delete files.
+    // ------------------------------------------------------------
+
+    match /events/{eventId}/eventPhotos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    match /events/{eventId}/event_photos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    match /events/{eventId}/sessionPhotos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    match /events/{eventId}/session_photos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    match /eventPhotos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    match /event_photos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    match /sessionPhotos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    match /session_photos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    match /sessions/{sessionId}/photos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    match /sessions/{sessionId}/eventPhotos/{allPaths=**} {
+      allow read: if isSignedIn();
+
+      allow create, update:
+        if isSignedIn() && isImageUnder10MB();
+
+      allow delete: if isAdmin();
+    }
+
+    // ------------------------------------------------------------
+    // OTHER EVENT FILES
     // ------------------------------------------------------------
     match /events/{eventId}/{allPaths=**} {
       allow read: if isSignedIn();
-      allow create, update: if isAdmin() && isImageUnder10MB();
+
+      allow create, update:
+        if isAdmin() && isImageUnder10MB();
+
       allow delete: if isAdmin();
     }
 
     // ------------------------------------------------------------
-    // SESSION FILES
+    // OTHER SESSION FILES
     // ------------------------------------------------------------
     match /sessions/{sessionId}/{allPaths=**} {
       allow read: if isSignedIn();
-      allow create, update: if isAdminOrStaff() && isImageUnder10MB();
+
+      allow create, update:
+        if isAdminOrStaff() && isImageUnder10MB();
+
       allow delete: if isAdmin();
     }
 
@@ -67,12 +175,20 @@ service firebase.storage {
     match /users/{userId}/{allPaths=**} {
       allow read: if isSignedIn();
 
-      allow create, update: if
-        (request.auth.uid == userId || isAdmin()) &&
+      allow create, update:
+        if isSignedIn() &&
+        (
+          request.auth.uid == userId ||
+          isAdmin()
+        ) &&
         isImageUnder10MB();
 
-      allow delete: if
-        request.auth.uid == userId || isAdmin();
+      allow delete:
+        if isSignedIn() &&
+        (
+          request.auth.uid == userId ||
+          isAdmin()
+        );
     }
 
     // ------------------------------------------------------------
@@ -82,35 +198,77 @@ service firebase.storage {
     match /profile_images/{userId}/{allPaths=**} {
       allow read: if isSignedIn();
 
-      allow create, update: if
-        (request.auth.uid == userId || isAdmin()) &&
+      allow create, update:
+        if isSignedIn() &&
+        (
+          request.auth.uid == userId ||
+          isAdmin()
+        ) &&
         isImageUnder10MB();
 
-      allow delete: if
-        request.auth.uid == userId || isAdmin();
+      allow delete:
+        if isSignedIn() &&
+        (
+          request.auth.uid == userId ||
+          isAdmin()
+        );
     }
 
     // ------------------------------------------------------------
-    // CURRENT PROFILE IMAGE PATH USED BY STORAGE SERVICE
+    // CURRENT PROFILE IMAGE PATH
     // profile/{userId}.jpg
     // ------------------------------------------------------------
     match /profile/{fileName} {
       allow read: if isSignedIn();
 
-      allow create, update: if
+      allow create, update:
+        if isSignedIn() &&
         (
           fileName == request.auth.uid + '.jpg' ||
+          fileName == request.auth.uid + '.jpeg' ||
+          fileName == request.auth.uid + '.png' ||
+          fileName == request.auth.uid + '.webp' ||
           isAdmin()
         ) &&
         isImageUnder10MB();
 
-      allow delete: if
-        fileName == request.auth.uid + '.jpg' ||
-        isAdmin();
+      allow delete:
+        if isSignedIn() &&
+        (
+          fileName == request.auth.uid + '.jpg' ||
+          fileName == request.auth.uid + '.jpeg' ||
+          fileName == request.auth.uid + '.png' ||
+          fileName == request.auth.uid + '.webp' ||
+          isAdmin()
+        );
+    }
+// ------------------------------------------------------------
+// SESSION PHOTO UPLOADS
+// event_photos/{eventId}/{sessionId}/{photo}
+// ------------------------------------------------------------
+match /event_photos/{eventId}/{sessionId}/{fileName} {
+
+  allow read: if isSignedIn();
+
+  allow create: if
+      isSignedIn() &&
+      isImageUnder10MB();
+
+  allow update: if false;
+
+  allow delete: if
+      isAdmin();
+}
+    // ------------------------------------------------------------
+    // CERTIFICATE TEMPLATE FILES
+    // ------------------------------------------------------------
+    match /certificate_templates/{allPaths=**} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
     }
 
     // ------------------------------------------------------------
-    // CERTIFICATE FILES
+    // GENERATED CERTIFICATES
     // ------------------------------------------------------------
     match /certificates/{allPaths=**} {
       allow read: if isSignedIn();

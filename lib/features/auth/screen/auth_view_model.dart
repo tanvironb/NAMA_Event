@@ -1,11 +1,10 @@
 // lib/features/auth/screen/auth_view_model.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/features/auth/data/auth_repository.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-
-import 'package:events_app_trueattempt/features/auth/data/auth_repository.dart';
 
 enum AuthFormType { login, signup }
 
@@ -65,18 +64,19 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
       if (mounted) {
         state = const AsyncValue.data(null);
       }
-    } on FirebaseAuthException catch (e, stack) {
-      if (mounted) {
-        state = AsyncValue.error(e, stack);
-      }
     } catch (e, stack) {
       if (mounted) {
         state = AsyncValue.error(e, stack);
       }
+      rethrow;
     }
   }
 
-  Future<void> signUp(String email, String password, {String? name}) async {
+  Future<void> signUp(
+    String email,
+    String password, {
+    String? name,
+  }) async {
     if (!mounted) return;
 
     state = const AsyncValue.loading();
@@ -97,24 +97,40 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
       if (mounted) {
         state = const AsyncValue.data(null);
       }
-    } on FirebaseAuthException catch (e, stack) {
+    } catch (e, stack) {
       if (mounted) {
         state = AsyncValue.error(e, stack);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deleteAccount({
+    required String password,
+  }) async {
+    if (!mounted) return;
+
+    state = const AsyncValue.loading();
+
+    try {
+      await _authRepository.deleteCurrentAccount(
+        password: password,
+      );
+
+      if (mounted) {
+        state = const AsyncValue.data(null);
       }
     } catch (e, stack) {
       if (mounted) {
         state = AsyncValue.error(e, stack);
       }
+      rethrow;
     }
   }
 
   Future<void> signOut() async {
     if (!mounted) return;
 
-    // Important:
-    // Do NOT keep authViewModelProvider in loading state during logout.
-    // LoginScreen watches this same provider, so if it remains loading,
-    // user cannot login again until app refresh.
     state = const AsyncValue.data(null);
 
     try {

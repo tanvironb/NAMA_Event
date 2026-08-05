@@ -1,11 +1,12 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'features/auth/screen/auth_gate.dart';
-import 'config/app_themes.dart';
-import 'package:events_app_trueattempt/core/services/notification_handler.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/splash_screen.dart';
+import 'package:events_app_trueattempt/config/app_themes.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/core/services/notification_handler.dart';
+import 'package:events_app_trueattempt/features/auth/screen/auth_gate.dart';
 import 'package:events_app_trueattempt/features/notifications/services/alert_notification_service.dart';
 
 class MyApp extends ConsumerStatefulWidget {
@@ -16,7 +17,8 @@ class MyApp extends ConsumerStatefulWidget {
 }
 
 class _MyAppState extends ConsumerState<MyApp> {
-  final _alertService = AlertNotificationService();
+  final AlertNotificationService _alertService =
+      AlertNotificationService();
 
   bool _showSplash = true;
 
@@ -24,37 +26,76 @@ class _MyAppState extends ConsumerState<MyApp> {
   void initState() {
     super.initState();
 
-    // Always show splash first for 5 seconds.
-    Future.delayed(const Duration(seconds: 5), () {
+    // Use a shorter splash duration when testing the normal app in Chrome.
+    final splashDuration = kIsWeb
+        ? const Duration(milliseconds: 900)
+        : const Duration(seconds: 5);
+
+    Future.delayed(splashDuration, () {
       if (!mounted) return;
-      setState(() => _showSplash = false);
+
+      setState(() {
+        _showSplash = false;
+      });
     });
 
-    // Initialize alert service after first frame.
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (mounted && NotificationHandler.navigatorKey.currentContext != null) {
-        await _alertService.initialize(
-          NotificationHandler.navigatorKey.currentContext!,
-        );
+    // Native notification alerts should only initialize on mobile.
+    if (!kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        final currentContext =
+            NotificationHandler.navigatorKey.currentContext;
 
-        if (mounted && NotificationHandler.navigatorKey.currentContext != null) {
-          await _alertService.checkForUnshownAlerts(
-            NotificationHandler.navigatorKey.currentContext!,
-          );
+        if (!mounted || currentContext == null) {
+          return;
         }
-      }
-    });
+
+        await _alertService.initialize(currentContext);
+
+        final updatedContext =
+            NotificationHandler.navigatorKey.currentContext;
+
+        if (!mounted || updatedContext == null) {
+          return;
+        }
+
+        await _alertService.checkForUnshownAlerts(
+          updatedContext,
+        );
+      });
+    }
   }
 
   @override
   void dispose() {
-    _alertService.dispose();
+    if (!kIsWeb) {
+      _alertService.dispose();
+    }
+
     super.dispose();
+  }
+
+  void _restartSplash() {
+    setState(() {
+      _showSplash = true;
+    });
+
+    final retryDuration = kIsWeb
+        ? const Duration(milliseconds: 700)
+        : const Duration(seconds: 5);
+
+    Future.delayed(retryDuration, () {
+      if (!mounted) return;
+
+      setState(() {
+        _showSplash = false;
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    final appInitialization = ref.watch(appInitializationProvider);
+    final appInitialization =
+        ref.watch(appInitializationProvider);
 
     return MaterialApp(
       navigatorKey: NotificationHandler.navigatorKey,
@@ -64,43 +105,96 @@ class _MyAppState extends ConsumerState<MyApp> {
       themeMode: ThemeMode.light,
       debugShowCheckedModeBanner: false,
 
+      // Always open the normal app authentication flow.
+      // Chrome will now show attendee, speaker, moderator,
+      // staff, or mobile-admin interfaces based on the user role.
       home: _showSplash
           ? const SplashScreen()
           : appInitialization.when(
-              data: (_) => const AuthGate(),
-              loading: () => const SplashScreen(),
-              error: (err, stack) => Scaffold(
-                body: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error, size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text('Initialization Error: $err'),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          ref.invalidate(appInitializationProvider);
-                          setState(() => _showSplash = true);
+              data: (_) {
+                return const AuthGate();
+              },
+              loading: () {
+                return const SplashScreen();
+              },
+              error: (error, stackTrace) {
+                return _InitializationErrorScreen(
+                  error: error,
+                  onRetry: () {
+                    ref.invalidate(
+                      appInitializationProvider,
+                    );
 
-                          Future.delayed(const Duration(seconds: 5), () {
-                            if (!mounted) return;
-                            setState(() => _showSplash = false);
-                          });
-                        },
-                        child: const Text('Retry'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+                    _restartSplash();
+                  },
+                );
+              },
             ),
 
       routes: {
-        '/agenda': (context) => const AuthGate(),
-        '/networking': (context) => const AuthGate(),
-        '/notifications': (context) => const AuthGate(),
+        '/agenda': (_) => const AuthGate(),
+        '/networking': (_) => const AuthGate(),
+        '/notifications': (_) => const AuthGate(),
       },
+    );
+  }
+}
+
+class _InitializationErrorScreen extends StatelessWidget {
+  final Object error;
+  final VoidCallback onRetry;
+
+  const _InitializationErrorScreen({
+    required this.error,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: 500,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.error_outline_rounded,
+                  size: 64,
+                  color: Colors.red,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Initialization Error',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(
+                    Icons.refresh_rounded,
+                  ),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -2693,3 +2693,4 @@ export const cleanupArchivedEvents = onSchedule(
     }
   }
 );
+export {deleteMyAccount} from "./account_deletion";

@@ -243,7 +243,7 @@ class _PrivacyScreenState extends ConsumerState<PrivacyScreen> {
                   _buildInfoCard(
                     icon: AppIcons.info,
                     title: 'App Version',
-                    value: _appVersion,
+                    value: '1.0.1',
                   ),
 
                   SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
