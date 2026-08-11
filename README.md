@@ -267,31 +267,5 @@ Email functionality is handled through backend services integrated with Firebase
 | QR Flutter | QR Code Generation |
 | Mobile Scanner | QR Code Scanning |
 
----
 
-# 📂 Project Structure
 
-The project follows a feature-based Flutter architecture.
-
-```text
-lib/
-├── core/
-│   ├── models/
-│   ├── services/
-│   ├── theme/
-│   └── utilities/
-│
-├── features/
-│   ├── authentication/
-│   ├── events/
-│   ├── home/
-│   ├── sessions/
-│   ├── profile/
-│   ├── networking/
-│   ├── qr_scanner/
-│   ├── notifications/
-│   ├── certificates/
-│   ├── help/
-│   └── web_admin/
-│
-└── main.dart
