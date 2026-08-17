@@ -1,10 +1,7 @@
 // lib/features/web_admin/event_workspace/Screens/admin_web_moderators_screen.dart
 
-import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import '../../admin_web_theme.dart';
@@ -781,77 +778,6 @@ class _CreateModeratorDialogState
     super.dispose();
   }
 
-  String _generateTemporaryPassword() {
-    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-    const lower = 'abcdefghijkmnopqrstuvwxyz';
-    const numbers = '23456789';
-    const symbols = '@#%!';
-    final random = Random.secure();
-
-    String pick(String source) =>
-        source[random.nextInt(source.length)];
-
-    final values = <String>[
-      pick(upper),
-      pick(lower),
-      pick(numbers),
-      pick(symbols),
-    ];
-
-    const all = '$upper$lower$numbers$symbols';
-
-    while (values.length < 12) {
-      values.add(pick(all));
-    }
-
-    values.shuffle(random);
-
-    return values.join();
-  }
-
-  Future<String> _createAuthAccount({
-    required String name,
-    required String email,
-    required String password,
-  }) async {
-    FirebaseApp? secondaryApp;
-
-    try {
-      secondaryApp = await Firebase.initializeApp(
-        name:
-            'web_moderator_${DateTime.now().microsecondsSinceEpoch}',
-        options: Firebase.app().options,
-      );
-
-      final secondaryAuth =
-          FirebaseAuth.instanceFor(app: secondaryApp);
-
-      final credential =
-          await secondaryAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      final user = credential.user;
-
-      if (user == null || user.uid.isEmpty) {
-        throw Exception(
-          'Moderator account could not be created.',
-        );
-      }
-
-      await user.updateDisplayName(name);
-      await user.sendEmailVerification();
-      await secondaryAuth.signOut();
-
-      return user.uid;
-    } finally {
-      if (secondaryApp != null) {
-        await secondaryApp.delete();
-      }
-    }
-  }
-
   Future<void> _createModerator() async {
     FocusScope.of(context).unfocus();
 
@@ -866,94 +792,25 @@ class _CreateModeratorDialogState
     final company = _companyController.text.trim();
 
     try {
-      final existing = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-southeast1',
+      ).httpsCallable('createEventRoleAccount');
 
-      if (existing.docs.isNotEmpty) {
-        final doc = existing.docs.first;
-        final data = doc.data();
-        final existingRole =
-            (data['role'] ?? '').toString().toLowerCase();
-
-        if (existingRole.isNotEmpty &&
-            existingRole != 'moderator') {
-          throw Exception(
-            'This email already belongs to a $existingRole account.',
-          );
-        }
-
-        await doc.reference.set({
-          'uid': doc.id,
-          'name': name,
-          'email': email,
-          'company': company,
-          'role': 'moderator',
-          'title': (data['title'] ?? 'Moderator').toString(),
-          'position': (data['position'] ?? '').toString(),
-          'bio': (data['bio'] ?? '').toString(),
-          'status': 'approved',
-          'eventIds':
-              FieldValue.arrayUnion([widget.eventId]),
-          'createdByAdmin': true,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        if (!mounted) return;
-
-        Navigator.of(context).pop();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '$name was added to ${widget.eventName}.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        return;
-      }
-
-      final password = _generateTemporaryPassword();
-
-      final uid = await _createAuthAccount(
-        name: name,
-        email: email,
-        password: password,
-      );
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .set({
-        'uid': uid,
+      final result = await callable.call({
         'name': name,
         'email': email,
-        'role': 'moderator',
         'company': company,
-        'title': 'Moderator',
-        'position': '',
-        'bio': '',
-        'profileImageUrl': '',
-        'status': 'approved',
-        'points': 0,
-        'eventIds': [widget.eventId],
-        'activeEventId': widget.eventId,
-        'currentEventId': widget.eventId,
-        'profileVisibility': 'full',
-        'needsPrivacySelection': false,
-        'createdByAdmin': true,
-        'authAccountCreated': true,
-        'emailVerificationRequired': true,
-        'emailVerified': false,
-        'moderatorPassword': password,
-        'plainPassword': password,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'role': 'moderator',
+        'eventId': widget.eventId,
+        'eventName': widget.eventName,
       });
+
+      final data = Map<String, dynamic>.from(result.data as Map);
+
+      final accountCreated = data['accountCreated'] == true;
+      final invitationSent = data['invitationSent'] == true;
+      final existingInvitationSent =
+          data['existingInvitationSent'] == true;
 
       if (!mounted) return;
 
@@ -962,19 +819,24 @@ class _CreateModeratorDialogState
       await showDialog<void>(
         context: context,
         builder: (dialogContext) {
+          final message = accountCreated
+              ? invitationSent
+                  ? '$name has been created and added to ${widget.eventName}.\n\n'
+                      'An invitation email with the temporary password has been sent to $email.'
+                  : '$name was created, but the invitation email was not sent.'
+              : existingInvitationSent
+                  ? '$name already had a NAMA Events account and has been added to ${widget.eventName}.\n\n'
+                      'An event invitation email has been sent to $email.'
+                  : '$name has been added to ${widget.eventName}.';
+
           return AlertDialog(
-            title: const Text(
-              'Moderator Created',
-              style: TextStyle(
+            title: Text(
+              accountCreated ? 'Moderator Created' : 'Moderator Added',
+              style: const TextStyle(
                 fontWeight: FontWeight.w800,
               ),
             ),
-            content: SelectableText(
-              '$name has been created and added to ${widget.eventName}.\n\n'
-              'Email: $email\n'
-              'Temporary password: $password\n\n'
-              'The existing verification and moderator invitation email flow will continue from the account and Firestore role creation.',
-            ),
+            content: Text(message),
             actions: [
               FilledButton(
                 onPressed: () =>
@@ -985,10 +847,8 @@ class _CreateModeratorDialogState
           );
         },
       );
-    } on FirebaseAuthException catch (error) {
-      _showError(
-        error.message ?? error.code,
-      );
+    } on FirebaseFunctionsException catch (error) {
+      _showError(error.message ?? error.code);
     } catch (error) {
       _showError(
         error.toString().replaceFirst('Exception: ', ''),

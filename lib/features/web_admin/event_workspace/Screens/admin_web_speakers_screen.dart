@@ -1,11 +1,8 @@
 // lib/features/web_admin/event_workspace/Screens/admin_web_speakers_screen.dart
 
-import 'dart:math';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../admin_web_theme.dart';
 
@@ -460,173 +457,175 @@ class _SpeakersTable extends StatelessWidget {
                   fontSize: 10.5,
                   fontWeight: FontWeight.w500,
                 ),
-              columnSpacing: 26,
-              horizontalMargin: 18,
-              columns: const [
-                DataColumn(label: Text('SPEAKER')),
-                DataColumn(label: Text('COMPANY')),
-                DataColumn(label: Text('POSITION')),
-                DataColumn(
-  label: SizedBox(
-    width: 90,
-    child: Center(
-      child: Text('SESSIONS'),
-    ),
-  ),
-),
-                DataColumn(label: Text('STATUS')),
-                DataColumn(label: Text('VERIFICATION')),
-                DataColumn(label: Text('ACTIONS')),
-              ],
-              rows: speakers.map((speaker) {
-                final data = speaker.data();
+                columnSpacing: 26,
+                horizontalMargin: 18,
+                columns: const [
+                  DataColumn(label: Text('SPEAKER')),
+                  DataColumn(label: Text('COMPANY')),
+                  DataColumn(label: Text('POSITION')),
+                  DataColumn(
+                    label: SizedBox(
+                      width: 90,
+                      child: Center(
+                        child: Text('SESSIONS'),
+                      ),
+                    ),
+                  ),
+                  DataColumn(label: Text('STATUS')),
+                  DataColumn(label: Text('VERIFICATION')),
+                  DataColumn(label: Text('ACTIONS')),
+                ],
+                rows: speakers.map((speaker) {
+                  final data = speaker.data();
 
-                final name =
-                    (data['name'] ?? 'Unnamed Speaker').toString();
-                final email =
-                    (data['email'] ?? '').toString();
-                final company =
-                    (data['company'] ?? '—').toString();
-                final position =
-                    (data['position'] ?? '').toString().trim();
-                final status =
-                    (data['status'] ?? 'approved').toString();
-                final verified =
-                    data['emailVerified'] == true;
+                  final name =
+                      (data['name'] ?? 'Unnamed Speaker').toString();
+                  final email =
+                      (data['email'] ?? '').toString();
+                  final company =
+                      (data['company'] ?? '—').toString();
+                  final position =
+                      (data['position'] ?? '').toString().trim();
+                  final status =
+                      (data['status'] ?? 'approved').toString();
+                  final verified =
+                      data['emailVerified'] == true;
 
-                return DataRow(
-                  cells: [
-                    DataCell(
-                      SizedBox(
-                        width: 230,
-                        child: Row(
-                          children: [
-                            _SpeakerAvatar(
-                              imageUrl: (data['profileImageUrl'] ?? '')
-                                  .toString(),
-                              name: name,
-                            ),
-                            const SizedBox(width: 11),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.center,
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow:
-                                        TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color:
-                                          AdminWebTheme.textPrimary,
-                                      fontSize: 11,
-                                      fontWeight:
-                                          FontWeight.w700,
+                  return DataRow(
+                    cells: [
+                      DataCell(
+                        SizedBox(
+                          width: 230,
+                          child: Row(
+                            children: [
+                              _SpeakerAvatar(
+                                imageUrl:
+                                    (data['profileImageUrl'] ?? '')
+                                        .toString(),
+                                name: name,
+                              ),
+                              const SizedBox(width: 11),
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.center,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      name,
+                                      maxLines: 1,
+                                      overflow:
+                                          TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color:
+                                            AdminWebTheme.textPrimary,
+                                        fontSize: 11,
+                                        fontWeight:
+                                            FontWeight.w700,
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    email,
-                                    maxLines: 1,
-                                    overflow:
-                                        TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: AdminWebTheme
-                                          .textSecondary,
-                                      fontSize: 8.5,
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      email,
+                                      maxLines: 1,
+                                      overflow:
+                                          TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: AdminWebTheme
+                                            .textSecondary,
+                                        fontSize: 8.5,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        SizedBox(
+                          width: 150,
+                          child: Text(
+                            company.isEmpty ? '—' : company,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        SizedBox(
+                          width: 150,
+                          child: Text(
+                            position.isEmpty ? '—' : position,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        SizedBox(
+                          width: 90,
+                          child: Center(
+                            child: Text(
+                              '${_sessionCount(speaker.id)}',
+                              style: const TextStyle(
+                                color: AdminWebTheme.primary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      SizedBox(
-                        width: 150,
-                        child: Text(
-                          company.isEmpty ? '—' : company,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    DataCell(
-                      SizedBox(
-                        width: 150,
-                        child: Text(
-                          position.isEmpty ? '—' : position,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-DataCell(
-  SizedBox(
-    width: 90,
-    child: Center(
-      child: Text(
-        '${_sessionCount(speaker.id)}',
-        style: const TextStyle(
-          color: AdminWebTheme.primary,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    ),
-  ),
-),
-                    DataCell(
-                      _StatusBadge(
-                        active:
-                            status.toLowerCase() == 'approved',
-                        activeText: 'Approved',
-                        inactiveText: status.isEmpty
-                            ? 'Unknown'
-                            : _capitalize(status),
-                      ),
-                    ),
-                    DataCell(
-                      _StatusBadge(
-                        active: verified,
-                        activeText: 'Verified',
-                        inactiveText: 'Pending',
-                      ),
-                    ),
-                    DataCell(
-                      OutlinedButton.icon(
-                        onPressed: () =>
-                            onEdit(speaker.id, data),
-                        icon: const Icon(
-                          Icons.edit_outlined,
-                          size: 17,
-                        ),
-                        label: const Text('Edit'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor:
-                              AdminWebTheme.primary,
-                          side: const BorderSide(
-                            color: AdminWebTheme.border,
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 8,
-                          ),
-                          minimumSize: const Size(72, 34),
-                          textStyle: const TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
-                    ),
-                  ],
-                );
+                      DataCell(
+                        _StatusBadge(
+                          active:
+                              status.toLowerCase() == 'approved',
+                          activeText: 'Approved',
+                          inactiveText: status.isEmpty
+                              ? 'Unknown'
+                              : _capitalize(status),
+                        ),
+                      ),
+                      DataCell(
+                        _StatusBadge(
+                          active: verified,
+                          activeText: 'Verified',
+                          inactiveText: 'Pending',
+                        ),
+                      ),
+                      DataCell(
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              onEdit(speaker.id, data),
+                          icon: const Icon(
+                            Icons.edit_outlined,
+                            size: 17,
+                          ),
+                          label: const Text('Edit'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor:
+                                AdminWebTheme.primary,
+                            side: const BorderSide(
+                              color: AdminWebTheme.border,
+                            ),
+                            padding:
+                                const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 8,
+                            ),
+                            minimumSize: const Size(72, 34),
+                            textStyle: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
                 }).toList(),
               ),
             ),
@@ -781,77 +780,6 @@ class _CreateSpeakerDialogState
     super.dispose();
   }
 
-  String _generateTemporaryPassword() {
-    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-    const lower = 'abcdefghijkmnopqrstuvwxyz';
-    const numbers = '23456789';
-    const symbols = '@#%!';
-    final random = Random.secure();
-
-    String pick(String source) =>
-        source[random.nextInt(source.length)];
-
-    final values = <String>[
-      pick(upper),
-      pick(lower),
-      pick(numbers),
-      pick(symbols),
-    ];
-
-    const all = '$upper$lower$numbers$symbols';
-
-    while (values.length < 12) {
-      values.add(pick(all));
-    }
-
-    values.shuffle(random);
-
-    return values.join();
-  }
-
-  Future<String> _createAuthAccount({
-    required String name,
-    required String email,
-    required String password,
-  }) async {
-    FirebaseApp? secondaryApp;
-
-    try {
-      secondaryApp = await Firebase.initializeApp(
-        name:
-            'web_speaker_${DateTime.now().microsecondsSinceEpoch}',
-        options: Firebase.app().options,
-      );
-
-      final secondaryAuth =
-          FirebaseAuth.instanceFor(app: secondaryApp);
-
-      final credential =
-          await secondaryAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      final user = credential.user;
-
-      if (user == null || user.uid.isEmpty) {
-        throw Exception(
-          'Speaker account could not be created.',
-        );
-      }
-
-      await user.updateDisplayName(name);
-      await user.sendEmailVerification();
-      await secondaryAuth.signOut();
-
-      return user.uid;
-    } finally {
-      if (secondaryApp != null) {
-        await secondaryApp.delete();
-      }
-    }
-  }
-
   Future<void> _createSpeaker() async {
     FocusScope.of(context).unfocus();
 
@@ -866,96 +794,27 @@ class _CreateSpeakerDialogState
     final company = _companyController.text.trim();
 
     try {
-      final existing = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
+      final callable = FirebaseFunctions.instanceFor(
+        region: 'asia-southeast1',
+      ).httpsCallable('createEventRoleAccount');
 
-      if (existing.docs.isNotEmpty) {
-        final doc = existing.docs.first;
-        final data = doc.data();
-        final existingRole =
-            (data['role'] ?? '').toString().toLowerCase();
-
-        if (existingRole.isNotEmpty &&
-            existingRole != 'speaker') {
-          throw Exception(
-            'This email already belongs to a $existingRole account.',
-          );
-        }
-
-        await doc.reference.set({
-          'uid': doc.id,
-          'name': name,
-          'email': email,
-          'company': company,
-          'role': 'speaker',
-          'title': (data['title'] ?? 'Speaker').toString(),
-          'position': (data['position'] ?? '').toString(),
-          'bio': (data['bio'] ?? '').toString(),
-          'status': 'approved',
-          'eventIds':
-              FieldValue.arrayUnion([widget.eventId]),
-          'activeEventId': widget.eventId,
-          'currentEventId': widget.eventId,
-          'createdByAdmin': true,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
-
-        if (!mounted) return;
-
-        Navigator.of(context).pop();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '$name was added to ${widget.eventName}.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-
-        return;
-      }
-
-      final password = _generateTemporaryPassword();
-
-      final uid = await _createAuthAccount(
-        name: name,
-        email: email,
-        password: password,
-      );
-
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(uid)
-          .set({
-        'uid': uid,
+      final result = await callable.call({
         'name': name,
         'email': email,
-        'role': 'speaker',
         'company': company,
-        'title': 'Speaker',
-        'position': '',
-        'bio': '',
-        'profileImageUrl': '',
-        'status': 'approved',
-        'points': 0,
-        'eventIds': [widget.eventId],
-        'activeEventId': widget.eventId,
-        'currentEventId': widget.eventId,
-        'profileVisibility': 'full',
-        'needsPrivacySelection': false,
-        'createdByAdmin': true,
-        'authAccountCreated': true,
-        'emailVerificationRequired': true,
-        'emailVerified': false,
-        'speakerPassword': password,
-        'plainPassword': password,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'role': 'speaker',
+        'eventId': widget.eventId,
+        'eventName': widget.eventName,
       });
+
+      final data = Map<String, dynamic>.from(
+        result.data as Map,
+      );
+
+      final accountCreated = data['accountCreated'] == true;
+      final invitationSent = data['invitationSent'] == true;
+      final verificationEmailSent =
+          data['verificationEmailSent'] == true;
 
       if (!mounted) return;
 
@@ -964,19 +823,24 @@ class _CreateSpeakerDialogState
       await showDialog<void>(
         context: context,
         builder: (dialogContext) {
+          final message = accountCreated
+              ? invitationSent
+                  ? '$name has been created and added to ${widget.eventName}.\n\n'
+                      'An invitation email with the temporary password has been sent to $email.'
+                  : '$name was created, but the invitation email was not sent.'
+              : verificationEmailSent
+                  ? '$name already had a NAMA Events account and has been added to ${widget.eventName}.\n\n'
+                      'A verification email has been sent to $email.'
+                  : '$name has been added to ${widget.eventName}.';
+
           return AlertDialog(
-            title: const Text(
-              'Speaker Created',
-              style: TextStyle(
+            title: Text(
+              accountCreated ? 'Speaker Created' : 'Speaker Added',
+              style: const TextStyle(
                 fontWeight: FontWeight.w800,
               ),
             ),
-            content: SelectableText(
-              '$name has been created and added to ${widget.eventName}.\n\n'
-              'Email: $email\n'
-              'Temporary password: $password\n\n'
-              'The existing verification and speaker invitation email flow will continue from the account and Firestore role creation.',
-            ),
+            content: Text(message),
             actions: [
               FilledButton(
                 onPressed: () =>
@@ -987,7 +851,7 @@ class _CreateSpeakerDialogState
           );
         },
       );
-    } on FirebaseAuthException catch (error) {
+    } on FirebaseFunctionsException catch (error) {
       _showError(
         error.message ?? error.code,
       );
@@ -1119,16 +983,6 @@ class _EditSpeakerDialogState
   late final TextEditingController _positionController;
   late final TextEditingController _bioController;
 
-  late final TextEditingController _phoneController;
-  late final TextEditingController _countryController;
-  late final TextEditingController _linkedInController;
-  late final TextEditingController _twitterController;
-  late final TextEditingController _websiteController;
-  late final TextEditingController _githubController;
-  late final TextEditingController _mediumController;
-  late final TextEditingController _instagramController;
-  late final TextEditingController _profileImageController;
-
   late String _status;
   late String _profileVisibility;
 
@@ -1157,40 +1011,6 @@ class _EditSpeakerDialogState
     );
     _bioController = TextEditingController(
       text: (widget.speakerData['bio'] ?? '').toString(),
-    );
-
-    _phoneController = TextEditingController(
-      text: (widget.speakerData['phone'] ??
-              widget.speakerData['phoneNumber'] ??
-              '')
-          .toString(),
-    );
-    _countryController = TextEditingController(
-      text: (widget.speakerData['country'] ?? '').toString(),
-    );
-    _linkedInController = TextEditingController(
-      text: (widget.speakerData['linkedin'] ??
-              widget.speakerData['linkedIn'] ??
-              '')
-          .toString(),
-    );
-    _twitterController = TextEditingController(
-      text: (widget.speakerData['twitter'] ?? '').toString(),
-    );
-    _websiteController = TextEditingController(
-      text: (widget.speakerData['website'] ?? '').toString(),
-    );
-    _githubController = TextEditingController(
-      text: (widget.speakerData['github'] ?? '').toString(),
-    );
-    _mediumController = TextEditingController(
-      text: (widget.speakerData['medium'] ?? '').toString(),
-    );
-    _instagramController = TextEditingController(
-      text: (widget.speakerData['instagram'] ?? '').toString(),
-    );
-    _profileImageController = TextEditingController(
-      text: (widget.speakerData['profileImageUrl'] ?? '').toString(),
     );
 
     final rawStatus =
@@ -1239,15 +1059,6 @@ class _EditSpeakerDialogState
     _titleController.dispose();
     _positionController.dispose();
     _bioController.dispose();
-    _phoneController.dispose();
-    _countryController.dispose();
-    _linkedInController.dispose();
-    _twitterController.dispose();
-    _websiteController.dispose();
-    _githubController.dispose();
-    _mediumController.dispose();
-    _instagramController.dispose();
-    _profileImageController.dispose();
     super.dispose();
   }
 
@@ -1276,24 +1087,14 @@ class _EditSpeakerDialogState
               ? 'Speaker'
               : _titleController.text.trim(),
           'position': _positionController.text.trim(),
-          'jobTitle': _positionController.text.trim(),
           'bio': _bioController.text.trim(),
-          'phone': _phoneController.text.trim(),
-          'phoneNumber': _phoneController.text.trim(),
-          'country': _countryController.text.trim(),
-          'linkedin': _linkedInController.text.trim(),
-          'linkedIn': _linkedInController.text.trim(),
-          'twitter': _twitterController.text.trim(),
-          'website': _websiteController.text.trim(),
-          'github': _githubController.text.trim(),
-          'medium': _mediumController.text.trim(),
-          'instagram': _instagramController.text.trim(),
-          'profileImageUrl': _profileImageController.text.trim(),
           'role': 'speaker',
           'status': _status,
           'profileVisibility': _profileVisibility,
           'eventIds':
               FieldValue.arrayUnion([widget.eventId]),
+          'activeEventId': widget.eventId,
+          'currentEventId': widget.eventId,
           'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true),
@@ -1398,7 +1199,6 @@ class _EditSpeakerDialogState
                         controller: _emailController,
                         icon: Icons.mail_outline_rounded,
                         enabled: false,
-                        allowClear: false,
                       ),
                     ],
                   ),
@@ -1435,33 +1235,6 @@ class _EditSpeakerDialogState
                     icon: Icons.notes_rounded,
                     maxLines: 5,
                   ),
-
-                  const SizedBox(height: 14),
-                  _ResponsiveDialogFields(
-                    children: [
-                      _DialogTextField(
-                        label: 'Phone Number',
-                        hint: 'Enter phone number',
-                        controller: _phoneController,
-                        icon: Icons.phone_outlined,
-                        keyboardType: TextInputType.phone,
-                      ),
-                      _DialogTextField(
-                        label: 'Country',
-                        hint: 'Enter country',
-                        controller: _countryController,
-                        icon: Icons.public_rounded,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _DialogTextField(
-                    label: 'Profile Image URL',
-                    hint: 'Paste profile image URL',
-                    controller: _profileImageController,
-                    icon: Icons.image_outlined,
-                    keyboardType: TextInputType.url,
-                  ),
                   const SizedBox(height: 14),
                   _ResponsiveDialogFields(
                     children: [
@@ -1497,72 +1270,6 @@ class _EditSpeakerDialogState
                             () => _profileVisibility = value,
                           );
                         },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            _DialogSection(
-              title: 'Social Profiles',
-              subtitle:
-                  'Add, update, or clear the profile links shown to users.',
-              child: Column(
-                children: [
-                  _ResponsiveDialogFields(
-                    children: [
-                      _DialogTextField(
-                        label: 'LinkedIn',
-                        hint: 'LinkedIn profile URL',
-                        controller: _linkedInController,
-                        icon: Icons.link_rounded,
-                        keyboardType: TextInputType.url,
-                      ),
-                      _DialogTextField(
-                        label: 'Twitter / X',
-                        hint: 'Twitter or X profile URL',
-                        controller: _twitterController,
-                        icon: Icons.alternate_email_rounded,
-                        keyboardType: TextInputType.url,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _ResponsiveDialogFields(
-                    children: [
-                      _DialogTextField(
-                        label: 'Website',
-                        hint: 'Website URL',
-                        controller: _websiteController,
-                        icon: Icons.language_rounded,
-                        keyboardType: TextInputType.url,
-                      ),
-                      _DialogTextField(
-                        label: 'GitHub',
-                        hint: 'GitHub profile URL',
-                        controller: _githubController,
-                        icon: Icons.code_rounded,
-                        keyboardType: TextInputType.url,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _ResponsiveDialogFields(
-                    children: [
-                      _DialogTextField(
-                        label: 'Medium',
-                        hint: 'Medium profile URL',
-                        controller: _mediumController,
-                        icon: Icons.article_outlined,
-                        keyboardType: TextInputType.url,
-                      ),
-                      _DialogTextField(
-                        label: 'Instagram',
-                        hint: 'Instagram profile URL',
-                        controller: _instagramController,
-                        icon: Icons.photo_camera_outlined,
-                        keyboardType: TextInputType.url,
                       ),
                     ],
                   ),
@@ -1918,7 +1625,6 @@ class _DialogTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final TextInputType? keyboardType;
   final bool enabled;
-  final bool allowClear;
   final int maxLines;
 
   const _DialogTextField({
@@ -1929,51 +1635,28 @@ class _DialogTextField extends StatelessWidget {
     this.validator,
     this.keyboardType,
     this.enabled = true,
-    this.allowClear = true,
     this.maxLines = 1,
   });
 
   @override
   Widget build(BuildContext context) {
-    return StatefulBuilder(
-      builder: (context, setLocalState) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _FieldLabel(label),
-            const SizedBox(height: 7),
-            TextFormField(
-              controller: controller,
-              enabled: enabled,
-              validator: validator,
-              keyboardType: keyboardType,
-              maxLines: maxLines,
-              onChanged: (_) => setLocalState(() {}),
-              decoration: _dialogInputDecoration(
-                hint: hint,
-                icon: icon,
-              ).copyWith(
-                suffixIcon: enabled &&
-                        allowClear &&
-                        controller.text.trim().isNotEmpty
-                    ? IconButton(
-                        tooltip: 'Clear $label',
-                        onPressed: () {
-                          controller.clear();
-                          setLocalState(() {});
-                        },
-                        icon: const Icon(
-                          Icons.delete_outline_rounded,
-                          color: Colors.redAccent,
-                          size: 19,
-                        ),
-                      )
-                    : null,
-              ),
-            ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label),
+        const SizedBox(height: 7),
+        TextFormField(
+          controller: controller,
+          enabled: enabled,
+          validator: validator,
+          keyboardType: keyboardType,
+          maxLines: maxLines,
+          decoration: _dialogInputDecoration(
+            hint: hint,
+            icon: icon,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -2155,6 +1838,40 @@ class _SpeakerAvatar extends StatelessWidget {
               ),
             )
           : null,
+    );
+  }
+}
+
+class _CountBadge extends StatelessWidget {
+  final int count;
+
+  const _CountBadge({
+    required this.count,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(
+        minWidth: 32,
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 6,
+      ),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: AdminWebTheme.primary.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        '$count',
+        style: const TextStyle(
+          color: AdminWebTheme.primary,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }

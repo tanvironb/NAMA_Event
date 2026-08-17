@@ -335,6 +335,18 @@ export const createEventRoleAccount = onCall(
       throw new HttpsError("not-found", "The selected event does not exist.");
     }
 
+    const eventData = eventDoc.data() || {};
+
+    if (
+      eventData.status === "archived" ||
+      eventData.isActive === false
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Speakers and moderators cannot be added to an archived or inactive event."
+      );
+    }
+
     let authUser: admin.auth.UserRecord | null = null;
     let accountCreated = false;
     let temporaryPassword = "";
@@ -382,6 +394,13 @@ export const createEventRoleAccount = onCall(
     const existingUserDoc = await userRef.get();
     const existingData = existingUserDoc.data() || {};
 
+    const existingEventIds: string[] = Array.isArray(existingData.eventIds) ?
+      existingData.eventIds.map((item: unknown) => String(item)) :
+      [];
+
+    const wasAlreadyInThisEvent =
+      existingEventIds.includes(payload.eventId);
+
     await userRef.set(
       {
         uid: authUser.uid,
@@ -402,7 +421,7 @@ export const createEventRoleAccount = onCall(
         needsPrivacySelection: false,
         createdByAdmin: true,
         authAccountCreated: true,
-        emailVerificationRequired: true,
+        emailVerificationRequired: accountCreated,
         emailVerified: authUser.emailVerified,
         invitationManagedByCallable: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -413,16 +432,21 @@ export const createEventRoleAccount = onCall(
       {merge: true}
     );
 
-    let invitationSent = false;
+    const resend = new Resend(resendApiKey.value());
+    const roleLabel =
+      payload.role === "moderator" ? "Moderator" : "Speaker";
 
-    if (accountCreated) {
-      try {
+    let invitationSent = false;
+    let existingInvitationSent = false;
+    let emailType = "";
+
+    try {
+      if (accountCreated) {
+        // NEW SPEAKER / MODERATOR:
+        // Keep the existing working invitation flow with temporary password
+        // and Firebase Admin verification link.
         const verificationLink =
           await admin.auth().generateEmailVerificationLink(payload.email);
-
-        const resend = new Resend(resendApiKey.value());
-        const roleLabel =
-          payload.role === "moderator" ? "Moderator" : "Speaker";
 
         const sendResult = await resend.emails.send({
           from: "NAMA Events <apps@namafoundation.org>",
@@ -453,6 +477,7 @@ export const createEventRoleAccount = onCall(
         }
 
         invitationSent = true;
+        emailType = "new-account-invitation";
 
         await userRef.set(
           {
@@ -461,42 +486,97 @@ export const createEventRoleAccount = onCall(
               admin.firestore.FieldValue.serverTimestamp(),
             invitationEmailProvider: "resend",
             invitationEmailId: sendResult.data?.id || "",
+            lastEventInvitationType: emailType,
+            lastEventInvitationEventId: payload.eventId,
+            lastEventInvitationSentAt:
+              admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
           {merge: true}
         );
-      } catch (error) {
-        console.error("Failed to send invitation email:", error);
+      } else {
+        // EXISTING SPEAKER / MODERATOR:
+        // Use the published Resend dashboard template.
+        // No new password and no attendee/staff verification email.
+        const sendResult = await resend.emails.send({
+          to: [payload.email],
+          template: {
+            id: "existing-speaker-event-invitation",
+            variables: {
+              name: payload.name,
+              event_name: payload.eventName,
+              role: roleLabel,
+              email: payload.email,
+            },
+          },
+        });
+
+        if (sendResult.error) {
+          throw new Error(sendResult.error.message);
+        }
+
+        existingInvitationSent = true;
+        emailType = "existing-account-event-invitation";
 
         await userRef.set(
           {
-            invitationEmailSent: false,
-            invitationEmailError:
-              error instanceof Error ? error.message : String(error),
+            existingEventInvitationSent: true,
+            existingEventInvitationSentAt:
+              admin.firestore.FieldValue.serverTimestamp(),
+            existingEventInvitationProvider: "resend",
+            existingEventInvitationId: sendResult.data?.id || "",
+            lastEventInvitationType: emailType,
+            lastEventInvitationEventId: payload.eventId,
+            lastEventInvitationWasRepeatForSameEvent: wasAlreadyInThisEvent,
+            lastEventInvitationSentAt:
+              admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
           {merge: true}
         );
+      }
+    } catch (error) {
+      console.error("Failed to send event invitation email:", error);
 
+      await userRef.set(
+        {
+          lastEventInvitationFailed: true,
+          lastEventInvitationError:
+            error instanceof Error ? error.message : String(error),
+          lastEventInvitationEventId: payload.eventId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        {merge: true}
+      );
+
+      // Roll back ONLY a newly-created account.
+      // Never delete an existing account if its event invitation email fails.
+      if (accountCreated) {
         try {
           await admin.auth().deleteUser(authUser.uid);
           await userRef.delete();
         } catch (rollbackError) {
           console.error("Failed to roll back new account:", rollbackError);
         }
-
-        throw new HttpsError(
-          "internal",
-          "The account could not be completed because the invitation email failed."
-        );
       }
+
+      throw new HttpsError(
+        "internal",
+        accountCreated ?
+          "The account could not be completed because the invitation email failed." :
+          "The existing account was added to the event, but the invitation email could not be sent."
+      );
     }
 
     return {
       success: true,
       uid: authUser.uid,
       accountCreated,
+      existingAccount: !accountCreated,
+      wasAlreadyInThisEvent,
       invitationSent,
+      existingInvitationSent,
+      emailType,
       email: payload.email,
       role: payload.role,
     };
@@ -2309,6 +2389,7 @@ async function cleanupEventUsers(eventId: string): Promise<{
   authDeleted: number;
   firestoreDeleted: number;
   eventLinksRemoved: number;
+  eventPointersReassigned: number;
 }> {
   const usersSnap = await db
     .collection("users")
@@ -2318,26 +2399,41 @@ async function cleanupEventUsers(eventId: string): Promise<{
   let authDeleted = 0;
   let firestoreDeleted = 0;
   let eventLinksRemoved = 0;
+  let eventPointersReassigned = 0;
 
   for (const userDoc of usersSnap.docs) {
     const userData = userDoc.data();
     const role = (userData.role || "").toString().toLowerCase();
 
-    if (role !== "attendee" && role !== "speaker") continue;
+    // Keep admin and staff accounts. Clean event-scoped attendee,
+    // speaker and moderator accounts.
+    if (
+      role !== "attendee" &&
+      role !== "speaker" &&
+      role !== "moderator"
+    ) {
+      continue;
+    }
 
     const eventIds = Array.isArray(userData.eventIds) ?
       userData.eventIds.map((item) => item.toString()) :
       [];
 
-    const isEventOnlyUser = eventIds.length <= 1;
+    const remainingEventIds =
+      eventIds.filter((linkedEventId) => linkedEventId !== eventId);
+
     const uid = userDoc.id;
 
-    if (isEventOnlyUser) {
+    if (remainingEventIds.length === 0) {
+      // The user belongs only to the archived event.
+      // Remove Auth + Firestore after the 15-day retention period.
       try {
         await admin.auth().deleteUser(uid);
         authDeleted++;
-      } catch (error) {
-        console.log(`Auth delete skipped/failed for ${uid}:`, error);
+      } catch (error: any) {
+        if (error?.code !== "auth/user-not-found") {
+          console.log(`Auth delete skipped/failed for ${uid}:`, error);
+        }
       }
 
       try {
@@ -2346,19 +2442,39 @@ async function cleanupEventUsers(eventId: string): Promise<{
       } catch (error) {
         console.log(`Firestore user delete skipped/failed for ${uid}:`, error);
       }
-    } else {
-      await userDoc.ref.update({
-        eventIds: admin.firestore.FieldValue.arrayRemove(eventId),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      eventLinksRemoved++;
+
+      continue;
     }
+
+    // User is still linked to another event, so preserve the account and
+    // remove only the archived event.
+    const updates: Record<string, any> = {
+      eventIds: admin.firestore.FieldValue.arrayRemove(eventId),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const activeEventId = (userData.activeEventId || "").toString();
+    const currentEventId = (userData.currentEventId || "").toString();
+
+    if (activeEventId === eventId) {
+      updates.activeEventId = remainingEventIds[0];
+      eventPointersReassigned++;
+    }
+
+    if (currentEventId === eventId) {
+      updates.currentEventId = remainingEventIds[0];
+      eventPointersReassigned++;
+    }
+
+    await userDoc.ref.update(updates);
+    eventLinksRemoved++;
   }
 
   return {
     authDeleted,
     firestoreDeleted,
     eventLinksRemoved,
+    eventPointersReassigned,
   };
 }
 
@@ -2694,3 +2810,5 @@ export const cleanupArchivedEvents = onSchedule(
   }
 );
 export {deleteMyAccount} from "./account_deletion";
+
+//l//
