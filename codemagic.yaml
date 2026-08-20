@@ -1,0 +1,20 @@
+workflows:
+  android-release:
+    name: NAMA Events Android Release
+
+    environment:
+      flutter: stable
+      android_signing:
+        - nama_events_upload
+
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+
+      - name: Build Android AAB
+        script: |
+          flutter build appbundle --release
+
+    artifacts:
+      - build/app/outputs/bundle/release/*.aab
