@@ -3,7 +3,7 @@ workflows:
     name: NAMA Events Android Release
 
     environment:
-      flutter: stable
+      flutter: 3.41.9
       android_signing:
         - nama_events_upload
 
