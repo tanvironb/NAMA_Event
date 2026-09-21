@@ -380,6 +380,8 @@ class _AdminWebCreateSessionFormState
   String? _venueImageName;
   String _existingSessionImageUrl = '';
   String _existingVenueImageUrl = '';
+  bool _removeExistingSessionImage = false;
+  bool _removeExistingVenueImage = false;
 
   static const List<String> _categories = [
     'Keynote',
@@ -413,8 +415,11 @@ class _AdminWebCreateSessionFormState
         : (data['category'] ?? '').toString();
     _priority = data['priority'] is int ? data['priority'] as int : 3;
     _isChatEnabled = data['isChatEnabled'] != false;
-    _existingSessionImageUrl = (data['imageUrl'] ?? '').toString();
-    _existingVenueImageUrl = (data['venueImageUrl'] ?? '').toString();
+    _existingSessionImageUrl = (data['imageUrl'] ?? '').toString().trim();
+    _existingVenueImageUrl =
+        (data['venueImageUrl'] ?? data['locationImageUrl'] ?? '')
+            .toString()
+            .trim();
 
     final startValue = data['startTime'];
     final endValue = data['endTime'];
@@ -524,6 +529,7 @@ class _AdminWebCreateSessionFormState
     setState(() {
       _sessionImageBytes = bytes;
       _sessionImageName = image.name;
+      _removeExistingSessionImage = false;
     });
   }
 
@@ -542,6 +548,7 @@ class _AdminWebCreateSessionFormState
     setState(() {
       _venueImageBytes = bytes;
       _venueImageName = image.name;
+      _removeExistingVenueImage = false;
     });
   }
 
@@ -655,8 +662,8 @@ class _AdminWebCreateSessionFormState
       final sessionReference = widget.sessionDocument?.reference ??
           FirebaseFirestore.instance.collection('sessions').doc();
 
-      String sessionImageUrl = _existingSessionImageUrl;
-      String venueImageUrl = _existingVenueImageUrl;
+      String sessionImageUrl = _removeExistingSessionImage ? '' : _existingSessionImageUrl;
+      String venueImageUrl = _removeExistingVenueImage ? '' : _existingVenueImageUrl;
 
       if (_sessionImageBytes != null) {
         sessionImageUrl = await _uploadImage(
@@ -704,6 +711,7 @@ class _AdminWebCreateSessionFormState
         'category': _selectedCategory ?? '',
         'imageUrl': sessionImageUrl,
         'venueImageUrl': venueImageUrl,
+        'locationImageUrl': venueImageUrl,
         'priority': _priority,
         'partnerId': '',
         'isChatEnabled': _isChatEnabled,
@@ -922,6 +930,7 @@ class _AdminWebCreateSessionFormState
                           subtitle:
                               'Shown in session details and featured areas.',
                           imageBytes: _sessionImageBytes,
+                          existingImageUrl: _removeExistingSessionImage ? '' : _existingSessionImageUrl,
                           fileName: _sessionImageName,
                           icon: Icons.photo_outlined,
                           onPick: _pickSessionImage,
@@ -929,6 +938,8 @@ class _AdminWebCreateSessionFormState
                             setState(() {
                               _sessionImageBytes = null;
                               _sessionImageName = null;
+                              _existingSessionImageUrl = '';
+                              _removeExistingSessionImage = true;
                             });
                           },
                         ),
@@ -938,6 +949,7 @@ class _AdminWebCreateSessionFormState
                           subtitle:
                               'Shown in the venue section for attendees.',
                           imageBytes: _venueImageBytes,
+                          existingImageUrl: _removeExistingVenueImage ? '' : _existingVenueImageUrl,
                           fileName: _venueImageName,
                           icon: Icons.location_city_outlined,
                           onPick: _pickVenueImage,
@@ -945,6 +957,8 @@ class _AdminWebCreateSessionFormState
                             setState(() {
                               _venueImageBytes = null;
                               _venueImageName = null;
+                              _existingVenueImageUrl = '';
+                              _removeExistingVenueImage = true;
                             });
                           },
                         ),
@@ -961,6 +975,7 @@ class _AdminWebCreateSessionFormState
                           subtitle:
                               'Shown in session details and featured areas.',
                           imageBytes: _sessionImageBytes,
+                          existingImageUrl: _removeExistingSessionImage ? '' : _existingSessionImageUrl,
                           fileName: _sessionImageName,
                           icon: Icons.photo_outlined,
                           onPick: _pickSessionImage,
@@ -968,6 +983,8 @@ class _AdminWebCreateSessionFormState
                             setState(() {
                               _sessionImageBytes = null;
                               _sessionImageName = null;
+                              _existingSessionImageUrl = '';
+                              _removeExistingSessionImage = true;
                             });
                           },
                         ),
@@ -979,6 +996,7 @@ class _AdminWebCreateSessionFormState
                           subtitle:
                               'Shown in the venue section for attendees.',
                           imageBytes: _venueImageBytes,
+                          existingImageUrl: _removeExistingVenueImage ? '' : _existingVenueImageUrl,
                           fileName: _venueImageName,
                           icon: Icons.location_city_outlined,
                           onPick: _pickVenueImage,
@@ -986,6 +1004,8 @@ class _AdminWebCreateSessionFormState
                             setState(() {
                               _venueImageBytes = null;
                               _venueImageName = null;
+                              _existingVenueImageUrl = '';
+                              _removeExistingVenueImage = true;
                             });
                           },
                         ),
@@ -2811,6 +2831,7 @@ class _ImagePickerCard extends StatelessWidget {
   final String label;
   final String subtitle;
   final Uint8List? imageBytes;
+  final String existingImageUrl;
   final String? fileName;
   final IconData icon;
   final VoidCallback onPick;
@@ -2820,6 +2841,7 @@ class _ImagePickerCard extends StatelessWidget {
     required this.label,
     required this.subtitle,
     required this.imageBytes,
+    required this.existingImageUrl,
     required this.fileName,
     required this.icon,
     required this.onPick,
@@ -2828,6 +2850,10 @@ class _ImagePickerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasLocalImage = imageBytes != null;
+    final hasSavedImage = existingImageUrl.trim().isNotEmpty;
+    final hasImage = hasLocalImage || hasSavedImage;
+
     return Container(
       height: 190,
       padding: const EdgeInsets.all(14),
@@ -2836,44 +2862,20 @@ class _ImagePickerCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(11),
         border: Border.all(color: AdminWebTheme.border),
       ),
-      child: imageBytes == null
+      child: !hasImage
           ? InkWell(
               onTap: onPick,
               borderRadius: BorderRadius.circular(9),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    icon,
-                    color: AdminWebTheme.primary,
-                    size: 30,
-                  ),
+                  Icon(icon, color: AdminWebTheme.primary, size: 30),
                   const SizedBox(height: 10),
-                  Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AdminWebTheme.textPrimary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+                  Text(label, textAlign: TextAlign.center, style: const TextStyle(color: AdminWebTheme.textPrimary, fontSize: 12, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 5),
-                  Text(
-                    subtitle,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AdminWebTheme.textSecondary,
-                      fontSize: 10,
-                      height: 1.4,
-                    ),
-                  ),
+                  Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: AdminWebTheme.textSecondary, fontSize: 10, height: 1.4)),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: onPick,
-                    icon: const Icon(Icons.upload_rounded, size: 17),
-                    label: const Text('Choose Image'),
-                  ),
+                  OutlinedButton.icon(onPressed: onPick, icon: const Icon(Icons.upload_rounded, size: 17), label: const Text('Choose Image')),
                 ],
               ),
             )
@@ -2882,49 +2884,39 @@ class _ImagePickerCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(9),
-                  child: Image.memory(
-                    imageBytes!,
-                    fit: BoxFit.cover,
-                  ),
+                  child: hasLocalImage
+                      ? Image.memory(imageBytes!, fit: BoxFit.cover)
+                      : Image.network(
+                          existingImageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => Container(
+                            alignment: Alignment.center,
+                            color: const Color(0xFFFAFBFD),
+                            child: const Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.broken_image_outlined, color: AdminWebTheme.textSecondary, size: 30),
+                                SizedBox(height: 8),
+                                Text('Could not display saved image', style: TextStyle(color: AdminWebTheme.textSecondary, fontSize: 10)),
+                              ],
+                            ),
+                          ),
+                        ),
                 ),
                 Positioned(
-                  top: 8,
-                  right: 8,
-                  child: IconButton.filled(
-                    tooltip: 'Remove image',
-                    onPressed: onRemove,
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      size: 18,
-                    ),
-                    style: IconButton.styleFrom(
-                      backgroundColor: Colors.black54,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
+                  top: 8, right: 8,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton.filled(tooltip: 'Replace image', onPressed: onPick, icon: const Icon(Icons.edit_outlined, size: 17), style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white)),
+                    const SizedBox(width: 6),
+                    IconButton.filled(tooltip: 'Remove image', onPressed: onRemove, icon: const Icon(Icons.close_rounded, size: 18), style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white)),
+                  ]),
                 ),
                 Positioned(
-                  left: 8,
-                  right: 8,
-                  bottom: 8,
+                  left: 8, right: 8, bottom: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(7),
-                    ),
-                    child: Text(
-                      fileName ?? 'Selected image',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9.5,
-                      ),
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(7)),
+                    child: Text(hasLocalImage ? (fileName ?? 'Selected image') : 'Saved image', maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 9.5)),
                   ),
                 ),
               ],

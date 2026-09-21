@@ -114,23 +114,53 @@ class _AdminWebLoginScreenState extends ConsumerState<AdminWebLoginScreen>
 
     ref.read(authViewModelProvider.notifier).resetState();
 
-    await ref.read(authViewModelProvider.notifier).signIn(
-          _emailController.text.trim(),
-          _passwordController.text,
+    try {
+      await ref.read(authViewModelProvider.notifier).signIn(
+            _emailController.text.trim(),
+            _passwordController.text,
+          );
+
+      if (!mounted) return;
+
+      final authState = ref.read(authViewModelProvider);
+
+      if (authState.hasError) {
+        _showLoginError(
+          _getErrorMessage(authState.error),
         );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
 
+      _showLoginError(
+        _getErrorMessage(e),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      _showLoginError(
+        _getErrorMessage(e),
+      );
+    }
+  }
+
+  void _showLoginError(String message) {
     if (!mounted) return;
-
-    final authState = ref.read(authViewModelProvider);
-    if (!authState.hasError) return;
 
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(_getErrorMessage(authState.error)),
+          content: Text(
+            message,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 4),
         ),
       );
   }
@@ -141,25 +171,42 @@ class _AdminWebLoginScreenState extends ConsumerState<AdminWebLoginScreen>
         case 'invalid-credential':
         case 'wrong-password':
         case 'user-not-found':
-          return 'Incorrect email address or password.';
+          return 'Wrong username or password. Use the correct one.';
+
         case 'email-not-verified':
           return 'Please verify your email before signing in.';
+
         case 'user-not-authorized':
           return 'Your account is not registered in the system.';
+
         case 'too-many-requests':
           return 'Too many login attempts. Please try again later.';
+
         case 'network-request-failed':
           return 'Network error. Please check your internet connection.';
+
         case 'user-disabled':
           return 'This account has been disabled.';
+
         case 'invalid-email':
           return 'Please enter a valid email address.';
+
         default:
-          return error.message ?? 'Login failed.';
+          return error.message ?? 'Login failed. Please try again.';
       }
     }
 
-    return error?.toString() ?? 'Login failed.';
+    final errorText = error?.toString().toLowerCase() ?? '';
+
+    if (errorText.contains('invalid-credential') ||
+        errorText.contains('wrong-password') ||
+        errorText.contains('user-not-found') ||
+        errorText.contains('invalid credential') ||
+        errorText.contains('incorrect password')) {
+      return 'Wrong username or password. Use the correct one.';
+    }
+
+    return 'Login failed. Please try again.';
   }
 
   @override
