@@ -25,7 +25,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _canSeeCertificates(String? role) {
     final cleanRole = (role ?? '').trim().toLowerCase();
 
-    return cleanRole == 'attendee' || cleanRole == 'speaker';
+    return cleanRole == 'attendee' ||
+        cleanRole == 'speaker' ||
+        cleanRole == 'moderator' ||
+        cleanRole == 'staff' ||
+        cleanRole == 'volunteer';
   }
 
   bool _canSeeConnections(String? role) {
@@ -33,7 +37,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return cleanRole == 'attendee' ||
         cleanRole == 'speaker' ||
-        cleanRole == 'staff';
+        cleanRole == 'moderator' ||
+        cleanRole == 'staff' ||
+        cleanRole == 'volunteer';
   }
 
   Future<void> _openDeleteAccount() async {
@@ -228,8 +234,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           : () {
                               Navigator.of(context).push(
                                 MaterialPageRoute<void>(
-                                  builder: (_) =>
-                                      const PrivacyScreen(),
+                                  builder: (_) => const PrivacyScreen(),
                                 ),
                               );
                             },
@@ -246,9 +251,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       iconColor: Colors.red,
                       titleColor: Colors.red,
                       arrowColor: Colors.red,
-                      onTap: _isLoggingOut
-                          ? null
-                          : _openDeleteAccount,
+                      onTap: _isLoggingOut ? null : _openDeleteAccount,
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -384,12 +387,9 @@ class _SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedIconColor =
-        iconColor ?? AppColors.namaNavyBlue;
-    final resolvedTitleColor =
-        titleColor ?? AppColors.namaMediumGray;
-    final resolvedArrowColor =
-        arrowColor ?? AppColors.namaMediumGray;
+    final resolvedIconColor = iconColor ?? AppColors.namaNavyBlue;
+    final resolvedTitleColor = titleColor ?? AppColors.namaMediumGray;
+    final resolvedArrowColor = arrowColor ?? AppColors.namaMediumGray;
 
     return InkWell(
       onTap: onTap,
@@ -421,8 +421,7 @@ class _SettingsTile extends StatelessWidget {
                 ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,

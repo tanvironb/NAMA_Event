@@ -21,9 +21,10 @@ class EmailVerificationScreen extends ConsumerStatefulWidget {
 class _EmailVerificationScreenState
     extends ConsumerState<EmailVerificationScreen> {
   bool _isResending = false;
-  bool _hasBeenSent = true;
+  bool _hasBeenSent = false;
   bool _isSigningOut = false;
   bool _isChecking = false;
+  bool _autoEmailSent = false;
 
   int _cooldownSeconds = 0;
 
@@ -33,6 +34,11 @@ class _EmailVerificationScreenState
   @override
   void initState() {
     super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sendInitialVerificationEmail();
+    });
+
     _startAutoCheck();
   }
 
@@ -43,50 +49,95 @@ class _EmailVerificationScreenState
     super.dispose();
   }
 
+Future<void> _sendInitialVerificationEmail() async {
+  if (_autoEmailSent || _isSigningOut) return;
+
+  _autoEmailSent = true;
+
+  final user = FirebaseAuth.instance.currentUser;
+
+  if (user == null || user.emailVerified) return;
+
+  try {
+    await user.sendEmailVerification();
+
+    if (!mounted) return;
+
+    setState(() {
+      _hasBeenSent = true;
+    });
+
+    _startCooldown();
+
+    _showSnackBar(
+      'Verification email sent! Check your inbox and spam folder.',
+      isError: false,
+    );
+  } catch (e) {
+    debugPrint('Auto verification email returned error, but email may still be sent: $e');
+
+    if (!mounted) return;
+
+    setState(() {
+      _hasBeenSent = true;
+    });
+
+    _startCooldown();
+
+    _showSnackBar(
+      'Verification email sent! Check your inbox and spam folder.',
+      isError: false,
+    );
+  }
+}
+
   void _startAutoCheck() {
     _autoCheckTimer?.cancel();
 
-    _autoCheckTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-
-      if (_isSigningOut || _isChecking) return;
-
-      final user = FirebaseAuth.instance.currentUser;
-
-      if (user == null) {
-        timer.cancel();
-        _returnToAuthGate();
-        return;
-      }
-
-      try {
-        await user.reload();
-
-        final refreshedUser = FirebaseAuth.instance.currentUser;
-
-        if (refreshedUser?.emailVerified == true) {
+    _autoCheckTimer = Timer.periodic(
+      const Duration(seconds: 4),
+      (timer) async {
+        if (!mounted) {
           timer.cancel();
-
-          if (!mounted) return;
-
-          _showSnackBar(
-            'Email verified! Please login to continue.',
-            isError: false,
-          );
-
-          await Future.delayed(const Duration(milliseconds: 600));
-
-          if (!mounted) return;
-
-          await _signOutAndReturnToAuthGate();
+          return;
         }
-      } catch (e) {
-        debugPrint('EmailVerificationScreen auto-check error: $e');
-      }
-    });
+
+        if (_isSigningOut || _isChecking) return;
+
+        final user = FirebaseAuth.instance.currentUser;
+
+        if (user == null) {
+          timer.cancel();
+          _returnToAuthGate();
+          return;
+        }
+
+        try {
+          await user.reload();
+
+          final refreshedUser = FirebaseAuth.instance.currentUser;
+
+          if (refreshedUser?.emailVerified == true) {
+            timer.cancel();
+
+            if (!mounted) return;
+
+            _showSnackBar(
+              'Email verified! Please login to continue.',
+              isError: false,
+            );
+
+            await Future.delayed(const Duration(milliseconds: 600));
+
+            if (!mounted) return;
+
+            await _signOutAndReturnToAuthGate();
+          }
+        } catch (e) {
+          debugPrint('EmailVerificationScreen auto-check error: $e');
+        }
+      },
+    );
   }
 
   Future<void> _signOutAndReturnToAuthGate() async {
@@ -103,18 +154,6 @@ class _EmailVerificationScreenState
     _cooldownTimer?.cancel();
 
     try {
-      /*
-        IMPORTANT:
-        Do not manually navigate to LoginScreen here.
-
-        We only sign out and return to the first route.
-        AuthGate will detect FirebaseAuth signed-out state
-        and show LoginScreen itself.
-
-        This keeps the correct flow:
-        AuthGate -> LoginScreen -> MainHubScreen after login.
-      */
-
       try {
         await ref.read(authViewModelProvider.notifier).signOut();
       } catch (e) {
@@ -148,26 +187,31 @@ class _EmailVerificationScreenState
   }
 
   void _startCooldown() {
+    if (!mounted) return;
+
     setState(() {
       _cooldownSeconds = 60;
     });
 
     _cooldownTimer?.cancel();
 
-    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
+    _cooldownTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (timer) {
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
 
-      setState(() {
-        _cooldownSeconds--;
-      });
+        setState(() {
+          _cooldownSeconds--;
+        });
 
-      if (_cooldownSeconds <= 0) {
-        timer.cancel();
-      }
-    });
+        if (_cooldownSeconds <= 0) {
+          timer.cancel();
+        }
+      },
+    );
   }
 
   Future<void> _sendVerificationEmail() async {
@@ -185,7 +229,10 @@ class _EmailVerificationScreenState
 
       if (!mounted) return;
 
-      setState(() => _hasBeenSent = true);
+      setState(() {
+        _hasBeenSent = true;
+        _autoEmailSent = true;
+      });
 
       _startCooldown();
 
@@ -193,6 +240,20 @@ class _EmailVerificationScreenState
         'Verification email sent! Check your inbox and spam folder.',
         isError: false,
       );
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+
+      if (e.code == 'too-many-requests') {
+        _startCooldown();
+
+        _showSnackBar(
+          'Verification email was already sent. Please check your inbox and spam folder.',
+          isError: false,
+        );
+        return;
+      }
+
+      _showSnackBar('Failed to send email: ${e.message ?? e.code}');
     } catch (e) {
       if (!mounted) return;
 
@@ -305,7 +366,7 @@ class _EmailVerificationScreenState
                       : IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          icon: Icon(
+                          icon: const Icon(
                             Icons.arrow_back,
                             color: AppColors.namaNavyBlue,
                             size: 21,
@@ -323,7 +384,7 @@ class _EmailVerificationScreenState
                       color: AppColors.namaNavyBlue.withOpacity(0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(
+                    child: const Icon(
                       Icons.mark_email_unread_outlined,
                       size: 48,
                       color: AppColors.namaNavyBlue,
@@ -333,7 +394,7 @@ class _EmailVerificationScreenState
 
                 const SizedBox(height: 28),
 
-                Text(
+                const Text(
                   'Verify Your Email',
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -349,7 +410,7 @@ class _EmailVerificationScreenState
                   Text(
                     user?.email ?? '',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
                       color: AppColors.namaNavyBlue,
@@ -361,9 +422,9 @@ class _EmailVerificationScreenState
                 Text(
                   _hasBeenSent
                       ? 'Verification email sent! Check your inbox and spam folder.'
-                      : 'Click below to send a verification link to your email.',
+                      : 'Sending verification email...',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 12.5,
                     height: 1.4,
                     color: AppColors.namaMediumGray,
@@ -385,14 +446,14 @@ class _EmailVerificationScreenState
                       width: 1,
                     ),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
                       Icon(
                         Icons.info_outline,
                         color: AppColors.warningAmber,
                         size: 20,
                       ),
-                      const SizedBox(width: 10),
+                      SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           "Can't find the email? Check your spam or junk folder!",
@@ -453,7 +514,7 @@ class _EmailVerificationScreenState
                         : _checkVerificationStatus,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.namaNavyBlue,
-                      side: BorderSide(
+                      side: const BorderSide(
                         color: AppColors.namaNavyBlue,
                         width: 1.5,
                       ),
@@ -462,7 +523,7 @@ class _EmailVerificationScreenState
                       ),
                     ),
                     child: _isChecking
-                        ? SizedBox(
+                        ? const SizedBox(
                             width: 17,
                             height: 17,
                             child: CircularProgressIndicator(
@@ -488,7 +549,7 @@ class _EmailVerificationScreenState
                   onPressed:
                       _isSigningOut ? null : _signOutAndReturnToAuthGate,
                   child: _isSigningOut
-                      ? SizedBox(
+                      ? const SizedBox(
                           width: 15,
                           height: 15,
                           child: CircularProgressIndicator(
@@ -498,7 +559,7 @@ class _EmailVerificationScreenState
                             ),
                           ),
                         )
-                      : Text(
+                      : const Text(
                           'Sign Out',
                           style: TextStyle(
                             color: AppColors.namaMediumGray,

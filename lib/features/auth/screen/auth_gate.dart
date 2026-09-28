@@ -1,6 +1,5 @@
-// lib/features/auth/screen/auth_gate.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/core/services/event_attendance_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -22,6 +21,8 @@ class AuthGate extends ConsumerStatefulWidget {
 }
 
 class _AuthGateState extends ConsumerState<AuthGate> {
+  final Set<String> _attendanceRecordedForUsers = {};
+
   Future<User?> _reloadAndGetUser(User user) async {
     try {
       await user.reload();
@@ -35,11 +36,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   Future<DocumentSnapshot<Map<String, dynamic>>> _loadUserProfile(
     String uid,
   ) async {
-    return FirebaseFirestore.instance
-        .collection('users')
-        .doc(uid)
-        .get()
-        .timeout(
+    return FirebaseFirestore.instance.collection('users').doc(uid).get().timeout(
       const Duration(seconds: 12),
       onTimeout: () {
         throw Exception(
@@ -72,6 +69,35 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     }
 
     return profileDoc;
+  }
+
+  void _recordEventAttendanceAfterLogin({
+    required String uid,
+    required Map<String, dynamic> userData,
+  }) {
+    if (_attendanceRecordedForUsers.contains(uid)) return;
+
+    final role = (userData['role'] ?? 'attendee')
+        .toString()
+        .trim()
+        .toLowerCase();
+
+    if (role == 'admin' || role == 'superadmin') {
+      return;
+    }
+
+    _attendanceRecordedForUsers.add(uid);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await EventAttendanceService().recordAttendanceForActiveEventOnLogin();
+        debugPrint('Event attendance recorded for $uid as $role.');
+      } catch (e) {
+        debugPrint('Failed to record event attendance for $uid: $e');
+
+        _attendanceRecordedForUsers.remove(uid);
+      }
+    });
   }
 
   Widget _buildProfileLoadingFailed(
@@ -304,6 +330,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
                 switch (status) {
                   case 'approved':
+                    _recordEventAttendanceAfterLogin(
+                      uid: refreshedUser.uid,
+                      userData: data,
+                    );
+
                     return const MainHubScreen();
 
                   case 'blocked':
