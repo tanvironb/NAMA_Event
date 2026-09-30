@@ -68,10 +68,10 @@ export const handleUserWrite = onDocumentWritten(
 
 
 // ============================================================================
-// ADMIN-CREATED SPEAKER / MODERATOR ACCOUNTS
+// ADMIN-CREATED SPEAKER / MODERATOR / STAFF ACCOUNTS
 // ============================================================================
 
-type EventRole = "speaker" | "moderator";
+type EventRole = "speaker" | "moderator" | "staff";
 
 interface EventRoleAccountRequest {
   name: string;
@@ -127,6 +127,12 @@ function generateTemporaryPassword(): string {
   return passwordCharacters.join("");
 }
 
+function getEventRoleLabel(role: EventRole): string {
+  if (role === "moderator") return "Moderator";
+  if (role === "staff") return "Staff";
+  return "Speaker";
+}
+
 function buildEventInvitationHtml({
   name,
   eventName,
@@ -147,7 +153,7 @@ function buildEventInvitationHtml({
   const safeEmail = escapeHtml(email);
   const safePassword = escapeHtml(temporaryPassword);
   const safeVerificationLink = escapeHtml(verificationLink);
-  const roleLabel = role === "moderator" ? "Moderator" : "Speaker";
+  const roleLabel = getEventRoleLabel(role);
 
   return `
 <!doctype html>
@@ -270,7 +276,7 @@ function buildEventInvitationText({
   temporaryPassword: string;
   verificationLink: string;
 }): string {
-  const roleLabel = role === "moderator" ? "Moderator" : "Speaker";
+  const roleLabel = getEventRoleLabel(role);
 
   return [
     `Dear ${name},`,
@@ -322,10 +328,14 @@ export const createEventRoleAccount = onCall(
       throw new HttpsError("invalid-argument", "A valid email is required.");
     }
 
-    if (payload.role !== "speaker" && payload.role !== "moderator") {
+    if (
+      payload.role !== "speaker" &&
+      payload.role !== "moderator" &&
+      payload.role !== "staff"
+    ) {
       throw new HttpsError(
         "invalid-argument",
-        "role must be either speaker or moderator."
+        "role must be speaker, moderator, or staff."
       );
     }
 
@@ -343,7 +353,7 @@ export const createEventRoleAccount = onCall(
     ) {
       throw new HttpsError(
         "failed-precondition",
-        "Speakers and moderators cannot be added to an archived or inactive event."
+        "Speakers, moderators, and staff cannot be added to an archived or inactive event."
       );
     }
 
@@ -408,7 +418,7 @@ export const createEventRoleAccount = onCall(
         email: payload.email,
         role: payload.role,
         company: payload.company,
-        title: payload.role === "moderator" ? "Moderator" : "Speaker",
+        title: getEventRoleLabel(payload.role),
         position: existingData.position || "",
         bio: existingData.bio || "",
         profileImageUrl: existingData.profileImageUrl || "",
@@ -433,8 +443,7 @@ export const createEventRoleAccount = onCall(
     );
 
     const resend = new Resend(resendApiKey.value());
-    const roleLabel =
-      payload.role === "moderator" ? "Moderator" : "Speaker";
+    const roleLabel = getEventRoleLabel(payload.role);
 
     let invitationSent = false;
     let existingInvitationSent = false;
@@ -442,7 +451,7 @@ export const createEventRoleAccount = onCall(
 
     try {
       if (accountCreated) {
-        // NEW SPEAKER / MODERATOR:
+        // NEW SPEAKER / MODERATOR / STAFF:
         // Keep the existing working invitation flow with temporary password
         // and Firebase Admin verification link.
         const verificationLink =
@@ -495,7 +504,7 @@ export const createEventRoleAccount = onCall(
           {merge: true}
         );
       } else {
-        // EXISTING SPEAKER / MODERATOR:
+        // EXISTING SPEAKER / MODERATOR / STAFF:
         // Use the published Resend dashboard template.
         // No new password and no attendee/staff verification email.
         const sendResult = await resend.emails.send({
@@ -579,13 +588,14 @@ export const createEventRoleAccount = onCall(
       emailType,
       email: payload.email,
       role: payload.role,
+      roleLabel,
     };
   }
 );
 
 
 // ============================================================================
-// SPEAKER / MODERATOR ROLE EMAIL
+// SPEAKER / MODERATOR / STAFF ROLE EMAIL
 // ============================================================================
 
 function normalizeRoleValue(role: any): string {
@@ -601,7 +611,7 @@ async function queueSpeakerRoleEmail({
   userId: string;
   email: string;
   name: string;
-  role: "speaker" | "moderator";
+  role: "speaker" | "moderator" | "staff";
 }) {
   const cleanEmail = email.trim();
 
@@ -611,7 +621,7 @@ async function queueSpeakerRoleEmail({
   }
 
   const displayName = name.trim().length > 0 ? name.trim() : "there";
-  const roleLabel = role === "moderator" ? "Moderator" : "Speaker";
+  const roleLabel = getEventRoleLabel(role);
 
   await db.collection("mail").add({
     to: [cleanEmail],
@@ -627,7 +637,7 @@ async function queueSpeakerRoleEmail({
 
           <p>
             You may now log in to the NAMA Events app using your registered email address.
-            Your interface will provide access to the speaker/moderator tools and related event features.
+            Your interface will provide access to the speaker/moderator/staff tools and related event features.
           </p>
 
           <p>
@@ -644,7 +654,7 @@ async function queueSpeakerRoleEmail({
         `Dear ${displayName},\n\n` +
         `You have been assigned as a ${roleLabel} for the event.\n\n` +
         "You may now log in to the NAMA Events app using your registered email address. " +
-        "Your interface will provide access to the speaker/moderator tools and related event features.\n\n" +
+        "Your interface will provide access to the speaker/moderator/staff tools and related event features.\n\n" +
         "Thank you.\n\n" +
         "Best regards,\n" +
         "NAMA Events Team",
@@ -658,7 +668,7 @@ async function queueSpeakerRoleEmail({
 
 /**
  * Triggered when a user's role changes.
- * Sends the same role-assignment email for speaker and moderator.
+ * Sends the same role-assignment email for speaker, moderator, and staff.
  *
  * IMPORTANT:
  * This uses Firebase Trigger Email extension format:
@@ -696,14 +706,20 @@ export const sendSpeakerOrModeratorRoleEmail = onDocumentWritten(
       return null;
     }
 
-    if (afterRole !== "speaker" && afterRole !== "moderator") {
+    if (
+      afterRole !== "speaker" &&
+      afterRole !== "moderator" &&
+      afterRole !== "staff"
+    ) {
       return null;
     }
 
     const emailAlreadySentField =
       afterRole === "moderator" ?
         "moderatorRoleEmailSent" :
-        "speakerRoleEmailSent";
+        afterRole === "staff" ?
+          "staffRoleEmailSent" :
+          "speakerRoleEmailSent";
 
     if (after[emailAlreadySentField] === true) {
       console.log(`Skipping ${afterRole} role email for ${userId}: already sent.`);
@@ -717,7 +733,7 @@ export const sendSpeakerOrModeratorRoleEmail = onDocumentWritten(
       userId,
       email,
       name,
-      role: afterRole as "speaker" | "moderator",
+      role: afterRole as "speaker" | "moderator" | "staff",
     });
 
     await event.data?.after.ref.update({
@@ -2810,5 +2826,3 @@ export const cleanupArchivedEvents = onSchedule(
   }
 );
 export {deleteMyAccount} from "./account_deletion";
-
-//l//
