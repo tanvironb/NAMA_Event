@@ -1,6 +1,5 @@
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/admin/screen/admin_session_management_screen.dart';
-import 'package:events_app_trueattempt/features/admin/screen/create_session_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/send_notification_screen.dart';
 import 'package:events_app_trueattempt/features/admin/screen/user_management_screen.dart';
 import 'package:events_app_trueattempt/features/help/screen/admin_help_tickets_screen.dart';
@@ -18,7 +17,6 @@ class StaffQuickActions extends ConsumerWidget {
   static const Color _textDark = Color(0xFF1F2937);
 
   static const List<Color> _cardColors = [
-    Color(0xFFEFF4FF),
     Color(0xFFF3F0FF),
     Color(0xFFEFFFF7),
     Color(0xFFFFF6E8),
@@ -26,7 +24,6 @@ class StaffQuickActions extends ConsumerWidget {
   ];
 
   static const List<Color> _iconColors = [
-    Color(0xFF2563EB),
     Color(0xFF7C3AED),
     Color(0xFF059669),
     Color(0xFFEA580C),
@@ -60,24 +57,6 @@ class StaffQuickActions extends ConsumerWidget {
         final eventName = event.name;
 
         final List<_StaffActionItem> staffActions = [
-          _StaffActionItem(
-            icon: Icons.edit_square,
-            label: 'Add / Edit Session',
-            onTap: () {
-              if (eventId.isEmpty) {
-                _showMissingEventMessage(context);
-                return;
-              }
-
-              _openScreen(
-                context,
-                CreateSessionScreen(
-                  eventId: eventId,
-                  eventName: eventName,
-                ),
-              );
-            },
-          ),
           _StaffActionItem(
             icon: Icons.person_outline_rounded,
             label: 'Manage User Details',
@@ -187,7 +166,7 @@ class StaffQuickActions extends ConsumerWidget {
             mainAxisSpacing: 11,
             childAspectRatio: 3.15,
           ),
-          itemCount: 5,
+          itemCount: 4,
           itemBuilder: (context, index) {
             return Container(
               decoration: BoxDecoration(

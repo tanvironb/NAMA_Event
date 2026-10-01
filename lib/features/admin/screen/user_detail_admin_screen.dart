@@ -1,12 +1,14 @@
 // lib/features/admin/screen/user_detail_admin_screen.dart
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+
+import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/features/admin/screen/manage_user_profile_screen.dart';
-import 'package:intl/intl.dart';
 
 class UserDetailAdminScreen extends ConsumerStatefulWidget {
   final AppUser user;
@@ -22,8 +24,60 @@ class UserDetailAdminScreen extends ConsumerStatefulWidget {
 }
 
 class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
+  late final Future<bool> _isCurrentUserStaffFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _isCurrentUserStaffFuture = _isCurrentUserStaff();
+  }
+
+  Future<bool> _isCurrentUserStaff() async {
+    final currentUser = ref.read(firebaseAuthProvider).currentUser;
+
+    if (currentUser == null) {
+      return false;
+    }
+
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      final role = (userDoc.data()?['role'] ?? '')
+          .toString()
+          .trim()
+          .toLowerCase();
+
+      return role == 'staff';
+    } catch (_) {
+      return false;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _isCurrentUserStaffFuture,
+      builder: (context, snapshot) {
+        final isCurrentUserStaff =
+            snapshot.connectionState == ConnectionState.waiting
+                ? true
+                : snapshot.data == true;
+
+        return _buildPage(
+          context,
+          isCurrentUserStaff: isCurrentUserStaff,
+        );
+      },
+    );
+  }
+
+  Widget _buildPage(
+    BuildContext context, {
+    required bool isCurrentUserStaff,
+  }) {
     final possibleRoles = [
       'attendee',
       'staff',
@@ -32,7 +86,12 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
       'admin',
     ];
 
-    final possibleStatuses = ['pending', 'approved', 'rejected', 'blocked'];
+    final possibleStatuses = [
+      'pending',
+      'approved',
+      'rejected',
+      'blocked',
+    ];
 
     final currentRole = possibleRoles.contains(widget.user.role)
         ? widget.user.role
@@ -51,9 +110,7 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildCustomHeader(context),
-
               const SizedBox(height: 18),
-
               _buildCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,16 +165,14 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 18),
-
               _buildCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Admin Controls',
-                      style: TextStyle(
+                    Text(
+                      isCurrentUserStaff ? 'Staff Controls' : 'Admin Controls',
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
                         color: Colors.black87,
@@ -125,37 +180,40 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    DropdownButtonFormField<String>(
-                      value: currentRole,
-                      isExpanded: true,
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                      items: possibleRoles
-                          .map(
-                            (role) => DropdownMenuItem(
-                              value: role,
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _getRoleIcon(role),
-                                    color: _getRoleColor(role),
-                                    size: 17,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _getRoleLabel(role),
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      letterSpacing: 0.5,
+                    if (isCurrentUserStaff)
+                      _buildReadOnlyRoleField(currentRole)
+                    else
+                      DropdownButtonFormField<String>(
+                        value: currentRole,
+                        isExpanded: true,
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                        items: possibleRoles
+                            .map(
+                              (role) => DropdownMenuItem(
+                                value: role,
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      _getRoleIcon(role),
+                                      color: _getRoleColor(role),
+                                      size: 17,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      _getRoleLabel(role),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (newRole) => _handleRoleChange(newRole),
-                      decoration: _inputDecoration('Change Role'),
-                    ),
+                            )
+                            .toList(),
+                        onChanged: (newRole) => _handleRoleChange(newRole),
+                        decoration: _inputDecoration('Change Role'),
+                      ),
 
                     const SizedBox(height: 14),
 
@@ -187,7 +245,8 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
                             ),
                           )
                           .toList(),
-                      onChanged: (newStatus) => _handleStatusChange(newStatus),
+                      onChanged: (newStatus) =>
+                          _handleStatusChange(newStatus),
                       decoration: _inputDecoration('Change Status'),
                     ),
 
@@ -203,7 +262,9 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (context) =>
-                                    ManageUserProfileScreen(user: widget.user),
+                                    ManageUserProfileScreen(
+                                  user: widget.user,
+                                ),
                               ),
                             );
                           },
@@ -235,6 +296,49 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildReadOnlyRoleField(String role) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 13,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.grey.shade400,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            _getRoleIcon(role),
+            color: _getRoleColor(role),
+            size: 17,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _getRoleLabel(role),
+              style: const TextStyle(
+                fontSize: 14,
+                letterSpacing: 0.5,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const Icon(
+            Icons.lock_outline_rounded,
+            size: 16,
+            color: Colors.black45,
+          ),
+        ],
       ),
     );
   }
@@ -496,7 +600,10 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
         try {
           await ref.read(userProfileRepositoryProvider).updateUserProfile(
             widget.user.uid,
-            {'status': newStatus},
+            {
+              'status': newStatus,
+              'updatedAt': DateTime.now(),
+            },
           );
 
           if (mounted) {
@@ -504,7 +611,9 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
 
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Status updated to ${newStatus.toUpperCase()}'),
+                content: Text(
+                  'Status updated to ${newStatus.toUpperCase()}',
+                ),
                 backgroundColor: AppColors.successGreen,
               ),
             );
