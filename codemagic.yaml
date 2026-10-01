@@ -1,6 +1,8 @@
 workflows:
   android-release:
     name: NAMA Events Android Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
 
     environment:
       flutter: 3.41.9
@@ -18,3 +20,58 @@ workflows:
 
     artifacts:
       - build/app/outputs/bundle/release/*.aab
+
+
+  ios-app-store-upload:
+    name: NAMA Events iOS App Store Upload
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: NAMA Events iOS
+
+    environment:
+      flutter: 3.41.9
+      xcode: latest
+      cocoapods: default
+
+      vars:
+        BUNDLE_ID: "org.namafoundation.eventapp"
+        APP_STORE_APPLE_ID: "6790268255"
+
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: org.namafoundation.eventapp
+
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          flutter pub get
+
+      - name: Install iOS pods
+        script: |
+          cd ios
+          pod install
+          cd ..
+
+      - name: Set up iOS code signing
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build iOS IPA
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
