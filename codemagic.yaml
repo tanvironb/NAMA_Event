@@ -44,6 +44,10 @@ workflows:
         bundle_identifier: org.namafoundation.eventapp
 
     scripts:
+      - name: Initialize keychain
+        script: |
+          keychain initialize
+
       - name: Get Flutter packages
         script: |
           flutter pub get
