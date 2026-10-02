@@ -38,6 +38,7 @@ workflows:
       vars:
         BUNDLE_ID: "org.namafoundation.eventapp"
         APP_STORE_APPLE_ID: "6790268255"
+        APP_STORE_CONNECT_ALTOOL_ADDITIONAL_ARGUMENTS: "--apple-id 6790268255"
 
       ios_signing:
         distribution_type: app_store
