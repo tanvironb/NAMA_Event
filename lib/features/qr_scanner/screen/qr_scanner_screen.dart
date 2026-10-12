@@ -1,5 +1,6 @@
 import 'dart:convert';
-
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -11,125 +12,65 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-
 class QRScannerScreen extends ConsumerStatefulWidget {
   const QRScannerScreen({super.key});
-
   @override
   ConsumerState<QRScannerScreen> createState() => _QRScannerScreenState();
 }
-
 class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
   final MobileScannerController _scannerController = MobileScannerController();
-
   bool _isProcessing = false;
+  bool _manualEntryOpen = false;
   String _processingMessage = 'Processing...';
-
   void _handleQRCode(BarcodeCapture barcodes) {
-    if (_isProcessing) return;
-
+    if (_isProcessing || _manualEntryOpen) return;
     final barcode = barcodes.barcodes.firstOrNull;
-
     if (barcode?.rawValue == null) return;
-
     HapticFeedback.lightImpact();
-
     setState(() {
       _isProcessing = true;
       _processingMessage = 'Validating session QR...';
     });
-
     _scannerController.stop();
     _processScannedPayload(barcode!.rawValue!);
   }
-
   Future<void> _openManualQrDialog() async {
-    if (_isProcessing) return;
-
-    final controller = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: const Text(
-            'Enter Session Code',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: AppColors.namaNavyBlue,
-            ),
-          ),
-          content: TextField(
-            controller: controller,
-            textCapitalization: TextCapitalization.characters,
-            decoration: InputDecoration(
-              hintText: 'Example: SES-123456',
-              filled: true,
-              fillColor: const Color(0xFFF5F5F5),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.namaNavyBlue,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                final value = controller.text.trim();
-
-                if (value.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Please enter session code.'),
-                    ),
-                  );
-                  return;
-                }
-
-                Navigator.pop(dialogContext);
-
-                setState(() {
-                  _isProcessing = true;
-                  _processingMessage = 'Joining session...';
-                });
-
-                _scannerController.stop();
-                _processScannedPayload(value);
-              },
-              child: const Text('Submit'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _processScannedPayload(String payload) async {
+    if (_isProcessing || _manualEntryOpen) return;
+    setState(() => _manualEntryOpen = true);
+    try {
+      await _scannerController.stop();
+    } catch (_) {}
     if (!mounted) return;
-
+    try {
+      final input = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (_) => const _ScannerCodeDialog(),
+      );
+      if (!mounted) return;
+      if (input == null) {
+        _resetScanner();
+        return;
+      }
+      final personal = input['kind'] == 'personal';
+      setState(() {
+        _isProcessing = true;
+        _processingMessage = personal ? 'Validating personal code...' : 'Joining session...';
+      });
+      await _processScannedPayload(input['payload']!, personalCode: personal);
+    } finally {
+      if (mounted) setState(() => _manualEntryOpen = false);
+    }
+  }
+  Future<void> _processScannedPayload(String payload, {bool personalCode = false}) async {
+    if (!mounted) return;
     final scannerProfile = ref.read(userAppProfileStreamProvider).asData?.value;
-
     if (scannerProfile == null) {
       _showErrorDialog('Your profile could not be loaded. Please try again.');
       return;
     }
-
     try {
       final functions = ref.read(firebaseFunctionsProvider);
       final callable = functions.httpsCallable('validateQrCode');
-
       final result = await callable.call({
         'payload': payload,
       }).timeout(
@@ -140,29 +81,27 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
           );
         },
       );
-
       if (!mounted) return;
-
       final responseData = Map<String, dynamic>.from(result.data as Map);
       final String type = responseData['type'] as String;
       final Map<String, dynamic> data =
           Map<String, dynamic>.from(responseData['data'] as Map);
-
       if (type == 'user') {
+        if (personalCode && data['uid']?.toString() == FirebaseAuth.instance.currentUser?.uid) {
+          _showErrorDialog('You cannot use your own code to connect.');
+          return;
+        }
         await _scannerController.stop();
         await _handleUserScan(scannerProfile, data);
       } else if (type == 'session') {
         final sessionId = (data['sessionId'] ?? '').toString();
-
         if (sessionId.isEmpty) {
           _showErrorDialog('Invalid session QR. Session ID is missing.');
           return;
         }
-
         setState(() {
           _processingMessage = 'Joining session...';
         });
-
         await _logSessionCheckIn(sessionId);
       } else {
         _showErrorDialog('This QR is not a session QR.');
@@ -170,14 +109,17 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
     } catch (e, stackTrace) {
       debugPrint('QR Validation Error: $e');
       debugPrint('Stack trace: $stackTrace');
-
       if (!mounted) return;
-
+      if (personalCode) {
+        final message = e is FirebaseFunctionsException
+            ? e.message ?? 'Could not validate personal code. Please try again.'
+            : 'Could not validate personal code. Please try again.';
+        _showErrorDialog(message);
+        return;
+      }
       final handled = await _tryHandleLocalSessionCode(payload);
       if (handled) return;
-
       String errorMessage = 'Invalid session QR/code.';
-
       if (e.toString().contains('not-found')) {
         errorMessage = 'Session QR/code not found or expired.';
       } else if (e.toString().contains('unauthenticated')) {
@@ -185,26 +127,19 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       } else if (e.toString().contains('failed-precondition')) {
         errorMessage = 'This session is not currently active.';
       }
-
       _showErrorDialog(errorMessage);
     }
   }
-
   Future<bool> _tryHandleLocalSessionCode(String payload) async {
     try {
       String code = '';
       String sessionId = '';
-
       final cleanPayload = payload.trim();
-
       if (cleanPayload.startsWith('{')) {
         final decoded = jsonDecode(cleanPayload);
-
         if (decoded is Map) {
           final data = Map<String, dynamic>.from(decoded);
-
           final type = (data['type'] ?? data['qrType'] ?? '').toString();
-
           if (type == 'session_checkin' ||
               type == 'session_attendance' ||
               type == 'session') {
@@ -215,50 +150,39 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       } else {
         code = cleanPayload;
       }
-
       if (sessionId.isNotEmpty) {
         await _logSessionCheckIn(sessionId);
         return true;
       }
-
       if (code.trim().isEmpty) return false;
-
       final normalizedCode = code.trim().toUpperCase();
-
       final snapshot = await FirebaseFirestore.instance
           .collection('sessions')
           .where('checkInCode', isEqualTo: normalizedCode)
           .limit(1)
           .get();
-
       if (snapshot.docs.isEmpty) {
         _showErrorDialog('No session found for this code.');
         return true;
       }
-
       final foundSessionId = snapshot.docs.first.id;
-
       if (mounted) {
         setState(() {
           _processingMessage = 'Joining session...';
         });
       }
-
       await _logSessionCheckIn(foundSessionId);
-
       return true;
     } catch (e) {
       debugPrint('Local session code error: $e');
       return false;
     }
   }
-
   Future<void> _handleUserScan(
     dynamic scannerProfile,
     Map<String, dynamic> scannedUserData,
   ) async {
     if (!mounted) return;
-
     try {
       if (scannerProfile.role == 'admin' || scannerProfile.role == 'staff') {
         _showAdminStaffPopup(scannedUserData);
@@ -266,11 +190,9 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
         try {
           final functions = ref.read(firebaseFunctionsProvider);
           final callable = functions.httpsCallable('addScannedConnection');
-
           final result = await callable.call<Map<String, dynamic>>({
             'scannedUserId': scannedUserData['uid'],
           });
-
           if (result.data['message'] == 'User already connected') {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -294,7 +216,6 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
           }
         } catch (connectionError) {
           debugPrint('Connection error: $connectionError');
-
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -307,49 +228,36 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
             );
           }
         }
-
         await Future.delayed(const Duration(milliseconds: 100));
-
         if (!mounted) return;
-
         final userId = scannedUserData['uid'];
-
         await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => UserDetailsScreen(userId: userId),
           ),
         );
-
         if (mounted) {
           _resetScanner();
         }
       }
     } catch (e) {
       debugPrint('Error in _handleUserScan: $e');
-
       if (mounted) {
         _showErrorDialog('Failed to load user profile: ${e.toString()}');
       }
     }
   }
-
   Future<void> _logSessionCheckIn(String sessionId) async {
     if (!mounted) return;
-
     try {
       final functions = ref.read(firebaseFunctionsProvider);
       final callable = functions.httpsCallable('logSessionCheckIn');
-
       final result = await callable.call<Map<String, dynamic>>({
         'sessionId': sessionId,
       });
-
       if (!mounted) return;
-
       final returnedSessionData = result.data['session'];
-
       final allSessions = ref.read(sessionsStreamProvider).asData?.value ?? [];
-
       final session = allSessions.cast<Session>().firstWhere(
             (s) => s.id == returnedSessionData['id'],
             orElse: () => Session(
@@ -374,13 +282,9 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
               priority: returnedSessionData['priority'] ?? 3,
             ),
           );
-
       if (!mounted) return;
-
       Navigator.of(context).pop();
-
       final remoteConfig = ref.read(remoteConfigServiceProvider);
-
       if (remoteConfig.isChatEnabled) {
         Navigator.of(context).push(
           MaterialPageRoute(
@@ -388,7 +292,6 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
           ),
         );
       }
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Joined "${session.title}" successfully!'),
@@ -397,15 +300,11 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       );
     } catch (e) {
       debugPrint('Session Check-in Error: $e');
-
       if (!mounted) return;
-
       String errorMessage = 'Session check-in failed.';
-
       if (e.toString().contains('FirebaseFunctionsException')) {
         final messageMatch =
-            RegExp(r'message: (.+?)[,\]]').firstMatch(e.toString());
-
+            RegExp(r'message: (.+?)[,\\]]').firstMatch(e.toString());
         if (messageMatch != null) {
           errorMessage = messageMatch.group(1) ?? errorMessage;
         }
@@ -414,11 +313,9 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       } else if (e.toString().contains('not-found')) {
         errorMessage = 'Session not found.';
       }
-
       _showErrorDialog(errorMessage);
     }
   }
-
   void _showAdminStaffPopup(Map<String, dynamic> scannedUserData) {
     showDialog(
       context: context,
@@ -462,7 +359,6 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
             child: const Text('View Profile'),
             onPressed: () {
               Navigator.of(context).pop();
-
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (_) => UserDetailsScreen(
@@ -478,15 +374,11 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
               try {
                 final functions = ref.read(firebaseFunctionsProvider);
                 final callable = functions.httpsCallable('logEventCheckIn');
-
                 await callable.call<Map<String, dynamic>>({
                   'scannedUserId': scannedUserData['uid'],
                 });
-
                 if (!mounted) return;
-
                 Navigator.of(context).pop();
-
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('Checked in ${scannedUserData['name']}!'),
@@ -495,11 +387,8 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
                 );
               } catch (e) {
                 debugPrint('Event Check-in Error: $e');
-
                 if (!mounted) return;
-
                 Navigator.of(context).pop();
-
                 _showErrorDialog('Check-in failed.');
               }
             },
@@ -508,10 +397,8 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       ),
     ).then((_) => _resetScanner());
   }
-
   void _showErrorDialog(String message) {
     if (!mounted) return;
-
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -526,18 +413,15 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       ),
     ).then((_) => _resetScanner());
   }
-
   void _resetScanner() {
     if (mounted) {
       setState(() {
         _isProcessing = false;
         _processingMessage = 'Processing...';
       });
-
       _scannerController.start();
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -596,10 +480,10 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: _isProcessing ? null : _openManualQrDialog,
+                    onPressed: _isProcessing || _manualEntryOpen ? null : _openManualQrDialog,
                     icon: const Icon(Icons.keyboard_alt_outlined, size: 20),
                     label: const Text(
-                      'Enter Session Code Manually',
+                      'Enter Code',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -620,7 +504,7 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
                 ),
                 const SizedBox(height: 10),
                 const Text(
-                  'Use this for Chrome/Web testing or if camera is not working.',
+                  'Enter a personal code to connect, or a session code to join.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white70,
@@ -660,10 +544,83 @@ class _QRScannerScreenState extends ConsumerState<QRScannerScreen> {
       ),
     );
   }
-
   @override
   void dispose() {
     _scannerController.dispose();
     super.dispose();
   }
+}
+
+class _ScannerCodeDialog extends StatefulWidget {
+  const _ScannerCodeDialog();
+  @override
+  State<_ScannerCodeDialog> createState() => _ScannerCodeDialogState();
+}
+class _ScannerCodeDialogState extends State<_ScannerCodeDialog> {
+  final _controller = TextEditingController();
+  String _kind = 'personal';
+  String? _error;
+  void _submit() {
+    final value = _controller.text.trim().toUpperCase();
+    if (value.isEmpty) {
+      setState(() => _error = 'Please enter a code.');
+      return;
+    }
+    if (_kind == 'personal' && !RegExp(r'^[A-Z2-9]{10}$').hasMatch(value)) {
+      setState(() => _error = 'Enter the 10-character code shown below the QR.');
+      return;
+    }
+    Navigator.of(context).pop(<String, String>{'kind': _kind, 'payload': value});
+  }
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+    title: const Text('Enter Code', style: TextStyle(
+        fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.namaNavyBlue)),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DropdownButtonFormField<String>(
+          value: _kind,
+          decoration: const InputDecoration(labelText: 'Code Type'),
+          items: const [
+            DropdownMenuItem(value: 'personal', child: Text('Personal Code')),
+            DropdownMenuItem(value: 'session', child: Text('Session Code')),
+          ],
+          onChanged: (value) {
+            if (value == null) return;
+            setState(() { _kind = value; _error = null; _controller.clear(); });
+          },
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _controller,
+          autofocus: true,
+          autocorrect: false,
+          enableSuggestions: false,
+          textCapitalization: TextCapitalization.characters,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => _submit(),
+          decoration: InputDecoration(
+            hintText: _kind == 'personal' ? 'Code shown below the user’s QR' : 'Example: SES-123456',
+            errorText: _error,
+            filled: true, fillColor: const Color(0xFFF5F5F5),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none),
+          ),
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+      ElevatedButton(
+        onPressed: _submit,
+        style: ElevatedButton.styleFrom(backgroundColor: AppColors.namaNavyBlue,
+            foregroundColor: Colors.white),
+        child: const Text('Continue'),
+      ),
+    ],
+  );
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
 }

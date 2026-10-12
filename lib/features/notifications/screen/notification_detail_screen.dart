@@ -1,9 +1,9 @@
 // lib/features/notifications/screen/notification_detail_screen.dart
-import 'package:events_app_trueattempt/core/enums/notification_type.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/chat/screen/speaker_moderator_room_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,12 +11,10 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 class NotificationDetailScreen extends ConsumerStatefulWidget {
   final AppNotification notification;
-
   const NotificationDetailScreen({
     super.key,
     required this.notification,
   });
-
   @override
   ConsumerState<NotificationDetailScreen> createState() =>
       _NotificationDetailScreenState();
@@ -27,10 +25,9 @@ class _NotificationDetailScreenState
   late TextEditingController _titleController;
   late TextEditingController _subtitleController;
   late TextEditingController _bodyController;
-
   bool _isEditing = false;
   bool _isLoading = false;
-
+  String? _localMeetingStatus;
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _textMuted = Color(0xFF6B7280);
   static const Color _softPurple = Color(0xFFF1EEFB);
@@ -39,7 +36,6 @@ class _NotificationDetailScreenState
   @override
   void initState() {
     super.initState();
-
     _titleController = TextEditingController(text: widget.notification.title);
     _subtitleController =
         TextEditingController(text: widget.notification.subtitle ?? '');
@@ -69,71 +65,367 @@ class _NotificationDetailScreenState
   String get _sessionTitle {
     final fromModel = widget.notification.sessionTitle.trim();
     if (fromModel.isNotEmpty) return fromModel;
-
     final fromData =
         (widget.notification.data['sessionTitle'] ?? '').toString().trim();
-
     if (fromData.isNotEmpty) return fromData;
-
     if ((widget.notification.subtitle ?? '').trim().isNotEmpty) {
       return widget.notification.subtitle!.trim();
     }
-
     return widget.notification.eventName.trim();
   }
 
+  String get _meetingId {
+    return (widget.notification.data['meetingId'] ?? '').toString().trim();
+  }
+
+  String get _meetingStatus {
+    if (_localMeetingStatus != null &&
+        _localMeetingStatus!.trim().isNotEmpty) {
+      return _localMeetingStatus!.trim().toLowerCase();
+    }
+    final status = (widget.notification.data['status'] ??
+            widget.notification.data['meetingStatus'] ??
+            widget.notification.data['meeting_status'] ??
+            '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    if (status.isNotEmpty) return status;
+    return 'pending';
+  }
+
   bool get _hasQrPayload => _qrPayload.isNotEmpty;
-
   bool get _hasSessionCode => _sessionCode.isNotEmpty;
-
   bool get _hasQrAnnouncement => _hasQrPayload || _hasSessionCode;
 
-  Future<void> _copySessionCode() async {
-    if (_sessionCode.isEmpty) return;
+  Color _getNotificationColor() {
+    final title = widget.notification.title.toLowerCase();
+    final body = widget.notification.body.toLowerCase();
+    final type = widget.notification.type.name.toLowerCase();
+    if (title.contains('accepted') || type.contains('accepted')) {
+      return AppColors.successGreen;
+    }
+    if (title.contains('declined') ||
+        title.contains('cancelled') ||
+        type.contains('declined') ||
+        type.contains('cancelled')) {
+      return Colors.red;
+    }
+    if (type.contains('meeting') ||
+        title.contains('meeting') ||
+        body.contains('meeting')) {
+      return AppColors.namaNavyBlue;
+    }
+    if (type.contains('speaker') ||
+        title.contains('speaker room') ||
+        title.contains('speaker & moderator') ||
+        body.contains('speaker & moderator')) {
+      return AppColors.namaNavyBlue;
+    }
+    return AppColors.namaNavyBlue;
+  }
 
-    await Clipboard.setData(
-      ClipboardData(text: _sessionCode),
-    );
+  IconData _getNotificationIcon() {
+    final title = widget.notification.title.toLowerCase();
+    final body = widget.notification.body.toLowerCase();
+    final type = widget.notification.type.name.toLowerCase();
+    if (title.contains('accepted') || type.contains('accepted')) {
+      return Icons.check_circle_outline_rounded;
+    }
+    if (title.contains('declined') ||
+        title.contains('cancelled') ||
+        type.contains('declined') ||
+        type.contains('cancelled')) {
+      return Icons.cancel_outlined;
+    }
+    if (type.contains('meeting') ||
+        title.contains('meeting') ||
+        body.contains('meeting')) {
+      return Icons.handshake_outlined;
+    }
+    if (type.contains('speaker') ||
+        title.contains('speaker room') ||
+        title.contains('speaker & moderator') ||
+        body.contains('speaker & moderator')) {
+      return Icons.groups_2_outlined;
+    }
+    if (title.contains('qr') || body.contains('qr')) {
+      return Icons.qr_code_2_rounded;
+    }
+    if (title.contains('session') || body.contains('session')) {
+      return Icons.event_note_outlined;
+    }
+    return Icons.notifications_none_rounded;
+  }
 
+  String _getNotificationTypeLabel() {
+    final type = widget.notification.type.name.trim();
+    if (type.isEmpty) return 'Notification';
+    if (type.toLowerCase() == 'meetingrequest') return 'Meeting Request';
+    if (type.toLowerCase() == 'meetingaccepted') return 'Meeting Accepted';
+    if (type.toLowerCase() == 'meetingdeclined') return 'Meeting Declined';
+    if (type.toLowerCase() == 'speakermoderatorroom') return 'Speaker Room';
+    return type;
+  }
+
+  bool _isSpeakerRoomNotification() {
+    final title = widget.notification.title.toLowerCase();
+    final subtitle = (widget.notification.subtitle ?? '').toLowerCase();
+    final body = widget.notification.body.toLowerCase();
+    final type = widget.notification.type.name.toLowerCase();
+    final notificationCategory =
+        (widget.notification.data['notificationCategory'] ?? '')
+            .toString()
+            .toLowerCase();
+    final allText = '$title $subtitle $body $type $notificationCategory';
+    return allText.contains('speaker room') ||
+        allText.contains('speaker & moderator') ||
+        allText.contains('speaker moderator') ||
+        allText.contains('speaker and moderator') ||
+        allText.contains('speakermoderatorroom');
+  }
+
+  bool _isMeetingRequestNotification() {
+    final title = widget.notification.title.toLowerCase();
+    final subtitle = (widget.notification.subtitle ?? '').toLowerCase();
+    final body = widget.notification.body.toLowerCase();
+    final type = widget.notification.type.name.toLowerCase();
+    final notificationCategory =
+        (widget.notification.data['notificationCategory'] ?? '')
+            .toString()
+            .toLowerCase();
+    final allText = '$title $subtitle $body $type $notificationCategory';
+    return _meetingId.isNotEmpty &&
+        (allText.contains('meeting request') ||
+            allText.contains('meetingrequest') ||
+            allText.contains('meeting'));
+  }
+
+  bool _canRespondToMeetingRequest() {
+    return _isMeetingRequestNotification() && _meetingStatus == 'pending';
+  }
+
+  Future<void> _markSpeakerRoomNotificationsAsRead() async {
+    final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
+    if (userId == null) return;
+    final eventId =
+        (widget.notification.data['eventId'] ?? '').toString().trim();
+    final notificationsRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notifications');
+    Query<Map<String, dynamic>> query =
+        notificationsRef.where('isRead', isEqualTo: false);
+    if (eventId.isNotEmpty) {
+      query = query.where('eventId', isEqualTo: eventId);
+    }
+    final snapshot = await query.get();
+    if (snapshot.docs.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      final type = (data['type'] ?? '').toString().toLowerCase();
+      final title = (data['title'] ?? '').toString().toLowerCase();
+      final subtitle = (data['subtitle'] ?? '').toString().toLowerCase();
+      final body =
+          (data['body'] ?? data['message'] ?? '').toString().toLowerCase();
+      final notificationCategory = data['data'] is Map
+          ? (data['data']['notificationCategory'] ?? '')
+              .toString()
+              .toLowerCase()
+          : '';
+      final isSpeakerRoomNotification =
+          type.contains('speakermoderatorroom') ||
+              notificationCategory.contains('speakermoderatorroom') ||
+              title.contains('speaker room') ||
+              title.contains('speaker & moderator') ||
+              subtitle.contains('speaker & moderator') ||
+              body.contains('speaker & moderator room');
+      if (isSpeakerRoomNotification) {
+        batch.update(doc.reference, {
+          'isRead': true,
+          'readAt': FieldValue.serverTimestamp(),
+        });
+      }
+    }
+    await batch.commit();
+  }
+
+  Future<void> _openSpeakerRoom() async {
+    await _markSpeakerRoomNotificationsAsRead();
     if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Session code copied.'),
-        behavior: SnackBarBehavior.floating,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const SpeakerModeratorRoomScreen(),
       ),
     );
   }
 
+  Future<void> _respondToMeetingRequest(String status) async {
+    final meetingId = _meetingId;
+    if (meetingId.isEmpty) {
+      _showSnackBar('Meeting ID not found.');
+      return;
+    }
+    final cleanStatus = status.trim().toLowerCase();
+    if (cleanStatus != 'accepted' && cleanStatus != 'declined') {
+      _showSnackBar('Invalid meeting response.');
+      return;
+    }
+    setState(() => _isLoading = true);
+    try {
+      final meetingRef =
+          FirebaseFirestore.instance.collection('meetings').doc(meetingId);
+      final meetingDoc = await meetingRef.get();
+      if (!meetingDoc.exists) {
+        throw Exception('Meeting request not found.');
+      }
+      final meetingData = meetingDoc.data() ?? {};
+      final eventId =
+          (meetingData['eventId'] ?? widget.notification.data['eventId'] ?? '')
+              .toString();
+      final requesterId = (meetingData['requesterId'] ??
+              widget.notification.data['requesterId'] ??
+              '')
+          .toString();
+      final recipientId = (meetingData['recipientId'] ??
+              widget.notification.data['recipientId'] ??
+              '')
+          .toString();
+      final requesterInfo =
+          Map<String, dynamic>.from(meetingData['requesterInfo'] ?? {});
+      final recipientInfo =
+          Map<String, dynamic>.from(meetingData['recipientInfo'] ?? {});
+      await meetingRef.update({
+        'status': cleanStatus,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'respondedAt': FieldValue.serverTimestamp(),
+        'lastActionStatus': cleanStatus,
+      });
+      await _updateCurrentMeetingNotification(cleanStatus);
+      if (requesterId.isNotEmpty) {
+        final responderName =
+            (recipientInfo['name'] ?? 'Someone').toString().trim();
+        final requesterName =
+            (requesterInfo['name'] ?? 'User').toString().trim();
+        final isAccepted = cleanStatus == 'accepted';
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(requesterId)
+            .collection('notifications')
+            .add({
+          'eventId': eventId,
+          'title': isAccepted ? 'Meeting Accepted' : 'Meeting Declined',
+          'subtitle': responderName.isEmpty ? 'Meeting Update' : responderName,
+          'body': isAccepted
+              ? '${responderName.isEmpty ? 'Someone' : responderName} accepted your meeting request.'
+              : '${responderName.isEmpty ? 'Someone' : responderName} declined your meeting request.',
+          'timestamp': FieldValue.serverTimestamp(),
+          'isRead': false,
+          'type': isAccepted ? 'meetingAccepted' : 'meetingDeclined',
+          'targetRole': 'all',
+          'priority': isAccepted ? 'normal' : 'medium',
+          'data': {
+            'meetingId': meetingId,
+            'requesterId': requesterId,
+            'recipientId': recipientId,
+            'requesterName': requesterName,
+            'responderName': responderName,
+            'status': cleanStatus,
+            'notificationCategory':
+                isAccepted ? 'meetingAccepted' : 'meetingDeclined',
+          },
+        });
+      }
+      if (!mounted) return;
+      setState(() {
+        _localMeetingStatus = cleanStatus;
+        _isLoading = false;
+      });
+      _showSnackBar(
+        cleanStatus == 'accepted'
+            ? 'Meeting accepted.'
+            : 'Meeting declined.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showSnackBar('Failed to update meeting request: $e');
+    }
+  }
+
+  Future<void> _updateCurrentMeetingNotification(String status) async {
+    final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
+    if (userId == null) return;
+    final notificationId = widget.notification.id.trim();
+    if (notificationId.isNotEmpty) {
+      final notificationRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .doc(notificationId);
+      final doc = await notificationRef.get();
+      if (doc.exists) {
+        await notificationRef.set({
+          'isRead': true,
+          'meetingStatus': status,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'data': {
+            'status': status,
+          },
+        }, SetOptions(merge: true));
+        return;
+      }
+    }
+    final snapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .where('data.meetingId', isEqualTo: _meetingId)
+        .get();
+    if (snapshot.docs.isEmpty) return;
+    final batch = FirebaseFirestore.instance.batch();
+    for (final doc in snapshot.docs) {
+      batch.set(doc.reference, {
+        'isRead': true,
+        'meetingStatus': status,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'data': {
+          'status': status,
+        },
+      }, SetOptions(merge: true));
+    }
+    await batch.commit();
+  }
+
+  Future<void> _copySessionCode() async {
+    if (_sessionCode.isEmpty) return;
+    await Clipboard.setData(
+      ClipboardData(text: _sessionCode),
+    );
+    if (!mounted) return;
+    _showSnackBar('Session code copied.');
+  }
+
   Future<void> _saveChanges() async {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title cannot be empty')),
-      );
+      _showSnackBar('Title cannot be empty');
       return;
     }
-
     if (_bodyController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Message cannot be empty')),
-      );
+      _showSnackBar('Message cannot be empty');
       return;
     }
-
     setState(() => _isLoading = true);
-
     try {
       final sharedNotificationId =
           widget.notification.data['notificationId'] as String?;
-
       if (sharedNotificationId == null) {
         throw Exception(
           'Notification ID not found. This notification may not support editing.',
         );
       }
-
       final targetRole = widget.notification.targetRole;
-
       final usersQuery = targetRole == 'all'
           ? FirebaseFirestore.instance
               .collection('users')
@@ -142,12 +434,9 @@ class _NotificationDetailScreenState
               .collection('users')
               .where('status', isEqualTo: 'approved')
               .where('role', isEqualTo: targetRole);
-
       final usersSnapshot = await usersQuery.get();
-
       final batch = FirebaseFirestore.instance.batch();
       int updatedCount = 0;
-
       for (final userDoc in usersSnapshot.docs) {
         final notificationsSnapshot = await FirebaseFirestore.instance
             .collection('users')
@@ -156,10 +445,8 @@ class _NotificationDetailScreenState
             .where('data.notificationId', isEqualTo: sharedNotificationId)
             .limit(1)
             .get();
-
         if (notificationsSnapshot.docs.isNotEmpty) {
           final notificationRef = notificationsSnapshot.docs.first.reference;
-
           batch.update(notificationRef, {
             'title': _titleController.text.trim(),
             'subtitle': _subtitleController.text.trim().isEmpty
@@ -168,37 +455,20 @@ class _NotificationDetailScreenState
             'body': _bodyController.text.trim(),
             'data.editedAt': Timestamp.now(),
           });
-
           updatedCount++;
         }
       }
-
       await batch.commit();
-
       if (!mounted) return;
-
       setState(() {
         _isEditing = false;
         _isLoading = false;
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Notification updated for $updatedCount user(s)'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      _showSnackBar('Notification updated for $updatedCount user(s)');
     } catch (e) {
       if (!mounted) return;
-
       setState(() => _isLoading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to update notification: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnackBar('Failed to update notification: $e');
     }
   }
 
@@ -235,23 +505,17 @@ class _NotificationDetailScreenState
         );
       },
     );
-
     if (confirmed != true || !mounted) return;
-
     setState(() => _isLoading = true);
-
     try {
       final sharedNotificationId =
           widget.notification.data['notificationId'] as String?;
-
       if (sharedNotificationId == null) {
         throw Exception(
           'Notification ID not found. This notification may not support deletion.',
         );
       }
-
       final targetRole = widget.notification.targetRole;
-
       final usersQuery = targetRole == 'all'
           ? FirebaseFirestore.instance
               .collection('users')
@@ -260,12 +524,9 @@ class _NotificationDetailScreenState
               .collection('users')
               .where('status', isEqualTo: 'approved')
               .where('role', isEqualTo: targetRole);
-
       final usersSnapshot = await usersQuery.get();
-
       final batch = FirebaseFirestore.instance.batch();
       int deletedCount = 0;
-
       for (final userDoc in usersSnapshot.docs) {
         final notificationsSnapshot = await FirebaseFirestore.instance
             .collection('users')
@@ -274,36 +535,19 @@ class _NotificationDetailScreenState
             .where('data.notificationId', isEqualTo: sharedNotificationId)
             .limit(1)
             .get();
-
         if (notificationsSnapshot.docs.isNotEmpty) {
           batch.delete(notificationsSnapshot.docs.first.reference);
           deletedCount++;
         }
       }
-
       await batch.commit();
-
       if (!mounted) return;
-
       Navigator.pop(context, true);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Notification deleted for $deletedCount user(s)'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      _showSnackBar('Notification deleted for $deletedCount user(s)');
     } catch (e) {
       if (!mounted) return;
-
       setState(() => _isLoading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to delete notification: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnackBar('Failed to delete notification: $e');
     }
   }
 
@@ -316,16 +560,24 @@ class _NotificationDetailScreenState
     });
   }
 
+  void _showSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentUserAsync = ref.watch(userAppProfileStreamProvider);
-
     final isAdmin = currentUserAsync.when(
       data: (user) => user?.role.toLowerCase() == 'admin',
       loading: () => false,
       error: (_, __) => false,
     );
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -354,6 +606,7 @@ class _NotificationDetailScreenState
                               const SizedBox(height: 20),
                             ],
                             _buildMessageSection(),
+                            _buildActionButtons(),
                           ],
                         ],
                       ),
@@ -435,16 +688,16 @@ class _NotificationDetailScreenState
   }
 
   Widget _buildTopSummary() {
-    final type = widget.notification.type;
-
+    final color = _getNotificationColor();
+    final icon = _getNotificationIcon();
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
       decoration: BoxDecoration(
-        color: type.color.withOpacity(0.08),
+        color: color.withOpacity(0.08),
         border: Border(
           bottom: BorderSide(
-            color: type.color.withOpacity(0.25),
+            color: color.withOpacity(0.25),
           ),
         ),
       ),
@@ -456,15 +709,15 @@ class _NotificationDetailScreenState
             height: 54,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: type.color.withOpacity(0.08),
+              color: color.withOpacity(0.08),
               border: Border.all(
-                color: type.color,
+                color: color,
                 width: 1.5,
               ),
             ),
             child: Icon(
-              type.icon,
-              color: type.color,
+              icon,
+              color: color,
               size: 25,
             ),
           ),
@@ -474,9 +727,9 @@ class _NotificationDetailScreenState
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  type.displayName.toUpperCase(),
+                  _getNotificationTypeLabel().toUpperCase(),
                   style: TextStyle(
-                    color: type.color,
+                    color: color,
                     fontSize: 11.5,
                     letterSpacing: 1.1,
                     fontWeight: FontWeight.w800,
@@ -681,6 +934,186 @@ class _NotificationDetailScreenState
               fontSize: 13,
               height: 1.45,
               fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMeetingResponseButtons() {
+    if (_canRespondToMeetingRequest()) {
+      return Column(
+        children: [
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 38,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _respondToMeetingRequest('declined'),
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      size: 16,
+                    ),
+                    label: const Text(
+                      'Decline',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                      side: const BorderSide(
+                        color: Colors.red,
+                        width: 1.2,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: SizedBox(
+                  height: 38,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _respondToMeetingRequest('accepted'),
+                    icon: const Icon(
+                      Icons.check_rounded,
+                      size: 16,
+                    ),
+                    label: const Text(
+                      'Accept',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.successGreen,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+    if (_isMeetingRequestNotification() && _meetingStatus != 'pending') {
+      final accepted = _meetingStatus == 'accepted';
+      return Column(
+        children: [
+          const SizedBox(height: 22),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: accepted
+                  ? AppColors.successGreen.withOpacity(0.10)
+                  : Colors.red.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: accepted
+                    ? AppColors.successGreen.withOpacity(0.35)
+                    : Colors.red.withOpacity(0.35),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  accepted
+                      ? Icons.check_circle_outline
+                      : Icons.cancel_outlined,
+                  size: 18,
+                  color: accepted ? AppColors.successGreen : Colors.red,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  accepted ? 'Meeting accepted' : 'Meeting declined',
+                  style: TextStyle(
+                    color: accepted ? AppColors.successGreen : Colors.red,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        _buildMeetingResponseButtons(),
+        if (_isSpeakerRoomNotification()) ...[
+          const SizedBox(height: 22),
+          Center(
+            child: SizedBox(
+              width: 260,
+              height: 36,
+              child: ElevatedButton.icon(
+                onPressed: _openSpeakerRoom,
+                icon: const Icon(
+                  Icons.groups_2_outlined,
+                  size: 16,
+                ),
+                label: const Text(
+                  'Open Speaker Room',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.namaGoldenYellow,
+                  foregroundColor: AppColors.namaNavyBlue,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Center(
+          child: SizedBox(
+            width: 260,
+            height: 36,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.namaNavyBlue,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              child: const Text(
+                'Back to Notifications',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
         ),

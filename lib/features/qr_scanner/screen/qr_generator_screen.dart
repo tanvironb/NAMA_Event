@@ -9,12 +9,10 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class QRGeneratorScreen extends ConsumerWidget {
   const QRGeneratorScreen({super.key});
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final allSessionsAsync = ref.watch(sessionsStreamProvider);
     final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Generate Session QR')),
       body: allSessionsAsync.when(
@@ -41,7 +39,6 @@ class QRGeneratorScreen extends ConsumerWidget {
       ),
     );
   }
-
   void _showQRCodeDialog(BuildContext context, Session session) {
     final qrData = 'session:${session.id}';
     showDialog(
@@ -54,18 +51,14 @@ class QRGeneratorScreen extends ConsumerWidget {
           child: QrImageView(
             data: qrData,
             version: QrVersions.auto,
-            size: 200.0,
-            eyeStyle: const QrEyeStyle(
-              eyeShape: QrEyeShape.square,
-              color: AppColors.navyBlue,
-            ),
-            dataModuleStyle: const QrDataModuleStyle(
-              dataModuleShape: QrDataModuleShape.square,
-              color: AppColors.darkGray,
-            ),
+            size: 200,
+            eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square,color: AppColors.navyBlue),
+            dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square,color: AppColors.darkGray),
           ),
         ),
-        actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close'))],
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+        ],
       ),
     );
   }

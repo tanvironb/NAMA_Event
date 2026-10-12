@@ -9,6 +9,7 @@ import 'firebase_options.dart';
 import 'utils/seed_data.dart';
 import 'utils/test_live_session.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/core/services/local_notification_service.dart';
 
 /// Handles Firebase messages while the app is in the background.
 ///
@@ -39,6 +40,14 @@ Future<void> main() async {
 
   FirebaseMessaging.onBackgroundMessage(
     _firebaseMessagingBackgroundHandler,
+  );
+
+  await LocalNotificationService.initialize();
+
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
   );
 
   // ============================================================

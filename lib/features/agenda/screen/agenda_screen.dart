@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:collection/collection.dart';
@@ -11,13 +12,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:intl/intl.dart';
 
-class AgendaScreen extends ConsumerWidget {
+class AgendaScreen extends ConsumerStatefulWidget {
   const AgendaScreen({super.key});
 
   static const Color _primaryColor = Color(0xFF0B0B83);
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AgendaScreen> createState() => _AgendaScreenState();
+}
+
+class _AgendaScreenState extends ConsumerState<AgendaScreen> {
+  Timer? _statusRefreshTimer;
+  DateTime _now = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _statusRefreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) {
+        if (!mounted) return;
+
+        setState(() {
+          _now = DateTime.now();
+        });
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _statusRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final sessionsAsyncValue = ref.watch(sessionsStreamProvider);
     final userProfileAsync = ref.watch(userAppProfileStreamProvider);
 
@@ -63,7 +94,7 @@ class AgendaScreen extends ConsumerWidget {
                 title: const Text(
                   'Event Agenda',
                   style: TextStyle(
-                    color: _primaryColor,
+                    color: AgendaScreen._primaryColor,
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                   ),
@@ -73,7 +104,7 @@ class AgendaScreen extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(18, 8, 18, 92),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                        (context, dayIndex) {
+                    (context, dayIndex) {
                       final dayKey = groupedSessions.keys.elementAt(dayIndex);
                       final daySessions = groupedSessions[dayKey]!;
                       final dayDate = DateTime.parse(dayKey);
@@ -89,6 +120,7 @@ class AgendaScreen extends ConsumerWidget {
                               sessions: daySessions,
                               dayIndex: dayIndex,
                               isStaff: isStaff,
+                              now: _now,
                             ),
                           ),
                         ),
@@ -115,12 +147,14 @@ class _DaySection extends StatelessWidget {
   final List<Session> sessions;
   final int dayIndex;
   final bool isStaff;
+  final DateTime now;
 
   const _DaySection({
     required this.date,
     required this.sessions,
     required this.dayIndex,
     required this.isStaff,
+    required this.now,
   });
 
   void _openSession(BuildContext context, Session session) {
@@ -199,6 +233,7 @@ class _DaySection extends StatelessWidget {
               child: _AgendaSessionCard(
                 session: session,
                 isStaff: isStaff,
+                now: now,
                 onTap: () => _openSession(context, session),
               ),
             );
@@ -212,11 +247,13 @@ class _DaySection extends StatelessWidget {
 class _AgendaSessionCard extends StatelessWidget {
   final Session session;
   final bool isStaff;
+  final DateTime now;
   final VoidCallback onTap;
 
   const _AgendaSessionCard({
     required this.session,
     required this.isStaff,
+    required this.now,
     required this.onTap,
   });
 
@@ -226,7 +263,6 @@ class _AgendaSessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
     final isActive =
         now.isAfter(session.startTime) && now.isBefore(session.endTime);
     final hasEnded = now.isAfter(session.endTime);

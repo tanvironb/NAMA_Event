@@ -7,10 +7,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/services/app_usage_tracking_service.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+
 import 'package:events_app_trueattempt/features/home/screen/attendee_shell.dart';
 import 'package:events_app_trueattempt/features/home/screen/staff_shell.dart';
-import 'package:events_app_trueattempt/features/speaker/screen/speaker_shell.dart';
 import 'package:events_app_trueattempt/features/home/screen/admin_shell.dart';
+import 'package:events_app_trueattempt/features/speaker/screen/speaker_shell.dart';
+
 import 'package:events_app_trueattempt/common_widgets/in_app_notification_handler.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/features/privacy/widgets/privacy_selection_dialog.dart';
@@ -85,6 +87,7 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
     if (!mounted) return;
 
     final user = ref.read(firebaseAuthProvider).currentUser;
+
     if (user == null) return;
 
     try {
@@ -135,6 +138,7 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
     if (_privacyDialogShown || !mounted) return;
 
     if (_lastDialogCheckedUid == uid) return;
+
     _lastDialogCheckedUid = uid;
 
     final privacySelectedAt = userData['privacySelectedAt'];
@@ -381,26 +385,18 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
   Widget _getShellByRole(String role) {
     switch (role) {
       case 'admin':
-        return AdminShell(
-          key: ValueKey('admin_shell_$role'),
-        );
+        return const AdminShell();
 
       case 'speaker':
       case 'moderator':
-        return SpeakerShell(
-          key: ValueKey('speaker_shell_$role'),
-        );
+        return const SpeakerShell();
 
       case 'staff':
-        return StaffShell(
-          key: ValueKey('staff_shell_$role'),
-        );
+        return const StaffShell();
 
       case 'attendee':
       default:
-        return AttendeeShell(
-          key: ValueKey('attendee_shell_$role'),
-        );
+        return const AttendeeShell();
     }
   }
 

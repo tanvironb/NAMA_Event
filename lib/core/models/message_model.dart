@@ -4,11 +4,18 @@ class Message {
   final String id;
   final String text;
   final String senderId;
-  final String senderName; // Denormalized for easier display
-  final String senderImageUrl; // Denormalized for easier display
-  final String senderRole; // User role (attendee, speaker, staff, admin) for color coding
+  final String senderName;
+  final String senderImageUrl;
+  final String senderRole;
   final Timestamp timestamp;
-  final List<String> readBy; // List of user IDs who have read this message
+  final List<String> readBy;
+
+  // New fields for PDF/image/material sharing
+  final String messageType; // text, image, file
+  final String fileUrl;
+  final String fileName;
+  final String fileType; // image, pdf, file
+  final int fileSize;
 
   Message({
     required this.id,
@@ -19,33 +26,78 @@ class Message {
     required this.senderRole,
     required this.timestamp,
     List<String>? readBy,
+    this.messageType = 'text',
+    this.fileUrl = '',
+    this.fileName = '',
+    this.fileType = '',
+    this.fileSize = 0,
   }) : readBy = readBy ?? [];
 
   factory Message.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
+
     if (data == null) {
       throw StateError('Missing data for message ${doc.id}');
     }
-    
-    // Handle null timestamp (serverTimestamp() is null until written)
+
     final timestampData = data['timestamp'];
-    final timestamp = timestampData is Timestamp 
-        ? timestampData 
-        : Timestamp.now(); // Fallback for pending messages
-    
+
+    final Timestamp timestamp = timestampData is Timestamp
+        ? timestampData
+        : Timestamp.now();
+
     return Message(
       id: doc.id,
-      text: data['text'] as String,
-      senderId: data['senderId'] as String,
-      senderName: data['senderName'] as String? ?? 'User',
-      senderImageUrl: data['senderImageUrl'] as String? ?? '',
-      senderRole: data['senderRole'] as String? ?? 'attendee',
+      text: (data['text'] ?? '').toString(),
+      senderId: (data['senderId'] ?? '').toString(),
+      senderName: (data['senderName'] ?? 'User').toString(),
+      senderImageUrl: (data['senderImageUrl'] ?? '').toString(),
+      senderRole: (data['senderRole'] ?? 'attendee').toString(),
       timestamp: timestamp,
       readBy: List<String>.from(data['readBy'] ?? []),
+
+      // New file/material fields
+      messageType: (data['messageType'] ?? 'text').toString(),
+      fileUrl: (data['fileUrl'] ?? '').toString(),
+      fileName: (data['fileName'] ?? '').toString(),
+      fileType: (data['fileType'] ?? '').toString(),
+      fileSize: data['fileSize'] is int ? data['fileSize'] as int : 0,
     );
   }
-  
-  /// Check if a specific user has read this message
+
+  bool get isTextMessage {
+    return messageType == 'text' || fileUrl.isEmpty;
+  }
+
+  bool get isImageMessage {
+    return messageType == 'image' || fileType == 'image';
+  }
+
+  bool get isFileMessage {
+    return messageType == 'file' || fileUrl.isNotEmpty;
+  }
+
+  bool get isPdfFile {
+    return fileType.toLowerCase() == 'pdf' ||
+        fileName.toLowerCase().endsWith('.pdf');
+  }
+
+  String get readableFileSize {
+    if (fileSize <= 0) {
+      return '';
+    }
+
+    if (fileSize < 1024) {
+      return '$fileSize B';
+    }
+
+    if (fileSize < 1024 * 1024) {
+      return '${(fileSize / 1024).toStringAsFixed(1)} KB';
+    }
+
+    return '${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
   bool isReadBy(String userId) {
     return readBy.contains(userId);
   }

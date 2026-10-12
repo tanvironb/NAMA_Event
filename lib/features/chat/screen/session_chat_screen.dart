@@ -11,12 +11,10 @@ import 'package:events_app_trueattempt/config/app_colors.dart';
 
 class SessionChatScreen extends ConsumerStatefulWidget {
   final Session session;
-
   const SessionChatScreen({
     super.key,
     required this.session,
   });
-
   @override
   ConsumerState<SessionChatScreen> createState() => _SessionChatScreenState();
 }
@@ -30,7 +28,6 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
   ) async {
     final chatRepo = ref.read(chatRepositoryProvider);
     final newState = !currentSession.isChatEnabled;
-
     if (currentSession.isAdminLocked && userRole == 'speaker') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -40,28 +37,22 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
       );
       return;
     }
-
-    final closedByRole = userRole == 'admin' ? 'admin' : 'speaker';
-
+    final closedByRole = userRole == 'admin' ? 'admin' : userRole;
     try {
       await chatRepo.toggleChatEnabled(
         currentSession.id,
         newState,
         closedByRole,
       );
-
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(newState ? 'Chat opened' : 'Chat closed'),
-          backgroundColor:
-              newState ? AppColors.successGreen : AppColors.errorRed,
+          backgroundColor: newState ? AppColors.successGreen : AppColors.errorRed,
         ),
       );
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to update chat status: $e'),
@@ -72,12 +63,10 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
 
   Future<void> _muteUser(String userId) async {
     final chatRepo = ref.read(chatRepositoryProvider);
-
     try {
       await chatRepo.muteUser(widget.session.id, userId);
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to mute user: $e')),
       );
@@ -86,12 +75,10 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
 
   Future<void> _unmuteUser(String userId) async {
     final chatRepo = ref.read(chatRepositoryProvider);
-
     try {
       await chatRepo.unmuteUser(widget.session.id, userId);
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to unmute user: $e')),
       );
@@ -100,12 +87,10 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
 
   Future<void> _deleteMessage(String messageId) async {
     final chatRepo = ref.read(chatRepositoryProvider);
-
     try {
       await chatRepo.deleteMessage(widget.session.id, messageId);
     } catch (e) {
       if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to delete message: $e')),
       );
@@ -118,30 +103,22 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
   ) async {
     if (!session.hasEnded) return;
     if (_hasShownFeedbackOnce) return;
-
     final currentUser = ref.read(userAppProfileStreamProvider).asData?.value;
     if (currentUser == null) return;
-
     final isAdmin = currentUser.role == 'admin';
     final isSessionSpeaker = session.speakerIds.contains(userId);
-
-    if (isAdmin || isSessionSpeaker) return;
+    final isSessionModerator = session.moderatorIds.contains(userId);
+    if (isAdmin || isSessionSpeaker || isSessionModerator) return;
     if (!session.checkedInAttendees.contains(userId)) return;
-
     final feedbackRepo = FeedbackRepository();
     final feedbackStatus = await feedbackRepo.getFeedbackStatus(
       userId: userId,
       sessionId: session.id,
     );
-
     if (!feedbackStatus.shouldShowPrompt) return;
-
     _hasShownFeedbackOnce = true;
-
     await Future.delayed(const Duration(milliseconds: 500));
-
     if (!mounted) return;
-
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -235,8 +212,7 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
               if (currentSession.uniqueParticipants.isNotEmpty)
                 _buildAnalyticsRow(
                   'Avg Messages/User',
-                  currentSession.averageMessagesPerParticipant
-                      .toStringAsFixed(1),
+                  currentSession.averageMessagesPerParticipant.toStringAsFixed(1),
                 ),
               const Divider(height: 20),
               _analyticsSectionTitle(context, 'Moderation'),
@@ -285,10 +261,8 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
   @override
   Widget build(BuildContext context) {
     final sessionAsync = ref.watch(sessionStreamProvider(widget.session.id));
-    final messagesAsync =
-        ref.watch(sessionChatStreamProvider(widget.session.id));
+    final messagesAsync = ref.watch(sessionChatStreamProvider(widget.session.id));
     final currentUserAsync = ref.watch(userAppProfileStreamProvider);
-
     return sessionAsync.when(
       data: (currentSession) {
         if (currentSession == null) {
@@ -302,7 +276,6 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
             ),
           );
         }
-
         return currentUserAsync.when(
           data: (currentUser) {
             if (currentUser == null) {
@@ -316,16 +289,19 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                 ),
               );
             }
-
-            final bool isAdmin = currentUser.role == 'admin';
-            final bool isSessionSpeaker =
-                currentSession.speakerIds.contains(currentUser.uid);
-            final bool canModerate = isAdmin || isSessionSpeaker;
-
+            final role = currentUser.role.toLowerCase().trim();
+            final bool isAdmin = role == 'admin';
+            final bool isStaff = role == 'staff';
+            final bool isSessionSpeaker = currentSession.speakerIds.contains(currentUser.uid);
+            final bool isSessionModerator = currentSession.moderatorIds.contains(currentUser.uid);
+            final bool canModerate = isAdmin || isStaff || isSessionSpeaker || isSessionModerator;
+            final List<String> sessionModeratorsAndSpeakers = [
+              ...currentSession.speakerIds,
+              ...currentSession.moderatorIds,
+            ];
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _checkAndShowFeedbackDialog(currentSession, currentUser.uid);
             });
-
             return Scaffold(
               backgroundColor: const Color(0xFFF8F8F8),
               body: SafeArea(
@@ -337,23 +313,18 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                       actions: [
                         if (canModerate && !currentSession.hasEnded)
                           _HeaderIconButton(
-                            icon: currentSession.isChatEnabled
-                                ? Icons.lock_open
-                                : Icons.lock,
-                            color: currentSession.isChatEnabled
-                                ? AppColors.successGreen
-                                : AppColors.errorRed,
+                            icon: currentSession.isChatEnabled ? Icons.lock_open : Icons.lock,
+                            color: currentSession.isChatEnabled ? AppColors.successGreen : AppColors.errorRed,
                             onTap: () => _toggleChatEnabled(
                               currentSession,
-                              currentUser.role,
+                              role,
                             ),
                           ),
                         if (canModerate)
                           _HeaderIconButton(
                             icon: Icons.analytics_outlined,
                             color: AppColors.namaNavyBlue,
-                            onTap: () =>
-                                _showAnalyticsDialog(context, currentSession),
+                            onTap: () => _showAnalyticsDialog(context, currentSession),
                           ),
                       ],
                     ),
@@ -366,11 +337,10 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                     else if (!currentSession.isChatEnabled)
                       _StatusBanner(
                         icon: Icons.lock,
-                        text: currentSession.closedBy.isNotEmpty
-                            ? 'Chat closed by ${currentSession.closedBy}'
-                            : 'Chat is closed',
+                        text: currentSession.closedBy.isNotEmpty ? 'Chat closed by ${currentSession.closedBy}' : 'Chat is closed',
                         color: AppColors.warningAmber,
                       ),
+                    const _PinnedHouseRule(),
                     Expanded(
                       child: messagesAsync.when(
                         data: (messages) {
@@ -387,10 +357,7 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                                   const SizedBox(height: 12),
                                   Text(
                                     'No messages yet',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                           color: Colors.grey.shade600,
                                           fontSize: 15,
                                           fontWeight: FontWeight.w600,
@@ -398,11 +365,8 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
-                                    'Be the first to say something!',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.copyWith(
+                                    'Start a respectful session discussion.',
+                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                           color: Colors.grey.shade500,
                                           fontSize: 12,
                                         ),
@@ -411,7 +375,6 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                               ),
                             );
                           }
-
                           return ListView.builder(
                             reverse: true,
                             padding: const EdgeInsets.symmetric(
@@ -422,24 +385,16 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                             itemBuilder: (context, index) {
                               final message = messages[index];
                               final isMe = message.senderId == currentUser.uid;
-                              final isMessageSenderMuted =
-                                  currentSession.isUserMuted(message.senderId);
-
+                              final isMessageSenderMuted = currentSession.isUserMuted(message.senderId);
                               return ChatBubble(
                                 message: message,
                                 isMe: isMe,
-                                sessionSpeakerIds: currentSession.speakerIds,
+                                sessionSpeakerIds: sessionModeratorsAndSpeakers,
                                 isUserMuted: isMessageSenderMuted,
                                 isSessionChat: true,
-                                onMuteUser: canModerate && !isMe
-                                    ? () => _muteUser(message.senderId)
-                                    : null,
-                                onUnmuteUser: canModerate && !isMe
-                                    ? () => _unmuteUser(message.senderId)
-                                    : null,
-                                onDeleteMessage: canModerate && !isMe
-                                    ? () => _deleteMessage(message.id)
-                                    : null,
+                                onMuteUser: canModerate && !isMe ? () => _muteUser(message.senderId) : null,
+                                onUnmuteUser: canModerate && !isMe ? () => _unmuteUser(message.senderId) : null,
+                                onDeleteMessage: (isMe || canModerate) ? () => _deleteMessage(message.id) : null,
                               );
                             },
                           );
@@ -469,10 +424,7 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
                                 Text(
                                   err.toString(),
                                   textAlign: TextAlign.center,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(fontSize: 12),
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12),
                                 ),
                               ],
                             ),
@@ -552,7 +504,6 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final difference = now.difference(time);
-
     if (difference.inMinutes < 1) {
       return 'Just now';
     } else if (difference.inMinutes < 60) {
@@ -560,9 +511,63 @@ class _SessionChatScreenState extends ConsumerState<SessionChatScreen> {
     } else if (difference.inHours < 24) {
       return '${difference.inHours}h ago';
     } else {
-      return '${time.hour.toString().padLeft(2, '0')}:'
-          '${time.minute.toString().padLeft(2, '0')}';
+      return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
     }
+  }
+}
+
+class _PinnedHouseRule extends StatelessWidget {
+  const _PinnedHouseRule();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF7EA),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.namaGoldenYellow.withOpacity(0.45),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.push_pin_rounded,
+            color: AppColors.namaGoldenYellow,
+            size: 18,
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: RichText(
+              text: const TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Pinned: ',
+                    style: TextStyle(
+                      color: AppColors.namaNavyBlue,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  TextSpan(
+                    text: 'This chat is for session discussion, questions, and respectful collaboration.',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 12.5,
+                      height: 1.35,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -570,13 +575,11 @@ class _ChatHeader extends StatelessWidget {
   final String title;
   final VoidCallback onBack;
   final List<Widget> actions;
-
   const _ChatHeader({
     required this.title,
     required this.onBack,
     this.actions = const [],
   });
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -615,13 +618,11 @@ class _HeaderIconButton extends StatelessWidget {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
-
   const _HeaderIconButton({
     required this.icon,
     required this.color,
     required this.onTap,
   });
-
   @override
   Widget build(BuildContext context) {
     return IconButton(
@@ -641,14 +642,12 @@ class _StatusBanner extends StatelessWidget {
   final String text;
   final Color color;
   final bool compact;
-
   const _StatusBanner({
     required this.icon,
     required this.text,
     required this.color,
     this.compact = false,
   });
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -695,12 +694,10 @@ class _StatusBanner extends StatelessWidget {
 class _SimpleStateScaffold extends StatelessWidget {
   final String title;
   final Widget child;
-
   const _SimpleStateScaffold({
     required this.title,
     required this.child,
   });
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

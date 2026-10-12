@@ -232,15 +232,36 @@ class _AdminWebAttendanceScreenState
           .where('eventIds', arrayContains: widget.eventId)
           .get();
 
+      final registrationCollection = firestore
+          .collection('events')
+          .doc(widget.eventId)
+          .collection('registrations');
+
+      final activeUserIds =
+          usersSnapshot.docs.map((document) => document.id).toSet();
+
+      final existingRegistrations =
+          await registrationCollection.get();
+
       final batch = firestore.batch();
+
+      for (final registrationDoc in existingRegistrations.docs) {
+        final registrationUserId =
+            (registrationDoc.data()['userId'] ??
+                    registrationDoc.data()['uid'] ??
+                    registrationDoc.id)
+                .toString()
+                .trim();
+
+        if (!activeUserIds.contains(registrationUserId)) {
+          batch.delete(registrationDoc.reference);
+        }
+      }
 
       for (final userDoc in usersSnapshot.docs) {
         final userData = userDoc.data();
-        final registrationReference = firestore
-            .collection('events')
-            .doc(widget.eventId)
-            .collection('registrations')
-            .doc(userDoc.id);
+        final registrationReference =
+            registrationCollection.doc(userDoc.id);
 
         final normalizedRole = _normalizeRole(
           (userData['role'] ??
@@ -530,6 +551,41 @@ class _AdminWebAttendanceScreenState
         .snapshots();
   }
 
+  Stream<QuerySnapshot<Map<String, dynamic>>>
+      _eventUsersStream() {
+    return FirebaseFirestore.instance
+        .collection('users')
+        .where('eventIds', arrayContains: widget.eventId)
+        .snapshots();
+  }
+
+  String _registrationUserId(
+    QueryDocumentSnapshot<Map<String, dynamic>> document,
+  ) {
+    final data = document.data();
+    final userId = (data['userId'] ??
+            data['uid'] ??
+            data['userUID'] ??
+            data['user_id'] ??
+            '')
+        .toString()
+        .trim();
+    if (userId.isNotEmpty) return userId;
+    return document.id;
+  }
+
+  List<QueryDocumentSnapshot<Map<String, dynamic>>>
+      _activeRegistrationsOnly({
+    required List<QueryDocumentSnapshot<Map<String, dynamic>>>
+        registrations,
+    required Set<String> activeUserIds,
+  }) {
+    return registrations.where((document) {
+      final userId = _registrationUserId(document);
+      return activeUserIds.contains(userId);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<_AttendanceReportData>(
@@ -700,138 +756,178 @@ class _AdminWebAttendanceScreenState
   }
 
   Widget _buildRegistrationPage() {
-    return StreamBuilder<
-        QuerySnapshot<Map<String, dynamic>>>(
-      stream: _registrationsStream(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _eventUsersStream(),
+      builder: (context, usersSnapshot) {
+        if (usersSnapshot.hasError) {
           return _AttendanceErrorState(
-            message: snapshot.error.toString(),
+            message: usersSnapshot.error.toString(),
             onRetry: () => setState(() {}),
           );
         }
 
-        final registrations =
-            snapshot.data?.docs ?? const [];
-        final filtered =
-            _filterRegistrations(registrations);
-
-        final includedCount = registrations
-            .where(
-              (document) =>
-                  document.data()['includedInReport'] ==
-                  true,
-            )
-            .length;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _RegistrationBanner(
-              eventName: widget.eventName,
-              registrationCount:
-                  registrations.length,
-              includedCount: includedCount,
+        if (usersSnapshot.connectionState == ConnectionState.waiting &&
+            !usersSnapshot.hasData) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: AdminWebTheme.primary,
             ),
-            const SizedBox(height: 18),
-            _RegistrationSummaryGrid(
-              registrations: registrations,
-            ),
-            const SizedBox(height: 18),
-            _ToolbarCard(
-              searchController:
-                  _registrationSearchController,
-              searchHint:
-                  'Search registrations by name, email, or role',
-              selectedFilter:
-                  _selectedRegistrationFilter,
-              filters: const [
-                'All',
-                'Included',
-                'Not Included',
-                'Attendees',
-                'Speakers',
-                'Moderators',
-                'Staff',
-              ],
-              onSearchChanged: (value) {
-                setState(
-                  () =>
-                      _registrationSearchQuery = value,
-                );
-              },
-              onFilterChanged: (value) {
-                setState(
-                  () =>
-                      _selectedRegistrationFilter = value,
-                );
-              },
-              actions: [
-                OutlinedButton.icon(
-                  onPressed: _isSyncingRegistrations
-                      ? null
-                      : _syncExistingUsers,
-                  icon: _isSyncingRegistrations
-                      ? const SizedBox(
-                          width: 15,
-                          height: 15,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.sync_rounded,
-                          size: 17,
-                        ),
-                  label: Text(
-                    _isSyncingRegistrations
-                        ? 'Syncing...'
-                        : 'Sync Event Users',
-                  ),
+          );
+        }
+
+        final activeUserIds =
+            (usersSnapshot.data?.docs ?? const [])
+                .map((document) => document.id)
+                .toSet();
+
+        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+          stream: _registrationsStream(),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return _AttendanceErrorState(
+                message: snapshot.error.toString(),
+                onRetry: () => setState(() {}),
+              );
+            }
+
+            if (snapshot.connectionState == ConnectionState.waiting &&
+                !snapshot.hasData) {
+              return const Center(
+                child: CircularProgressIndicator(
+                  color: AdminWebTheme.primary,
                 ),
-                FilledButton.icon(
-                  onPressed:
-                      _isAddingAllToReport ||
-                              registrations.isEmpty
+              );
+            }
+
+            final allRegistrationDocs =
+                snapshot.data?.docs ?? const [];
+
+            final registrations = _activeRegistrationsOnly(
+              registrations: allRegistrationDocs,
+              activeUserIds: activeUserIds,
+            );
+
+            final filtered =
+                _filterRegistrations(registrations);
+
+            final includedCount = registrations
+                .where(
+                  (document) =>
+                      document.data()['includedInReport'] ==
+                      true,
+                )
+                .length;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _RegistrationBanner(
+                  eventName: widget.eventName,
+                  registrationCount:
+                      registrations.length,
+                  includedCount: includedCount,
+                ),
+                const SizedBox(height: 18),
+                _RegistrationSummaryGrid(
+                  registrations: registrations,
+                ),
+                const SizedBox(height: 18),
+                _ToolbarCard(
+                  searchController:
+                      _registrationSearchController,
+                  searchHint:
+                      'Search registrations by name, email, or role',
+                  selectedFilter:
+                      _selectedRegistrationFilter,
+                  filters: const [
+                    'All',
+                    'Included',
+                    'Not Included',
+                    'Attendees',
+                    'Speakers',
+                    'Moderators',
+                    'Staff',
+                  ],
+                  onSearchChanged: (value) {
+                    setState(
+                      () =>
+                          _registrationSearchQuery = value,
+                    );
+                  },
+                  onFilterChanged: (value) {
+                    setState(
+                      () =>
+                          _selectedRegistrationFilter = value,
+                    );
+                  },
+                  actions: [
+                    OutlinedButton.icon(
+                      onPressed: _isSyncingRegistrations
                           ? null
-                          : () =>
-                              _addAllRegistrationsToReport(
-                                registrations,
+                          : _syncExistingUsers,
+                      icon: _isSyncingRegistrations
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child:
+                                  CircularProgressIndicator(
+                                strokeWidth: 2,
                               ),
-                  icon: _isAddingAllToReport
-                      ? const SizedBox(
-                          width: 15,
-                          height: 15,
-                          child:
-                              CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(
-                          Icons.playlist_add_check_rounded,
-                          size: 17,
-                        ),
-                  label: Text(
-                    _isAddingAllToReport
-                        ? 'Adding...'
-                        : 'Add All to Report',
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor:
-                        AdminWebTheme.primary,
-                  ),
+                            )
+                          : const Icon(
+                              Icons.sync_rounded,
+                              size: 17,
+                            ),
+                      label: Text(
+                        _isSyncingRegistrations
+                            ? 'Syncing...'
+                            : 'Sync Event Users',
+                      ),
+                    ),
+                    FilledButton.icon(
+                      onPressed:
+                          _isAddingAllToReport ||
+                                  registrations.isEmpty
+                              ? null
+                              : () =>
+                                  _addAllRegistrationsToReport(
+                                    registrations,
+                                  ),
+                      icon: _isAddingAllToReport
+                          ? const SizedBox(
+                              width: 15,
+                              height: 15,
+                              child:
+                                  CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.playlist_add_check_rounded,
+                              size: 17,
+                            ),
+                      label: Text(
+                        _isAddingAllToReport
+                            ? 'Adding...'
+                            : 'Add All to Report',
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor:
+                            AdminWebTheme.primary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                _RegistrationsTableCard(
+                  registrations: filtered,
+                  onIncludeChanged:
+                      _toggleRegistrationReport,
                 ),
               ],
-            ),
-            const SizedBox(height: 18),
-            _RegistrationsTableCard(
-              registrations: filtered,
-              onIncludeChanged:
-                  _toggleRegistrationReport,
-            ),
-          ],
+            );
+          },
         );
       },
     );
@@ -1590,16 +1686,17 @@ class _AttendanceTableCard extends StatelessWidget {
                         ),
                       ),
                       DataCell(
-                        participant.isAttendee
-                            ? _StatusBadge(
-                                label:
-                                    participant.hasEventCheckIn
-                                        ? 'Present'
-                                        : 'Absent',
-                                positive: participant
-                                    .hasEventCheckIn,
+                        participant.hasEventCheckIn
+                            ? const _StatusBadge(
+                                label: 'Present',
+                                positive: true,
                               )
-                            : const Text('Not Required'),
+                            : participant.isAttendee
+                                ? const _StatusBadge(
+                                    label: 'Absent',
+                                    positive: false,
+                                  )
+                                : const Text('Not Required'),
                       ),
                       DataCell(
                         Text(
@@ -2103,13 +2200,15 @@ class _ParticipantMobileCard extends StatelessWidget {
               _RoleBadge(
                 role: participant.displayRole,
               ),
-              if (participant.isAttendee)
-                _StatusBadge(
-                  label: participant.hasEventCheckIn
-                      ? 'Present'
-                      : 'Absent',
-                  positive:
-                      participant.hasEventCheckIn,
+              if (participant.hasEventCheckIn)
+                const _StatusBadge(
+                  label: 'Present',
+                  positive: true,
+                )
+              else if (participant.isAttendee)
+                const _StatusBadge(
+                  label: 'Absent',
+                  positive: false,
                 ),
               _CertificateStatusBadge(
                 participant: participant,

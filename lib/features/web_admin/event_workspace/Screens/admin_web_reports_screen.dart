@@ -1,8 +1,12 @@
 // lib/features/web_admin/event_workspace/Screens/admin_web_reports_screen.dart
 import 'dart:async';
+// This screen is used only by the Flutter Web admin.
+// ignore: deprecated_member_use
+import 'dart:html' as html;
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
@@ -31,6 +35,7 @@ class _AdminWebReportsScreenState extends State<AdminWebReportsScreen> {
 
   late Future<_ReportData> _future;
   bool _isGeneratingPdf = false;
+  bool _isUploadingLogo = false;
 
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
       _feedbackSubscription;
@@ -196,23 +201,13 @@ class _AdminWebReportsScreenState extends State<AdminWebReportsScreen> {
 
     for (final doc in topSessionsSnap.docs) {
       sessionsMap[doc.reference.path] =
-          _SessionReportItem.fromDoc(doc);
+          _SessionReportItem.fromDoc(doc, approvedAverage: 0);
     }
 
     for (final doc in subSessionsSnap.docs) {
       sessionsMap[doc.reference.path] =
-          _SessionReportItem.fromDoc(doc);
+          _SessionReportItem.fromDoc(doc, approvedAverage: 0);
     }
-
-    final sessions = sessionsMap.values.toList()
-      ..sort((a, b) {
-        if (a.startTime == null && b.startTime == null) {
-          return a.title.compareTo(b.title);
-        }
-        if (a.startTime == null) return 1;
-        if (b.startTime == null) return -1;
-        return a.startTime!.compareTo(b.startTime!);
-      });
 
     // Session feedback is stored below each session document:
     // sessions/{sessionId}/feedback/{feedbackId}
@@ -253,12 +248,33 @@ class _AdminWebReportsScreenState extends State<AdminWebReportsScreen> {
           _FeedbackReportItem.fromDoc(doc);
     }
 
-    for (final snapshot in sessionFeedbackSnapshots) {
-      for (final doc in snapshot.docs) {
-        feedbackMap[doc.reference.path] =
-            _FeedbackReportItem.fromDoc(doc);
+    // Session feedback requires explicit approval. Existing event-wide
+    // feedback retains its separate report behavior.
+    final sessionDocuments = [...topSessionsSnap.docs, ...subSessionsSnap.docs];
+    for (var i = 0; i < sessionFeedbackSnapshots.length; i++) {
+      final approved = sessionFeedbackSnapshots[i].docs
+          .where((doc) => doc.data()['status'] == 'approved').toList();
+      for (final doc in approved) {
+        feedbackMap[doc.reference.path] = _FeedbackReportItem.fromDoc(doc);
       }
+      final ratings = approved.map((doc) => doc.data()['rating'])
+          .whereType<num>().toList();
+      final average = ratings.isEmpty ? 0.0 :
+          ratings.fold<double>(0, (sum, value) => sum + value) / ratings.length;
+      final sessionDocument = sessionDocuments[i];
+      sessionsMap[sessionDocument.reference.path] =
+          _SessionReportItem.fromDoc(sessionDocument, approvedAverage: average);
     }
+
+    final sessions = sessionsMap.values.toList()
+      ..sort((a, b) {
+        if (a.startTime == null && b.startTime == null) {
+          return a.title.compareTo(b.title);
+        }
+        if (a.startTime == null) return 1;
+        if (b.startTime == null) return -1;
+        return a.startTime!.compareTo(b.startTime!);
+      });
 
     final feedbacks = feedbackMap.values.toList()
       ..sort((a, b) {
@@ -364,6 +380,9 @@ class _AdminWebReportsScreenState extends State<AdminWebReportsScreen> {
               eventData['eventName'] ??
               widget.eventName)
           .toString(),
+      reportLogoUrl: [eventData['reportLogoUrl'], eventData['eventLogoUrl'], eventData['logoUrl']]
+          .map((value) => value?.toString().trim() ?? '')
+          .firstWhere((value) => value.isNotEmpty, orElse: () => ''),
       description: (eventData['description'] ?? '').toString(),
       location: (eventData['location'] ?? '').toString(),
       startDate: startDate,
@@ -406,6 +425,57 @@ class _AdminWebReportsScreenState extends State<AdminWebReportsScreen> {
         reportNotesDoc.data() ?? <String, dynamic>{},
       ),
     );
+  }
+
+  Future<void> _uploadReportLogo() async {
+    if (_isUploadingLogo) return;
+    final input = html.FileUploadInputElement()
+      ..accept = 'image/png,image/jpeg';
+    input.click();
+    await input.onChange.first;
+    if (!mounted || input.files == null || input.files!.isEmpty) return;
+    final file = input.files!.first;
+    if (file.size > 5 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please choose a logo smaller than 5 MB.')),
+      );
+      return;
+    }
+    setState(() => _isUploadingLogo = true);
+    try {
+      final reader = html.FileReader();
+      final loaded = reader.onLoad.first;
+      reader.readAsArrayBuffer(file);
+      await loaded;
+      if (reader.error != null || reader.result == null) {
+        throw StateError('Unable to read the selected image.');
+      }
+      final result = reader.result;
+      final bytes = result is ByteBuffer
+          ? result.asUint8List()
+          : Uint8List.fromList((result as List).cast<int>());
+      final extension = file.type == 'image/png' ? 'png' : 'jpg';
+      final path = 'events/${widget.eventId}/reportLogos/'
+          '${DateTime.now().microsecondsSinceEpoch}.$extension';
+      final storageRef = FirebaseStorage.instance.ref(path);
+      await storageRef.putData(bytes, SettableMetadata(contentType: file.type));
+      final url = await storageRef.getDownloadURL();
+      await FirebaseFirestore.instance.collection('events').doc(widget.eventId).update({
+        'reportLogoUrl': url,
+        'reportLogoStoragePath': path,
+      });
+      if (mounted) _refresh();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(error is FirebaseException
+              ? error.message ?? error.code
+              : 'Unable to upload the report logo. Please try again.'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingLogo = false);
+    }
   }
 
   Future<void> _openNotesEditor(_ReportData data) async {
@@ -501,6 +571,15 @@ class _AdminWebReportsScreenState extends State<AdminWebReportsScreen> {
                   isGeneratingPdf: _isGeneratingPdf,
                 ),
                 const SizedBox(height: 20),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed: _isUploadingLogo ? null : _uploadReportLogo,
+                    icon: const Icon(Icons.upload_outlined, size: 18),
+                    label: Text(_isUploadingLogo ? 'Uploading…' : 'Upload Report Logo'),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 _OverviewBanner(data: data),
                 const SizedBox(height: 18),
                 _SummaryGrid(data: data),
@@ -780,20 +859,46 @@ class _OverviewBanner extends StatelessWidget {
               //   ),
               // ),
               Positioned(
-  right: 30,
-  top: 20,
-  bottom: 20,
-  child: IgnorePointer(
-    child: Image.asset(
-      'assets/images/logo.png',
-      width: 120,
-      fit: BoxFit.contain,
-    ),
-  ),
-),
+                right: 24,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: Container(
+                    width: 160,
+                    height: 160,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: data.reportLogoUrl.isNotEmpty
+                          ? Image.network(
+                              data.reportLogoUrl,
+                              width: 132,
+                              height: 132,
+                              fit: BoxFit.contain,
+                              alignment: Alignment.center,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.broken_image_outlined,
+                                color: Colors.grey,
+                                size: 36,
+                              ),
+                            )
+                          : Image.asset(
+                              'assets/images/logo.png',
+                              width: 132,
+                              height: 132,
+                              fit: BoxFit.contain,
+                              alignment: Alignment.center,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
               Padding(
                 padding: EdgeInsets.only(
-                  right: constraints.maxWidth < 700 ? 145 : 215,
+                  right: 200,
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 760),
@@ -1915,7 +2020,7 @@ class _SystemNotesCard extends StatelessWidget {
       'Attendance rate is calculated from event attendance records compared with registered attendees.',
       'Only admin-approved event photos are included in the dashboard and generated PDF.',
       'The generated PDF includes a maximum of 10 approved event photos.',
-      'Feedback ratings are calculated directly from attendee feedback submissions.',
+      'Session feedback ratings include approved responses only; event-wide feedback is reported separately.',
       'Speaker and moderator counts are based on user roles linked to the selected event.',
     ];
 
@@ -2380,11 +2485,15 @@ class _ReportPdfGenerator {
     final regular = await PdfGoogleFonts.notoSansRegular();
     final bold = await PdfGoogleFonts.notoSansBold();
 
-    pw.MemoryImage? logoImage;
+    pw.ImageProvider? logoImage;
 
     try {
-      final logoData = await rootBundle.load('assets/images/logo.png');
-      logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
+      if (data.reportLogoUrl.isNotEmpty) {
+        logoImage = await networkImage(data.reportLogoUrl);
+      } else {
+        final logoData = await rootBundle.load('assets/images/logo.png');
+        logoImage = pw.MemoryImage(logoData.buffer.asUint8List());
+      }
     } catch (_) {
       logoImage = null;
     }
@@ -2484,7 +2593,7 @@ class _ReportPdfGenerator {
 
   static pw.Widget _header(
     _ReportData data,
-    pw.MemoryImage? logoImage,
+    pw.ImageProvider? logoImage,
   ) {
     return pw.Container(
       width: double.infinity,
@@ -2565,9 +2674,13 @@ class _ReportPdfGenerator {
                       ),
                     ),
                   )
-                : pw.Image(
-                    logoImage,
-                    fit: pw.BoxFit.contain,
+                : pw.Center(
+                    child: pw.Image(
+                      logoImage,
+                      width: 70,
+                      height: 70,
+                      fit: pw.BoxFit.contain,
+                    ),
                   ),
           ),
         ],
@@ -2852,6 +2965,7 @@ class _ReportPdfGenerator {
 }
 
 class _ReportData {
+  final String reportLogoUrl;
   final String eventId;
   final String eventName;
   final String description;
@@ -2880,6 +2994,7 @@ class _ReportData {
   final _ReportNotes notes;
 
   const _ReportData({
+    this.reportLogoUrl = '',
     required this.eventId,
     required this.eventName,
     required this.description,
@@ -2909,13 +3024,20 @@ class _ReportData {
   });
 
   int get absent {
-    final result = attendees - present;
+    final expectedParticipants = totalUsers;
+    if (expectedParticipants <= 0) return 0;
+    final result = expectedParticipants - present;
     return result < 0 ? 0 : result;
   }
 
   int get attendanceRate {
-    if (attendees == 0) return 0;
-    return ((present / attendees) * 100).round();
+    final expectedParticipants = totalUsers;
+    if (expectedParticipants <= 0) return 0;
+    final cappedPresent = present > expectedParticipants ? expectedParticipants : present;
+    final percentage = ((cappedPresent / expectedParticipants) * 100).round();
+    if (percentage < 0) return 0;
+    if (percentage > 100) return 100;
+    return percentage;
   }
 
   String get dateText {
@@ -2997,8 +3119,9 @@ class _SessionReportItem {
   });
 
   factory _SessionReportItem.fromDoc(
-    QueryDocumentSnapshot<Map<String, dynamic>> doc,
-  ) {
+    QueryDocumentSnapshot<Map<String, dynamic>> doc, {
+    required double approvedAverage,
+  }) {
     final data = doc.data();
 
     return _SessionReportItem(
@@ -3018,8 +3141,7 @@ class _SessionReportItem {
           (data['totalMessages'] as num?)?.toInt() ?? 0,
       activeChatUsers:
           List.from(data['uniqueParticipants'] as List? ?? []).length,
-      averageRating:
-          (data['averageRating'] as num?)?.toDouble() ?? 0,
+      averageRating: approvedAverage,
     );
   }
 }

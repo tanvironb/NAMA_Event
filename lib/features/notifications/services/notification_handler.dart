@@ -1,63 +1,94 @@
-// lib/features/notifications/services/notification_handler.dart
-import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+
 import 'package:events_app_trueattempt/features/agenda/screen/agenda_screen.dart';
 import 'package:events_app_trueattempt/features/directories/screen/directories_hub_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 
 class NotificationHandler {
-  static void handleNotificationRoute(BuildContext context, RemoteMessage message) {
-    final data = message.data;
-    
-    if (data.containsKey('sessionId')) {
-      _navigateToSessionDetail(context, data['sessionId']);
-    } else if (data.containsKey('type')) {
-      switch (data['type']) {
-        case 'livestream':
-          _navigateToHome(context);
-          break;
-        case 'message':
-        case 'meeting':
-          _navigateToNetworking(context);
-          break;
-        case 'announcement':
-        case 'general':
-          _navigateToNotifications(context);
-          break;
-        default:
-          _navigateToHome(context);
-      }
-    } else {
-      // Default to home for unknown notification types
-      _navigateToHome(context);
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
+  static void handleNotificationTap(RemoteMessage message) {
+    final BuildContext? context = navigatorKey.currentContext;
+
+    if (context == null) {
+      debugPrint(
+        'NotificationHandler: navigator context is null, cannot route.',
+      );
+      return;
+    }
+
+    handleNotificationRoute(context, message);
+  }
+
+  static void handleNotificationRoute(
+    BuildContext context,
+    RemoteMessage message,
+  ) {
+    final Map<String, dynamic> data = message.data;
+
+    final String type = (data['type'] ?? '').toString().toLowerCase();
+    final String sessionId = (data['sessionId'] ?? '').toString();
+
+    if (sessionId.isNotEmpty) {
+      _navigateToSessionDetail(context, sessionId);
+      return;
+    }
+
+    switch (type) {
+      case 'livestream':
+        _navigateToHome(context);
+        break;
+
+      case 'message':
+      case 'meeting':
+      case 'meetingrequest':
+        _navigateToNetworking(context);
+        break;
+
+      case 'announcement':
+      case 'general':
+      case 'notification':
+        _navigateToNotifications(context);
+        break;
+
+      default:
+        _navigateToNotifications(context);
+        break;
     }
   }
 
-  static void _navigateToSessionDetail(BuildContext context, String sessionId) {
-    // First navigate to agenda, which will handle session lookup
+  static void handleForegroundMessage(
+    BuildContext context,
+    RemoteMessage message,
+  ) {
+    showInAppBanner(context, message);
+  }
+
+  static void _navigateToSessionDetail(
+    BuildContext context,
+    String sessionId,
+  ) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => const AgendaScreen(),
       ),
     );
-    
-    // Show snackbar indicating which session to look for
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Looking for session: $sessionId'),
-        action: SnackBarAction(
-          label: 'Search',
-          onPressed: () {
-            // Future enhancement: add search functionality
-          },
+        content: Text(
+          'Opening related session: $sessionId',
         ),
       ),
     );
   }
 
   static void _navigateToHome(BuildContext context) {
-    // Pop all routes and go to home
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    Navigator.of(context).popUntil(
+      (route) => route.isFirst,
+    );
   }
 
   static void _navigateToNetworking(BuildContext context) {
@@ -76,10 +107,22 @@ class NotificationHandler {
     );
   }
 
-  // Helper method to show in-app notification banner
-  static void showInAppBanner(BuildContext context, RemoteMessage message) {
-    final notification = message.notification;
-    if (notification == null) return;
+  static void showInAppBanner(
+    BuildContext context,
+    RemoteMessage message,
+  ) {
+    final RemoteNotification? notification = message.notification;
+
+    final String title =
+        notification?.title ??
+        message.data['title']?.toString() ??
+        'NAMA Events';
+
+    final String body =
+        notification?.body ??
+        message.data['body']?.toString() ??
+        message.data['message']?.toString() ??
+        'You have a new notification.';
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -88,17 +131,21 @@ class NotificationHandler {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              notification.title ?? 'Notification',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-            if (notification.body != null)
-              Text(notification.body!),
+            const SizedBox(height: 4),
+            Text(body),
           ],
         ),
-        action: message.data.isNotEmpty ? SnackBarAction(
+        action: SnackBarAction(
           label: 'View',
-          onPressed: () => handleNotificationRoute(context, message),
-        ) : null,
+          onPressed: () {
+            handleNotificationRoute(context, message);
+          },
+        ),
         duration: const Duration(seconds: 4),
       ),
     );

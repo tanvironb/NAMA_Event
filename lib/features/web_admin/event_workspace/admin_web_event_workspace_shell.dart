@@ -1,5 +1,4 @@
 // lib/features/web_admin/event_workspace/admin_web_event_workspace_shell.dart
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/models/help_ticket_model.dart';
@@ -13,33 +12,30 @@ import 'Screens/admin_web_users_screen.dart';
 import 'Screens/admin_web_staff_screen.dart';
 import 'Screens/admin_web_notifications_screen.dart';
 import 'Screens/admin_web_help_center_screen.dart';
+import 'Screens/admin_web_speaker_room_screen.dart';
 import 'Screens/admin_web_reports_screen.dart';
 import 'Screens/admin_web_attendance_screen.dart';
+import 'Screens/admin_web_merchandise_collection_screen.dart';
 import 'Screens/admin_web_event_photos_screen.dart';
 import 'Screens/admin_web_certificate_template_screen.dart';
-
 class AdminWebEventWorkspaceShell extends StatefulWidget {
   final String eventId;
   final String eventName;
   final VoidCallback? onBackToEvents;
-
   const AdminWebEventWorkspaceShell({
     super.key,
     required this.eventId,
     required this.eventName,
     this.onBackToEvents,
   });
-
   @override
   State<AdminWebEventWorkspaceShell> createState() =>
       _AdminWebEventWorkspaceShellState();
 }
-
 class _AdminWebEventWorkspaceShellState
     extends State<AdminWebEventWorkspaceShell> {
   String _selectedItem = 'Overview';
   bool _mobileSidebarOpen = false;
-
   static const List<_WorkspaceNavigationItem> _navigationItems = [
     _WorkspaceNavigationItem(
       title: 'Overview',
@@ -77,6 +73,11 @@ class _AdminWebEventWorkspaceShellState
       selectedIcon: Icons.notifications_rounded,
     ),
     _WorkspaceNavigationItem(
+      title: 'Speaker Room',
+      icon: Icons.forum_outlined,
+      selectedIcon: Icons.forum_rounded,
+    ),
+    _WorkspaceNavigationItem(
       title: 'Help Center',
       icon: Icons.help_outline_rounded,
       selectedIcon: Icons.help_rounded,
@@ -92,6 +93,11 @@ class _AdminWebEventWorkspaceShellState
       selectedIcon: Icons.fact_check_rounded,
     ),
     _WorkspaceNavigationItem(
+      title: 'Merchandise',
+      icon: Icons.card_giftcard_outlined,
+      selectedIcon: Icons.card_giftcard_rounded,
+    ),
+    _WorkspaceNavigationItem(
       title: 'Event Photos',
       icon: Icons.photo_library_outlined,
       selectedIcon: Icons.photo_library_rounded,
@@ -102,25 +108,21 @@ class _AdminWebEventWorkspaceShellState
       selectedIcon: Icons.workspace_premium_rounded,
     ),
   ];
-
   void _selectPage(String page) {
     setState(() {
       _selectedItem = page;
       _mobileSidebarOpen = false;
     });
   }
-
   void _goBackToEvents() {
     if (widget.onBackToEvents != null) {
       widget.onBackToEvents!();
       return;
     }
-
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
     }
   }
-
   Widget _buildSelectedPage() {
     switch (_selectedItem) {
       case 'Overview':
@@ -129,73 +131,71 @@ class _AdminWebEventWorkspaceShellState
           eventName: widget.eventName,
           onNavigate: _selectPage,
         );
-
       case 'Sessions':
         return AdminWebSessionsScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
       case 'Speakers':
         return AdminWebSpeakersScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
       case 'Moderators':
         return AdminWebModeratorsScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
       case 'Users':
         return AdminWebUsersScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
       case 'Staff':
         return AdminWebStaffScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
       case 'Notifications':
         return AdminWebNotificationsScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
+      case 'Speaker Room':
+        return AdminWebSpeakerRoomScreen(
+          eventId: widget.eventId,
+          eventName: widget.eventName,
+        );
       case 'Help Center':
         return AdminWebHelpCenterScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
       case 'Reports':
         return AdminWebReportsScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
       case 'Attendance':
         return AdminWebAttendanceScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
+      case 'Merchandise':
+        return AdminWebMerchandiseCollectionScreen(
+          eventId: widget.eventId,
+          eventName: widget.eventName,
+        );
       case 'Event Photos':
         return AdminWebEventPhotosScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
       case 'Certificates':
         return AdminWebCertificateTemplateScreen(
           eventId: widget.eventId,
           eventName: widget.eventName,
         );
-
       default:
         return _WorkspacePlaceholderScreen(
           title: _selectedItem,
@@ -204,13 +204,11 @@ class _AdminWebEventWorkspaceShellState
         );
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isCompact = constraints.maxWidth < 960;
-
         if (isCompact) {
           return Scaffold(
             backgroundColor: AdminWebTheme.background,
@@ -303,7 +301,6 @@ class _AdminWebEventWorkspaceShellState
             ),
           );
         }
-
         return Scaffold(
           backgroundColor: AdminWebTheme.background,
           body: Row(
@@ -340,7 +337,6 @@ class _AdminWebEventWorkspaceShellState
     );
   }
 }
-
 class _WorkspaceSidebar extends StatelessWidget {
   final String eventId;
   final String eventName;
@@ -348,7 +344,6 @@ class _WorkspaceSidebar extends StatelessWidget {
   final List<_WorkspaceNavigationItem> items;
   final ValueChanged<String> onSelect;
   final VoidCallback onBackToEvents;
-
   const _WorkspaceSidebar({
     required this.eventId,
     required this.eventName,
@@ -357,28 +352,23 @@ class _WorkspaceSidebar extends StatelessWidget {
     required this.onSelect,
     required this.onBackToEvents,
   });
-
   List<Widget> _buildSectionItems({
     required List<String> titles,
     required int pendingHelpCount,
   }) {
     final widgets = <Widget>[];
-
     for (final title in titles) {
       final matchingItems = items
           .where((navigationItem) => navigationItem.title == title)
           .toList();
-
       // Skip removed or unavailable navigation items safely.
       // This prevents "Bad state: No element" when a section still
       // references an item that no longer exists.
       if (matchingItems.isEmpty) {
         continue;
       }
-
       final item = matchingItems.first;
       final selected = selectedItem == item.title;
-
       widgets.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 5),
@@ -392,14 +382,11 @@ class _WorkspaceSidebar extends StatelessWidget {
         ),
       );
     }
-
     return widgets;
   }
-
   @override
   Widget build(BuildContext context) {
     final helpRepository = HelpRepository(FirebaseFirestore.instance);
-
     return StreamBuilder<List<HelpTicket>>(
       stream: helpRepository.getTicketsByEventStream(eventId),
       builder: (context, snapshot) {
@@ -411,7 +398,6 @@ class _WorkspaceSidebar extends StatelessWidget {
                   ticket.status == TicketStatus.pending,
             )
             .length;
-
         return Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -538,6 +524,7 @@ class _WorkspaceSidebar extends StatelessWidget {
                       ..._buildSectionItems(
                         titles: const [
                           'Notifications',
+                          'Speaker Room',
                           'Help Center',
                         ],
                         pendingHelpCount: pendingHelpCount,
@@ -547,6 +534,7 @@ class _WorkspaceSidebar extends StatelessWidget {
                         titles: const [
                           'Reports',
                           'Attendance',
+                          'Merchandise',
                           'Event Photos',
                           'Certificates',
                         ],
@@ -563,14 +551,11 @@ class _WorkspaceSidebar extends StatelessWidget {
     );
   }
 }
-
 class _SidebarSectionHeader extends StatelessWidget {
   final String title;
-
   const _SidebarSectionHeader({
     required this.title,
   });
-
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -587,20 +572,17 @@ class _SidebarSectionHeader extends StatelessWidget {
     );
   }
 }
-
 class _SidebarItem extends StatelessWidget {
   final _WorkspaceNavigationItem item;
   final bool selected;
   final int notificationCount;
   final VoidCallback onTap;
-
   const _SidebarItem({
     required this.item,
     required this.selected,
     required this.onTap,
     this.notificationCount = 0,
   });
-
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -695,18 +677,15 @@ class _SidebarItem extends StatelessWidget {
     );
   }
 }
-
 class _WorkspaceTopBar extends StatelessWidget {
   final String eventName;
   final String selectedItem;
   final VoidCallback onBackToEvents;
-
   const _WorkspaceTopBar({
     required this.eventName,
     required this.selectedItem,
     required this.onBackToEvents,
   });
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -802,18 +781,15 @@ class _WorkspaceTopBar extends StatelessWidget {
     );
   }
 }
-
 class _WorkspacePlaceholderScreen extends StatelessWidget {
   final String title;
   final String subtitle;
   final IconData icon;
-
   const _WorkspacePlaceholderScreen({
     required this.title,
     required this.subtitle,
     required this.icon,
   });
-
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -894,10 +870,8 @@ class _WorkspacePlaceholderScreen extends StatelessWidget {
     );
   }
 }
-
 class _WorkspaceBrand extends StatelessWidget {
   const _WorkspaceBrand();
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -950,12 +924,10 @@ class _WorkspaceBrand extends StatelessWidget {
     );
   }
 }
-
 class _WorkspaceNavigationItem {
   final String title;
   final IconData icon;
   final IconData selectedIcon;
-
   const _WorkspaceNavigationItem({
     required this.title,
     required this.icon,

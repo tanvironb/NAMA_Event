@@ -11,6 +11,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../admin_web_theme.dart';
+import '../session_monitoring/session_monitoring_page.dart';
+
 
 class AdminWebSessionsScreen extends StatefulWidget {
   final String eventId;
@@ -53,14 +55,27 @@ class _AdminWebSessionsScreenState
   Future<void> _openSessionManagement(
     QueryDocumentSnapshot<Map<String, dynamic>> session,
   ) async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _WebSessionManagementDialog(
-        eventId: widget.eventId,
-        eventName: widget.eventName,
-        sessionReference: session.reference,
-        initialData: session.data(),
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (monitorContext) => SessionMonitoringPage(
+          eventId: widget.eventId,
+          eventName: widget.eventName,
+          sessionId: session.id,
+          onOpenSession: () => showDialog<void>(
+            context: monitorContext,
+            barrierDismissible: false,
+            builder: (_) => _WebSessionManagementDialog(
+              eventId: widget.eventId,
+              eventName: widget.eventName,
+              sessionReference: session.reference,
+              initialData: session.data(),
+            ),
+          ),
+          onEdit: () {
+            Navigator.of(monitorContext).pop();
+            _openEditForm(session);
+          },
+        ),
       ),
     );
   }
@@ -364,6 +379,8 @@ class _AdminWebCreateSessionFormState
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   final _liveStreamController = TextEditingController();
+  final _capacityController = TextEditingController();
+  bool _attendanceLimitEnabled = false;
 
   DateTime? _selectedDate;
   TimeOfDay? _startTime;
@@ -415,6 +432,9 @@ class _AdminWebCreateSessionFormState
         : (data['category'] ?? '').toString();
     _priority = data['priority'] is int ? data['priority'] as int : 3;
     _isChatEnabled = data['isChatEnabled'] != false;
+    final savedCapacity = (data['maxAttendees'] as num?)?.toInt() ?? 0;
+    _attendanceLimitEnabled = data['attendanceLimitEnabled'] == true;
+    if (savedCapacity > 0) _capacityController.text = '$savedCapacity';
     _existingSessionImageUrl = (data['imageUrl'] ?? '').toString().trim();
     _existingVenueImageUrl =
         (data['venueImageUrl'] ?? data['locationImageUrl'] ?? '')
@@ -442,6 +462,7 @@ class _AdminWebCreateSessionFormState
     _descriptionController.dispose();
     _locationController.dispose();
     _liveStreamController.dispose();
+    _capacityController.dispose();
     super.dispose();
   }
 
@@ -602,12 +623,14 @@ class _AdminWebCreateSessionFormState
     _descriptionController.clear();
     _locationController.clear();
     _liveStreamController.clear();
+    _capacityController.clear();
 
     setState(() {
       _selectedDate = null;
       _startTime = null;
       _endTime = null;
       _selectedCategory = null;
+      _attendanceLimitEnabled = false;
       _priority = 3;
       _isChatEnabled = true;
       _sessionImageBytes = null;
@@ -709,6 +732,10 @@ class _AdminWebCreateSessionFormState
             ? (existingData['checkInCode'] ?? _generateSessionCode())
             : _generateSessionCode(),
         'category': _selectedCategory ?? '',
+        'attendanceLimitEnabled': _attendanceLimitEnabled,
+        'maxAttendees': _attendanceLimitEnabled
+            ? int.parse(_capacityController.text.trim())
+            : 0,
         'imageUrl': sessionImageUrl,
         'venueImageUrl': venueImageUrl,
         'locationImageUrl': venueImageUrl,
@@ -759,7 +786,52 @@ class _AdminWebCreateSessionFormState
       };
 
       if (widget.isEditing) {
-        await sessionReference.set(payload, SetOptions(merge: true));
+        // Preserve live participation data rather than writing the older
+        // values captured when the edit form was opened.
+        final editPayload = Map<String, dynamic>.from(payload);
+        for (final key in [
+          'checkedInAttendees', 'totalMessages', 'uniqueParticipants',
+          'mutedUsers', 'deletedMessagesCount', 'messagesByRole',
+          'muteHistory', 'totalMuteActions', 'totalFeedbacks',
+          'totalRating', 'averageRating', 'createdAt', 'closedBy',
+          'speakerIds', 'moderatorIds', 'qrCodePayload', 'checkInCode',
+        ]) {
+          editPayload.remove(key);
+        }
+        await FirebaseFirestore.instance.runTransaction<void>((transaction) async {
+          final latest = await transaction.get(sessionReference);
+          if (!latest.exists) {
+            throw FirebaseException(
+              plugin: 'cloud_firestore',
+              code: 'session-not-found',
+              message: 'This session no longer exists.',
+            );
+          }
+          final current = latest.data() ?? <String, dynamic>{};
+          final attendees = current['checkedInAttendees'];
+          final joinedCount = attendees is List ? attendees.toSet().length : 0;
+          final newCapacity = (editPayload['maxAttendees'] as num?)?.toInt() ?? 0;
+          final previousCapacity = (current['maxAttendees'] as num?)?.toInt() ?? 0;
+          final previouslyLimited = current['attendanceLimitEnabled'] == true;
+          final enablingLimit = _attendanceLimitEnabled && !previouslyLimited;
+          final reducingLimit = _attendanceLimitEnabled && previouslyLimited &&
+              newCapacity < previousCapacity;
+
+          // Unchanged attendance limits must not prevent schedule edits.
+          if ((enablingLimit || reducingLimit) && newCapacity < joinedCount) {
+            throw FirebaseException(
+              plugin: 'cloud_firestore',
+              code: 'capacity-below-attendance',
+              message: 'There are already $joinedCount checked-in attendees. '
+                  'Set the limit to at least $joinedCount or disable the limit.',
+            );
+          }
+          final updates = Map<String, dynamic>.from(editPayload);
+          if (current['isChatEnabled'] != _isChatEnabled) {
+            updates['closedBy'] = _isChatEnabled ? '' : 'admin';
+          }
+          transaction.update(sessionReference, updates);
+        });
       } else {
         await sessionReference.set(payload);
       }
@@ -775,7 +847,7 @@ class _AdminWebCreateSessionFormState
       return true;
     } catch (error) {
       _showMessage(
-        'Failed to create session: $error',
+        'Failed to save session: ${error is FirebaseException ? (error.message ?? error.code) : error}',
         error: true,
       );
       return false;
@@ -1021,14 +1093,69 @@ class _AdminWebCreateSessionFormState
               title: 'Session Settings',
               subtitle:
                   'Configure attendee interaction for this session.',
-              child: _SettingSwitchTile(
-                title: 'Enable Session Chat',
-                subtitle:
-                    'Allow attendees to participate in the session chat.',
-                value: _isChatEnabled,
-                onChanged: (value) {
-                  setState(() => _isChatEnabled = value);
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SettingSwitchTile(
+                    title: 'Enable Session Chat',
+                    subtitle: 'Allow attendees to participate in the session chat.',
+                    value: _isChatEnabled,
+                    onChanged: (value) {
+                      setState(() => _isChatEnabled = value);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFAFBFD),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AdminWebTheme.border),
+                    ),
+                    child: SwitchListTile(
+                      title: const Text('Limit Session Attendance',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                      subtitle: const Text(
+                        'Set the maximum number of attendees. Recommended for breakout sessions.',
+                        style: TextStyle(fontSize: 10, height: 1.4)),
+                      secondary: const Icon(Icons.groups_outlined,
+                        color: AdminWebTheme.primary),
+                      activeTrackColor: AdminWebTheme.primary,
+                      value: _attendanceLimitEnabled,
+                      onChanged: _isSaving ? null : (value) {
+                        setState(() => _attendanceLimitEnabled = value);
+                      },
+                    ),
+                  ),
+                  if (_attendanceLimitEnabled) ...[
+                    const SizedBox(height: 14),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 400),
+                      child: TextFormField(
+                        controller: _capacityController,
+                        enabled: !_isSaving,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        decoration: _inputDecoration(
+                          hint: 'Example: 30',
+                          icon: Icons.event_seat_outlined,
+                          helperText: 'Maximum attendees allowed in this session.',
+                        ).copyWith(labelText: 'Maximum Attendees'),
+                        validator: (value) {
+                          if (!_attendanceLimitEnabled) return null;
+                          final limit = int.tryParse((value ?? '').trim());
+                          if (limit == null || limit < 1) {
+                            return 'Enter a whole number greater than zero.';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    const Text('Attendance is unlimited.',
+                      style: TextStyle(color: AdminWebTheme.textSecondary, fontSize: 10.5)),
+                  ],
+                ],
               ),
             ),
             const SizedBox(height: 22),

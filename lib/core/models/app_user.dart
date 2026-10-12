@@ -6,14 +6,9 @@ class AppUser {
   final String email;
   final String personalEmail;
   final String name;
-  final String role; // 'attendee', 'speaker', 'staff', 'admin'
-  final String status; // 'pending', 'approved', 'rejected'
-
-  // Events this user belongs to.
-  // Example in Firestore:
-  // eventIds: ["8th_nama_summit_tanzania"]
+  final String role;
+  final String status;
   final List<String> eventIds;
-
   final String profileImageUrl;
   final String company;
   final String title;
@@ -26,13 +21,10 @@ class AppUser {
   final String medium;
   final String instagram;
   final String qrCodePayload;
-
-  // Privacy & Connection Fields
-  final String profileVisibility; // 'anonymous', 'minimal', 'full'
+  final String profileVisibility;
   final List<String> usersIScanned;
   final List<String> scannedByUsers;
   final DateTime? privacySelectedAt;
-
   final List<String> bookmarkedSessions;
   final int points;
   final bool notificationsEnabled;
@@ -40,7 +32,6 @@ class AppUser {
   final DateTime? lastSeen;
   final DateTime? createdAt;
   final DateTime? updatedAt;
-
   AppUser({
     required this.uid,
     required this.email,
@@ -73,23 +64,20 @@ class AppUser {
     this.createdAt,
     this.updatedAt,
   });
-
   factory AppUser.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>?;
-
     if (data == null) {
       throw StateError('Missing data for user ${doc.id}');
     }
-
     return AppUser(
       uid: doc.id,
       email: data['email'] as String? ?? '',
       personalEmail: data['personalEmail'] as String? ?? '',
-      name: data['name'] as String? ?? 'User',
+      name: data['name'] as String? ?? data['fullName'] as String? ?? data['displayName'] as String? ?? 'User',
       role: data['role'] as String? ?? 'attendee',
       status: data['status'] as String? ?? 'pending',
       eventIds: List<String>.from(data['eventIds'] as List? ?? []),
-      profileImageUrl: data['profileImageUrl'] as String? ?? '',
+      profileImageUrl: data['profileImageUrl'] as String? ?? data['photoUrl'] as String? ?? '',
       company: data['company'] as String? ?? '',
       title: data['title'] as String? ?? '',
       bio: data['bio'] as String? ?? '',
@@ -104,26 +92,16 @@ class AppUser {
       profileVisibility: data['profileVisibility'] as String? ?? 'minimal',
       usersIScanned: List<String>.from(data['usersIScanned'] as List? ?? []),
       scannedByUsers: List<String>.from(data['scannedByUsers'] as List? ?? []),
-      privacySelectedAt: data['privacySelectedAt'] != null
-          ? (data['privacySelectedAt'] as Timestamp).toDate()
-          : null,
-      bookmarkedSessions:
-          List<String>.from(data['bookmarkedSessions'] as List? ?? []),
+      privacySelectedAt: data['privacySelectedAt'] != null ? (data['privacySelectedAt'] as Timestamp).toDate() : null,
+      bookmarkedSessions: List<String>.from(data['bookmarkedSessions'] as List? ?? []),
       points: data['points'] as int? ?? 0,
       notificationsEnabled: data['notificationsEnabled'] as bool? ?? true,
       isOnline: data['isOnline'] as bool? ?? false,
-      lastSeen: data['lastSeen'] != null
-          ? (data['lastSeen'] as Timestamp).toDate()
-          : null,
-      createdAt: data['createdAt'] != null
-          ? (data['createdAt'] as Timestamp).toDate()
-          : null,
-      updatedAt: data['updatedAt'] != null
-          ? (data['updatedAt'] as Timestamp).toDate()
-          : null,
+      lastSeen: data['lastSeen'] != null ? (data['lastSeen'] as Timestamp).toDate() : null,
+      createdAt: data['createdAt'] != null ? (data['createdAt'] as Timestamp).toDate() : null,
+      updatedAt: data['updatedAt'] != null ? (data['updatedAt'] as Timestamp).toDate() : null,
     );
   }
-
   Map<String, dynamic> toFirestore() {
     return {
       'email': email,
@@ -147,9 +125,7 @@ class AppUser {
       'profileVisibility': profileVisibility,
       'usersIScanned': usersIScanned,
       'scannedByUsers': scannedByUsers,
-      'privacySelectedAt': privacySelectedAt != null
-          ? Timestamp.fromDate(privacySelectedAt!)
-          : null,
+      'privacySelectedAt': privacySelectedAt != null ? Timestamp.fromDate(privacySelectedAt!) : null,
       'bookmarkedSessions': bookmarkedSessions,
       'points': points,
       'notificationsEnabled': notificationsEnabled,
@@ -159,13 +135,18 @@ class AppUser {
       'updatedAt': updatedAt != null ? Timestamp.fromDate(updatedAt!) : null,
     };
   }
-
+  String get displayName => name.trim().isEmpty ? 'User' : name.trim();
+  String get normalizedRole => role.toLowerCase().trim();
+  bool get isAdmin => normalizedRole == 'admin';
+  bool get isStaff => normalizedRole == 'staff';
+  bool get isSpeaker => normalizedRole == 'speaker';
+  bool get isModerator => normalizedRole == 'moderator';
+  bool get isAttendee => normalizedRole == 'attendee' || normalizedRole == 'user';
+  bool get isEventUser => isAttendee || isSpeaker || isModerator || isStaff;
+  bool belongsToEvent(String eventId) => eventIds.contains(eventId);
   bool get isAnonymous => profileVisibility == 'anonymous';
-
   bool get isMinimal => profileVisibility == 'minimal';
-
   bool get isFull => profileVisibility == 'full';
-
   bool canBeViewedBy(String viewerId, bool viewerIsAdmin) {
     if (viewerId == uid) return true;
     if (viewerIsAdmin) return true;
@@ -173,16 +154,13 @@ class AppUser {
     if (isAnonymous && scannedByUsers.contains(viewerId)) return true;
     return false;
   }
-
   bool canViewFullDataBy(String viewerId, bool viewerIsAdmin) {
     if (viewerId == uid) return true;
     if (viewerIsAdmin) return true;
     if (isFull) return true;
     return false;
   }
-
   bool get needsPrivacySelection => privacySelectedAt == null;
-
   String getDisplayNameFor(String viewerId, bool viewerIsAdmin) {
     if (viewerId == uid) return name;
     if (viewerIsAdmin) return name;
@@ -191,21 +169,18 @@ class AppUser {
     }
     return name;
   }
-
   String getDisplayEmailFor(String viewerId, bool viewerIsAdmin) {
     if (viewerId == uid) return email;
     if (viewerIsAdmin) return email;
     if (isAnonymous && !scannedByUsers.contains(viewerId)) return '';
     return email;
   }
-
   String getDisplayImageUrlFor(String viewerId, bool viewerIsAdmin) {
     if (viewerId == uid) return profileImageUrl;
     if (viewerIsAdmin) return profileImageUrl;
     if (isAnonymous && !scannedByUsers.contains(viewerId)) return '';
     return profileImageUrl;
   }
-
   bool isConnectedWith(String viewerId) {
     return scannedByUsers.contains(viewerId);
   }

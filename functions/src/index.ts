@@ -458,9 +458,9 @@ export const createEventRoleAccount = onCall(
           await admin.auth().generateEmailVerificationLink(payload.email);
 
         const sendResult = await resend.emails.send({
-          from: "NAMA Events <apps@namafoundation.org>",
+          from: "NAMA Events <ai@namafoundation.org>",
           to: [payload.email],
-          replyTo: "apps@namafoundation.org",
+          replyTo: "ai@namafoundation.org",
           subject:
             `You're Invited to Join ${payload.eventName} as a ${roleLabel}`,
           html: buildEventInvitationHtml({
@@ -508,7 +508,9 @@ export const createEventRoleAccount = onCall(
         // Use the published Resend dashboard template.
         // No new password and no attendee/staff verification email.
         const sendResult = await resend.emails.send({
+          from: "NAMA Events <ai@namafoundation.org>",
           to: [payload.email],
+          replyTo: "ai@namafoundation.org",
           template: {
             id: "existing-speaker-event-invitation",
             variables: {
@@ -892,6 +894,33 @@ export const validateQrCode = onCall(
       );
     }
 
+    // Manual codes resolve to the same user response as personal QR codes.
+    const manualCode = qrPayload.trim().toUpperCase();
+    if (/^[A-Z2-9]{10}$/.test(manualCode)) {
+      const codeDoc = await db.collection("personalCodes").doc(manualCode).get();
+      const uid = codeDoc.data()?.userId;
+      if (!codeDoc.exists || typeof uid !== "string" || !uid || uid.includes("/")) {
+        throw new HttpsError("not-found", "Participant code not found.");
+      }
+      const userDoc = await db.collection("users").doc(uid).get();
+      const userData = userDoc.data();
+      if (!userData || userData.personalCode !== manualCode ||
+          (userData.status || "approved") !== "approved") {
+        throw new HttpsError("not-found", "Participant code is unavailable.");
+      }
+      return {
+        type: "user",
+        data: {
+          uid: userDoc.id,
+          name: userData.name || userData.fullName || userData.displayName || "Participant",
+          email: userData.email || "",
+          role: userData.role,
+          profileImageUrl: userData.profileImageUrl || "",
+          title: userData.title || "",
+        },
+      };
+    }
+
     if (qrPayload.startsWith("user::")) {
       const snapshot = await db
         .collection("users")
@@ -1105,6 +1134,14 @@ export const logSessionCheckIn = onCall(
         eventId: sessionData.eventId || "",
       };
 
+      if (isBreakoutSession(sessionData.category)) {
+        throw new HttpsError(
+          "permission-denied",
+          "Please ask staff to join this breakout session.",
+          {reason: "staff-admission-required"}
+        );
+      }
+
       if (checkinDoc.exists) {
         alreadyCheckedIn = true;
 
@@ -1132,6 +1169,52 @@ export const logSessionCheckIn = onCall(
           "failed-precondition",
           "This session is not currently active."
         );
+      }
+
+      // Capacity and attendance are checked in the same transaction.
+      // Reading the session document serializes simultaneous joins because
+      // every successful join also updates that document.
+      if (sessionData.attendanceLimitEnabled === true) {
+        const maxAttendees = Number(sessionData.maxAttendees);
+        if (!Number.isSafeInteger(maxAttendees) || maxAttendees < 1) {
+          throw new HttpsError(
+            "failed-precondition",
+            "This session's attendance limit is invalid. Please contact admin."
+          );
+        }
+
+        // Include existing records as well as legacy session arrays so an
+        // inaccurate summary cannot allow extra attendees to join.
+        const attendanceSnapshot = await transaction.get(
+          sessionRef.collection("checkins")
+        );
+        const attendeeIds = new Set<string>();
+        if (Array.isArray(sessionData.checkedInAttendees)) {
+          for (const value of sessionData.checkedInAttendees) {
+            if (typeof value === "string" && value.trim()) {
+              attendeeIds.add(value.trim());
+            }
+          }
+        }
+        for (const document of attendanceSnapshot.docs) {
+          const record = document.data();
+          const attendeeId = record.userId || record.attendeeId ||
+            record.uid || document.id;
+          if (typeof attendeeId === "string" && attendeeId.trim()) {
+            attendeeIds.add(attendeeId.trim());
+          }
+        }
+
+        // A previously counted attendee can repair a missing check-in
+        // record without consuming another place.
+        if (!attendeeIds.has(scannerUid) &&
+            attendeeIds.size >= maxAttendees) {
+          throw new HttpsError(
+            "resource-exhausted",
+            "This session is full. Please join a different session.",
+            {reason: "session-full", maxAttendees}
+          );
+        }
       }
 
       transaction.set(checkinRef, {
@@ -2528,94 +2611,359 @@ async function createUserNotificationOnce({
   return true;
 }
 
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => item?.toString().trim())
+    .filter((item): item is string => Boolean(item));
+}
+
+function uniqueStrings(items: string[]): string[] {
+  return Array.from(new Set(items));
+}
+
+function getReminderWindow(minutesFromNow: number) {
+  const now = new Date();
+
+  const windowStart = admin.firestore.Timestamp.fromDate(
+    new Date(now.getTime() + (minutesFromNow - 1) * 60 * 1000)
+  );
+
+  const windowEnd = admin.firestore.Timestamp.fromDate(
+    new Date(now.getTime() + (minutesFromNow + 1) * 60 * 1000)
+  );
+
+  return {
+    windowStart,
+    windowEnd,
+  };
+}
+
+async function getEventAttendeeIds(eventId: string): Promise<string[]> {
+  if (!eventId) {
+    return [];
+  }
+
+  const usersSnap = await db
+    .collection("users")
+    .where("eventIds", "array-contains", eventId)
+    .get();
+
+  const attendeeIds: string[] = [];
+
+  usersSnap.docs.forEach((userDoc) => {
+    const userData = userDoc.data();
+
+    const role = (userData.role || "")
+      .toString()
+      .toLowerCase()
+      .trim();
+
+    const status = (userData.status || "")
+      .toString()
+      .toLowerCase()
+      .trim();
+
+    if (
+      (role === "attendee" || role === "user" || role === "delegate") &&
+      status !== "rejected" &&
+      status !== "blocked"
+    ) {
+      attendeeIds.push(userDoc.id);
+    }
+  });
+
+  return uniqueStrings(attendeeIds);
+}
+
+async function createSessionReminderForUsers({
+  userIds,
+  notificationIdPrefix,
+  eventId,
+  sessionId,
+  sessionTitle,
+  sessionLocation,
+  title,
+  subtitle,
+  body,
+  category,
+  minutesBefore,
+}: {
+  userIds: string[];
+  notificationIdPrefix: string;
+  eventId: string;
+  sessionId: string;
+  sessionTitle: string;
+  sessionLocation: string;
+  title: string;
+  subtitle: string;
+  body: string;
+  category: string;
+  minutesBefore: number;
+}) {
+  let sentCount = 0;
+
+  const uniqueUserIds = uniqueStrings(userIds);
+
+  for (const userId of uniqueUserIds) {
+    const created = await createUserNotificationOnce({
+      userId,
+      notificationId: `${notificationIdPrefix}_${sessionId}`,
+      data: {
+        eventId,
+        title,
+        subtitle,
+        body,
+        type: "information",
+        targetRole: "all",
+        priority: "normal",
+        includeDate: true,
+        data: {
+          notificationCategory: category,
+          sessionId,
+          sessionTitle,
+          sessionLocation,
+          eventId,
+          minutesBefore: minutesBefore.toString(),
+        },
+      },
+    });
+
+    if (created) {
+      sentCount++;
+    }
+  }
+
+  return sentCount;
+}
+
 /**
- * Runs every minute and alerts assigned speakers 5 minutes before their
- * active/upcoming session ends.
+ * Runs every minute and creates automated session reminder notifications.
+ *
+ * Attendee:
+ * - 2 minutes before checked-in session ends.
+ * - 2 minutes before next session starts for all event attendees.
+ *
+ * Speaker/Moderator:
+ * - 5 minutes before assigned session starts.
+ * - 5 minutes before assigned session ends.
  */
-export const sendSpeakerSessionEndingAlerts = onSchedule(
+export const sendAutomatedSessionReminders = onSchedule(
   {
     region: FUNCTION_REGION,
     schedule: "every 1 minutes",
     timeZone: "Asia/Kuala_Lumpur",
   },
   async () => {
-    const now = new Date();
+    const ATTENDEE_SESSION_END_MINUTES = 2;
+    const ATTENDEE_NEXT_SESSION_START_MINUTES = 2;
+    const ASSIGNED_SESSION_START_MINUTES = 5;
+    const ASSIGNED_SESSION_END_MINUTES = 5;
 
-    const alertWindowStart = admin.firestore.Timestamp.fromDate(
-      new Date(now.getTime() + 4 * 60 * 1000)
-    );
+    let totalSentCount = 0;
 
-    const alertWindowEnd = admin.firestore.Timestamp.fromDate(
-      new Date(now.getTime() + 6 * 60 * 1000)
-    );
+    // ------------------------------------------------------------------------
+    // 1. ATTENDEE: current session ending soon
+    // Send only to checked-in attendees.
+    // ------------------------------------------------------------------------
+    {
+      const {windowStart, windowEnd} = getReminderWindow(
+        ATTENDEE_SESSION_END_MINUTES
+      );
 
-    const sessionsSnap = await db
-      .collection("sessions")
-      .where("endTime", ">=", alertWindowStart)
-      .where("endTime", "<=", alertWindowEnd)
-      .get();
+      const sessionsSnap = await db
+        .collection("sessions")
+        .where("endTime", ">=", windowStart)
+        .where("endTime", "<=", windowEnd)
+        .get();
 
-    let sentCount = 0;
+      for (const sessionDoc of sessionsSnap.docs) {
+        const sessionData = sessionDoc.data();
 
-    for (const sessionDoc of sessionsSnap.docs) {
-      const sessionData = sessionDoc.data();
+        const eventId = (sessionData.eventId || "").toString();
+        const sessionTitle = (sessionData.title || "Session").toString();
+        const sessionLocation = (sessionData.location || "").toString();
 
-      if (sessionData.speakerFiveMinuteAlertSent === true) {
-        continue;
-      }
+        const checkedInAttendees = toStringArray(
+          sessionData.checkedInAttendees
+        );
 
-      const speakerIds = Array.isArray(sessionData.speakerIds) ?
-        sessionData.speakerIds.map((speakerId) => speakerId.toString()) :
-        [];
+        const speakerIds = toStringArray(sessionData.speakerIds);
+        const moderatorIds = toStringArray(sessionData.moderatorIds);
 
-      if (speakerIds.length === 0) {
-        await sessionDoc.ref.update({
-          speakerFiveMinuteAlertSent: true,
-          speakerFiveMinuteAlertSkippedReason: "No speakerIds found",
-          speakerFiveMinuteAlertSentAt:
-            admin.firestore.FieldValue.serverTimestamp(),
+        const assignedUserIds = uniqueStrings([
+          ...speakerIds,
+          ...moderatorIds,
+        ]);
+
+        const attendeesToNotify = checkedInAttendees.filter(
+          (userId) => !assignedUserIds.includes(userId)
+        );
+
+        const sentCount = await createSessionReminderForUsers({
+          userIds: attendeesToNotify,
+          notificationIdPrefix: "attendee_session_ending_2min",
+          eventId,
+          sessionId: sessionDoc.id,
+          sessionTitle,
+          sessionLocation,
+          title: "Session Ending Soon",
+          subtitle: "This session is ending soon",
+          body: `"${sessionTitle}" is ending in ${ATTENDEE_SESSION_END_MINUTES} minutes.`,
+          category: "attendeeSessionEndingReminder",
+          minutesBefore: ATTENDEE_SESSION_END_MINUTES,
         });
 
-        continue;
+        totalSentCount += sentCount;
       }
-
-      const eventId = (sessionData.eventId || "").toString();
-      const sessionTitle = (sessionData.title || "Session").toString();
-      const sessionLocation = (sessionData.location || "").toString();
-
-      for (const speakerId of speakerIds) {
-        const created = await createUserNotificationOnce({
-          userId: speakerId,
-          notificationId: `speaker_5min_${sessionDoc.id}`,
-          data: {
-            eventId,
-            title: "Session Ending Soon",
-            subtitle: "5 minutes remaining",
-            body: `Your session "${sessionTitle}" will end in 5 minutes.`,
-            type: "alert",
-            targetRole: "speaker",
-            includeDate: true,
-            data: {
-              notificationCategory: "speakerSessionEndingAlert",
-              sessionId: sessionDoc.id,
-              sessionTitle,
-              sessionLocation,
-              eventId,
-            },
-          },
-        });
-
-        if (created) sentCount++;
-      }
-
-      await sessionDoc.ref.update({
-        speakerFiveMinuteAlertSent: true,
-        speakerFiveMinuteAlertSentAt:
-          admin.firestore.FieldValue.serverTimestamp(),
-      });
     }
 
-    console.log(`Speaker 5-minute session alerts created: ${sentCount}`);
+    // ------------------------------------------------------------------------
+    // 2. ATTENDEE: next session starting soon
+    // Send to all attendees linked to the event.
+    // ------------------------------------------------------------------------
+    {
+      const {windowStart, windowEnd} = getReminderWindow(
+        ATTENDEE_NEXT_SESSION_START_MINUTES
+      );
+
+      const sessionsSnap = await db
+        .collection("sessions")
+        .where("startTime", ">=", windowStart)
+        .where("startTime", "<=", windowEnd)
+        .get();
+
+      for (const sessionDoc of sessionsSnap.docs) {
+        const sessionData = sessionDoc.data();
+
+        const eventId = (sessionData.eventId || "").toString();
+        const sessionTitle = (sessionData.title || "Session").toString();
+        const sessionLocation = (sessionData.location || "").toString();
+
+        const attendeeIds = await getEventAttendeeIds(eventId);
+
+        const sentCount = await createSessionReminderForUsers({
+          userIds: attendeeIds,
+          notificationIdPrefix: "attendee_next_session_starting_2min",
+          eventId,
+          sessionId: sessionDoc.id,
+          sessionTitle,
+          sessionLocation,
+          title: "Next Session Starting Soon",
+          subtitle: "Starts in 2 minutes",
+          body: `"${sessionTitle}" will start in ${ATTENDEE_NEXT_SESSION_START_MINUTES} minutes.`,
+          category: "attendeeNextSessionStartingReminder",
+          minutesBefore: ATTENDEE_NEXT_SESSION_START_MINUTES,
+        });
+
+        totalSentCount += sentCount;
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 3. SPEAKER/MODERATOR: assigned session starting soon
+    // Send only to users in speakerIds and moderatorIds.
+    // ------------------------------------------------------------------------
+    {
+      const {windowStart, windowEnd} = getReminderWindow(
+        ASSIGNED_SESSION_START_MINUTES
+      );
+
+      const sessionsSnap = await db
+        .collection("sessions")
+        .where("startTime", ">=", windowStart)
+        .where("startTime", "<=", windowEnd)
+        .get();
+
+      for (const sessionDoc of sessionsSnap.docs) {
+        const sessionData = sessionDoc.data();
+
+        const eventId = (sessionData.eventId || "").toString();
+        const sessionTitle = (sessionData.title || "Session").toString();
+        const sessionLocation = (sessionData.location || "").toString();
+
+        const speakerIds = toStringArray(sessionData.speakerIds);
+        const moderatorIds = toStringArray(sessionData.moderatorIds);
+
+        const assignedUserIds = uniqueStrings([
+          ...speakerIds,
+          ...moderatorIds,
+        ]);
+
+        const sentCount = await createSessionReminderForUsers({
+          userIds: assignedUserIds,
+          notificationIdPrefix: "assigned_session_starting_5min",
+          eventId,
+          sessionId: sessionDoc.id,
+          sessionTitle,
+          sessionLocation,
+          title: "Session Starting Soon",
+          subtitle: "Starts in 5 minutes",
+          body: `Your session "${sessionTitle}" will start in ${ASSIGNED_SESSION_START_MINUTES} minutes.`,
+          category: "assignedSessionStartingReminder",
+          minutesBefore: ASSIGNED_SESSION_START_MINUTES,
+        });
+
+        totalSentCount += sentCount;
+      }
+    }
+
+    // ------------------------------------------------------------------------
+    // 4. SPEAKER/MODERATOR: assigned session ending soon
+    // Send only to users in speakerIds and moderatorIds.
+    // ------------------------------------------------------------------------
+    {
+      const {windowStart, windowEnd} = getReminderWindow(
+        ASSIGNED_SESSION_END_MINUTES
+      );
+
+      const sessionsSnap = await db
+        .collection("sessions")
+        .where("endTime", ">=", windowStart)
+        .where("endTime", "<=", windowEnd)
+        .get();
+
+      for (const sessionDoc of sessionsSnap.docs) {
+        const sessionData = sessionDoc.data();
+
+        const eventId = (sessionData.eventId || "").toString();
+        const sessionTitle = (sessionData.title || "Session").toString();
+        const sessionLocation = (sessionData.location || "").toString();
+
+        const speakerIds = toStringArray(sessionData.speakerIds);
+        const moderatorIds = toStringArray(sessionData.moderatorIds);
+
+        const assignedUserIds = uniqueStrings([
+          ...speakerIds,
+          ...moderatorIds,
+        ]);
+
+        const sentCount = await createSessionReminderForUsers({
+          userIds: assignedUserIds,
+          notificationIdPrefix: "assigned_session_ending_5min",
+          eventId,
+          sessionId: sessionDoc.id,
+          sessionTitle,
+          sessionLocation,
+          title: "Session Ending Soon",
+          subtitle: "5 minutes remaining",
+          body: `Your session "${sessionTitle}" will end in ${ASSIGNED_SESSION_END_MINUTES} minutes.`,
+          category: "assignedSessionEndingReminder",
+          minutesBefore: ASSIGNED_SESSION_END_MINUTES,
+        });
+
+        totalSentCount += sentCount;
+      }
+    }
+
+    console.log(
+      `Automated session reminders completed. Total created: ${totalSentCount}`
+    );
+
+    return;
   }
 );
 
@@ -2826,3 +3174,219 @@ export const cleanupArchivedEvents = onSchedule(
   }
 );
 export {deleteMyAccount} from "./account_deletion";
+
+// Admin-only attendance removal. Bookmarks and feedback are preserved.
+export const removeSessionAttendance = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication is required.");
+    }
+    const sessionId = request.data?.sessionId;
+    const userId = request.data?.userId;
+    if (typeof sessionId !== "string" || !sessionId.trim() ||
+        sessionId.includes("/") || typeof userId !== "string" ||
+        !userId.trim() || userId.includes("/")) {
+      throw new HttpsError("invalid-argument", "Session and user IDs are required.");
+    }
+    const sessionRef = db.collection("sessions").doc(sessionId);
+    const adminRef = db.collection("users").doc(request.auth.uid);
+    await db.runTransaction(async (transaction) => {
+      const adminDoc = await transaction.get(adminRef);
+      const profile = adminDoc.data();
+      if (String(profile?.role || "").trim().toLowerCase() !== "admin" ||
+          String(profile?.status || "approved").toLowerCase() !== "approved") {
+        throw new HttpsError("permission-denied", "Only approved admins can remove attendance.");
+      }
+      const sessionDoc = await transaction.get(sessionRef);
+      if (!sessionDoc.exists) {
+        throw new HttpsError("not-found", "Session no longer exists.");
+      }
+      const records = await transaction.get(sessionRef.collection("checkins"));
+      for (const document of records.docs) {
+        const record = document.data();
+        const uid = record.userId || record.attendeeId || record.uid || document.id;
+        if (uid === userId) transaction.delete(document.ref);
+      }
+      transaction.update(sessionRef, {
+        checkedInAttendees: admin.firestore.FieldValue.arrayRemove(userId),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+    return {success: true};
+  }
+);
+
+// ============================================================================
+// PERSONAL MANUAL CODES AND STAFF BREAKOUT ADMISSION
+// ============================================================================
+
+function isBreakoutSession(category: unknown): boolean {
+  const normalized = String(category || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return normalized === "breakout" || normalized === "breakoutsession";
+}
+
+// Codes are random and do not expose a Firebase UID. The mapping is reserved
+// atomically, so two users cannot receive the same code.
+export const ensurePersonalCode = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication is required.");
+    }
+    const userRef = db.collection("users").doc(request.auth.uid);
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const random = crypto.randomBytes(10);
+      const candidate = Array.from(random, (value) => alphabet[value % alphabet.length]).join("");
+      const code = await db.runTransaction(async (transaction) => {
+        const userDoc = await transaction.get(userRef);
+        const userData = userDoc.data();
+        if (!userData) {
+          throw new HttpsError("not-found", "User profile not found.");
+        }
+        if ((userData.status || "approved") !== "approved") {
+          throw new HttpsError("permission-denied", "Your account is not approved.");
+        }
+        const existing = String(userData.personalCode || "").trim().toUpperCase();
+        if (/^[A-Z2-9]{10}$/.test(existing)) {
+          const existingRef = db.collection("personalCodes").doc(existing);
+          const existingDoc = await transaction.get(existingRef);
+          if (!existingDoc.exists || existingDoc.data()?.userId === userDoc.id) {
+            transaction.set(existingRef, {userId: userDoc.id});
+            transaction.update(userRef, {personalCode: existing});
+            return existing;
+          }
+        }
+        const codeRef = db.collection("personalCodes").doc(candidate);
+        const codeDoc = await transaction.get(codeRef);
+        if (codeDoc.exists) return null;
+        transaction.set(codeRef, {
+          userId: userDoc.id,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        transaction.update(userRef, {personalCode: candidate});
+        return candidate;
+      });
+      if (code) return {success: true, code};
+    }
+    throw new HttpsError("aborted", "Could not generate a code. Please try again.");
+  }
+);
+
+export const staffJoinBreakoutSession = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication is required.");
+    }
+    const staffUid = request.auth.uid;
+    const sessionId = request.data?.sessionId;
+    const userId = request.data?.userId;
+    if (typeof sessionId !== "string" || !sessionId.trim() || sessionId.includes("/") ||
+        typeof userId !== "string" || !userId.trim() || userId.includes("/")) {
+      throw new HttpsError("invalid-argument", "A sessionId and userId are required.");
+    }
+    const sessionRef = db.collection("sessions").doc(sessionId);
+    const staffRef = db.collection("users").doc(staffUid);
+    const userRef = db.collection("users").doc(userId);
+    const checkinRef = sessionRef.collection("checkins").doc(userId);
+    return db.runTransaction(async (transaction) => {
+      const staffDoc = await transaction.get(staffRef);
+      const userDoc = await transaction.get(userRef);
+      const sessionDoc = await transaction.get(sessionRef);
+      const checkinDoc = await transaction.get(checkinRef);
+      const staffData = staffDoc.data();
+      const userData = userDoc.data();
+      const sessionData = sessionDoc.data();
+      const staffRole = String(staffData?.role || "").trim().toLowerCase();
+      if (!staffData || !["staff", "secretariat", "admin"].includes(staffRole) ||
+          (staffData.status || "approved") !== "approved") {
+        throw new HttpsError("permission-denied", "Only approved staff can admit participants.");
+      }
+      if (!sessionData) {
+        throw new HttpsError("not-found", "Session not found.");
+      }
+      if (!isBreakoutSession(sessionData.category)) {
+        throw new HttpsError("failed-precondition", "Please select a breakout session.");
+      }
+      const eventId = String(sessionData.eventId || "");
+      if (!eventId || !Array.isArray(userData?.eventIds) || !userData.eventIds.includes(eventId) ||
+          (staffRole !== "admin" &&
+          (!Array.isArray(staffData.eventIds) || !staffData.eventIds.includes(eventId)))) {
+        throw new HttpsError("permission-denied", "Staff and participant must belong to this event.");
+      }
+      const userRole = String(userData?.role || "").trim().toLowerCase();
+      if (!userData || !["attendee", "speaker", "moderator"].includes(userRole) ||
+          (userData.status || "approved") !== "approved") {
+        throw new HttpsError("permission-denied", "This participant cannot join a breakout session.");
+      }
+      const sessionInfo = {id: sessionId, title: sessionData.title || "Session", eventId};
+      if (checkinDoc.exists) {
+        transaction.update(sessionRef, {
+          checkedInAttendees: admin.firestore.FieldValue.arrayUnion(userId),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return {success: true, alreadyCheckedIn: true, session: sessionInfo};
+      }
+      if (!(sessionData.startTime instanceof admin.firestore.Timestamp) ||
+          !(sessionData.endTime instanceof admin.firestore.Timestamp)) {
+        throw new HttpsError("failed-precondition", "Session times are not configured.");
+      }
+      const now = Date.now();
+      if (now < sessionData.startTime.toMillis() || now > sessionData.endTime.toMillis()) {
+        throw new HttpsError("failed-precondition", "This session is not currently active.");
+      }
+      const legacyIds = Array.isArray(sessionData.checkedInAttendees) ?
+        sessionData.checkedInAttendees : [];
+      let alreadyCounted = legacyIds.includes(userId);
+      if (sessionData.attendanceLimitEnabled === true) {
+        const maxAttendees = Number(sessionData.maxAttendees);
+        if (!Number.isSafeInteger(maxAttendees) || maxAttendees < 1) {
+          throw new HttpsError("failed-precondition", "Session attendance limit is invalid.");
+        }
+        const records = await transaction.get(sessionRef.collection("checkins"));
+        const ids = new Set<string>();
+        for (const value of legacyIds) {
+          if (typeof value === "string" && value.trim()) ids.add(value.trim());
+        }
+        for (const document of records.docs) {
+          const record = document.data();
+          const id = record.userId || record.attendeeId || record.uid || document.id;
+          if (typeof id === "string" && id.trim()) ids.add(id.trim());
+        }
+        alreadyCounted = ids.has(userId);
+        if (!alreadyCounted && ids.size >= maxAttendees) {
+          throw new HttpsError("resource-exhausted", "Session is Full.", {reason: "session-full", maxAttendees});
+        }
+      }
+      transaction.set(checkinRef, {
+        userId,
+        userName: userData.name || userData.fullName || userData.displayName || "Participant",
+        userEmail: userData.email || "",
+        userRole,
+        sessionId,
+        eventId,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        checkedInAt: admin.firestore.FieldValue.serverTimestamp(),
+        checkedInBy: staffUid,
+        checkedInByName: staffData.name || staffData.fullName || "Staff",
+        qrType: "staff_breakout_checkin",
+      });
+      transaction.update(sessionRef, {
+        checkedInAttendees: admin.firestore.FieldValue.arrayUnion(userId),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      if (!alreadyCounted) {
+        transaction.update(userRef, {points: admin.firestore.FieldValue.increment(10)});
+      }
+      return {success: true, alreadyCheckedIn: alreadyCounted, session: sessionInfo};
+    });
+  }
+);
+
+export {
+  generateEventJoinCredentials,
+  ensureEventJoinCredentials,
+  joinActiveEvent,
+} from "./event_join";

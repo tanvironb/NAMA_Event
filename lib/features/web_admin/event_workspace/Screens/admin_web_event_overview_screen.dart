@@ -1,6 +1,8 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../admin_web_theme.dart';
 
@@ -64,14 +66,11 @@ class AdminWebEventOverviewScreen extends StatelessWidget {
                 .snapshots(),
             builder: (context, snapshot) {
               final data = snapshot.data?.data() ?? {};
-              final description =
-                  (data['description'] ?? '').toString();
-              final active = data['isActive'] == true;
-
               return _EventOverviewHeader(
+                eventId: eventId,
                 eventName: eventName,
-                description: description,
-                active: active,
+                description: (data['description'] ?? '').toString(),
+                active: data['isActive'] == true,
               );
             },
           ),
@@ -79,7 +78,6 @@ class AdminWebEventOverviewScreen extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               int columns = 4;
-
               if (constraints.maxWidth < 700) {
                 columns = 1;
               } else if (constraints.maxWidth < 1100) {
@@ -87,10 +85,8 @@ class AdminWebEventOverviewScreen extends StatelessWidget {
               }
 
               const spacing = 14.0;
-
               final width =
-                  (constraints.maxWidth -
-                          (spacing * (columns - 1))) /
+                  (constraints.maxWidth - spacing * (columns - 1)) /
                       columns;
 
               return Wrap(
@@ -144,21 +140,24 @@ class AdminWebEventOverviewScreen extends StatelessWidget {
           const SizedBox(height: 18),
           LayoutBuilder(
             builder: (context, constraints) {
+              final checklist = _SetupChecklist(
+                eventId: eventId,
+                sessionsStream: _sessionsCountStream(),
+                speakersStream: _roleCountStream('speaker'),
+                moderatorsStream: _roleCountStream('moderator'),
+              );
+              final management = _EventManagement(
+                eventId: eventId,
+                eventName: eventName,
+                onNavigate: onNavigate,
+              );
+
               if (constraints.maxWidth < 900) {
                 return Column(
                   children: [
-                    _SetupChecklist(
-                      eventId: eventId,
-                      sessionsStream: _sessionsCountStream(),
-                      speakersStream: _roleCountStream('speaker'),
-                      moderatorsStream: _roleCountStream('moderator'),
-                    ),
+                    checklist,
                     const SizedBox(height: 18),
-                    _EventManagement(
-                      eventId: eventId,
-                      eventName: eventName,
-                      onNavigate: onNavigate,
-                    ),
+                    management,
                   ],
                 );
               }
@@ -166,24 +165,9 @@ class AdminWebEventOverviewScreen extends StatelessWidget {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    flex: 6,
-                    child: _SetupChecklist(
-                      eventId: eventId,
-                      sessionsStream: _sessionsCountStream(),
-                      speakersStream: _roleCountStream('speaker'),
-                      moderatorsStream: _roleCountStream('moderator'),
-                    ),
-                  ),
+                  Expanded(flex: 6, child: checklist),
                   const SizedBox(width: 18),
-                  Expanded(
-                    flex: 5,
-                    child: _EventManagement(
-                      eventId: eventId,
-                      eventName: eventName,
-                      onNavigate: onNavigate,
-                    ),
-                  ),
+                  Expanded(flex: 5, child: management),
                 ],
               );
             },
@@ -203,15 +187,69 @@ class AdminWebEventOverviewScreen extends StatelessWidget {
 }
 
 class _EventOverviewHeader extends StatelessWidget {
+  final String eventId;
   final String eventName;
   final String description;
   final bool active;
 
   const _EventOverviewHeader({
+    required this.eventId,
     required this.eventName,
     required this.description,
     required this.active,
   });
+
+  Widget _status() {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 13,
+        vertical: 8,
+      ),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        active ? 'ACTIVE EVENT' : 'SETUP IN PROGRESS',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget _information() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eventName,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 25,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        if (description.trim().isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            description,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFFD9DAF6),
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        _status(),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -227,56 +265,345 @@ class _EventOverviewHeader extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(15),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final credentials = _HeaderEventJoinCredentials(
+            key: ValueKey(eventId),
+            eventId: eventId,
+          );
+
+          if (constraints.maxWidth < 760) {
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  eventName,
+                _information(),
+                const SizedBox(height: 20),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 330),
+                    child: credentials,
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: _information()),
+              const SizedBox(width: 28),
+              SizedBox(
+                width: 330,
+                child: credentials,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HeaderEventJoinCredentials extends StatefulWidget {
+  final String eventId;
+
+  const _HeaderEventJoinCredentials({
+    super.key,
+    required this.eventId,
+  });
+
+  @override
+  State<_HeaderEventJoinCredentials> createState() =>
+      _HeaderEventJoinCredentialsState();
+}
+
+class _HeaderEventJoinCredentialsState
+    extends State<_HeaderEventJoinCredentials> {
+  late Future<void> _generation;
+  late Stream<DocumentSnapshot<Map<String, dynamic>>> _credentials;
+
+  @override
+  void initState() {
+    super.initState();
+    _connect();
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant _HeaderEventJoinCredentials oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.eventId != widget.eventId) {
+      _connect();
+    }
+  }
+
+  void _connect() {
+    _credentials = FirebaseFirestore.instance
+        .collection('eventJoinCredentials')
+        .doc(widget.eventId)
+        .snapshots();
+
+    _generation = _ensureCredentials();
+  }
+
+  Future<void> _ensureCredentials() async {
+    await FirebaseFunctions.instanceFor(
+      region: 'asia-southeast1',
+    ).httpsCallable('ensureEventJoinCredentials').call({
+      'eventId': widget.eventId,
+    });
+  }
+
+  Future<void> _copyCode(String code) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: code));
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Event code copied.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to copy. Please select the code manually.'),
+        ),
+      );
+    }
+  }
+
+  void _showQr(String payload, String code) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Event Joining QR'),
+          content: SizedBox(
+            width: 300,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.all(12),
+                  child: QrImageView(
+                    data: payload,
+                    size: 250,
+                    backgroundColor: Colors.white,
+                    foregroundColor: AdminWebTheme.primary,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text('Event Code'),
+                const SizedBox(height: 6),
+                SelectableText(
+                  code,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
+                    color: AdminWebTheme.primary,
+                    fontSize: 18,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (description.trim().isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    description,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFFD9DAF6),
-                      fontSize: 12,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
-          const SizedBox(width: 20),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 13,
-              vertical: 8,
+          actions: [
+            TextButton(
+              onPressed: () => _copyCode(code),
+              child: const Text('Copy Code'),
             ),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(20),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Close'),
             ),
-            child: Text(
-              active ? 'ACTIVE EVENT' : 'SETUP IN PROGRESS',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _loading() {
+    return const SizedBox(
+      height: 120,
+      child: Center(
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _failure(Object? error) {
+    final message = error is FirebaseFunctionsException
+        ? error.message ?? 'Unable to generate joining credentials.'
+        : error.toString();
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Unable to load event QR/code',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          message,
+          style: const TextStyle(
+            color: Color(0xFFD9DAF6),
+            fontSize: 11,
+          ),
+        ),
+        TextButton.icon(
+          onPressed: () => setState(_connect),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.white,
+          ),
+          icon: const Icon(Icons.refresh, size: 16),
+          label: const Text('Retry'),
+        ),
+      ],
+    );
+  }
+
+  Widget _joiningDetails(String code, String payload) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Tooltip(
+          message: 'Click to enlarge the event QR',
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: () => _showQr(payload, code),
+              child: Padding(
+                padding: const EdgeInsets.all(6),
+                child: QrImageView(
+                  data: payload,
+                  size: 108,
+                  backgroundColor: Colors.white,
+                  foregroundColor: AdminWebTheme.primary,
+                ),
               ),
             ),
           ),
-        ],
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'EVENT JOINING CODE',
+                style: TextStyle(
+                  color: Color(0xFFD9DAF6),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 7),
+              SelectableText(
+                code,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Scan QR or enter this code\nto join this event.',
+                style: TextStyle(
+                  color: Color(0xFFD9DAF6),
+                  fontSize: 10,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () => _copyCode(code),
+                icon: const Icon(Icons.copy_outlined, size: 14),
+                label: const Text('Copy Code'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.white38),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  textStyle: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(13),
+        border: Border.all(color: Colors.white.withOpacity(0.16)),
+      ),
+      child: FutureBuilder<void>(
+        future: _generation,
+        builder: (context, generated) {
+          if (generated.hasError) {
+            return _failure(generated.error);
+          }
+          if (generated.connectionState != ConnectionState.done) {
+            return _loading();
+          }
+
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: _credentials,
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return _failure(snapshot.error);
+              }
+              if (!snapshot.hasData) {
+                return _loading();
+              }
+
+              final data = snapshot.data!.data();
+              final code = (data?['code'] ?? '').toString().trim();
+              final payload =
+                  (data?['qrPayload'] ?? '').toString().trim();
+
+              if (code.isEmpty || payload.isEmpty) {
+                return _failure('Joining credentials are unavailable.');
+              }
+
+              return _joiningDetails(code, payload);
+            },
+          );
+        },
       ),
     );
   }
@@ -309,9 +636,7 @@ class _OverviewStatCard extends StatelessWidget {
           height: 120,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            border: Border.all(
-              color: AdminWebTheme.border,
-            ),
+            border: Border.all(color: AdminWebTheme.border),
             borderRadius: BorderRadius.circular(13),
           ),
           child: Row(
@@ -320,14 +645,10 @@ class _OverviewStatCard extends StatelessWidget {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color:
-                      AdminWebTheme.primary.withOpacity(0.08),
+                  color: AdminWebTheme.primary.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(
-                  icon,
-                  color: AdminWebTheme.primary,
-                ),
+                child: Icon(icon, color: AdminWebTheme.primary),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -335,22 +656,18 @@ class _OverviewStatCard extends StatelessWidget {
                   stream: stream,
                   builder: (context, snapshot) {
                     final value =
-                        snapshot.connectionState ==
-                                ConnectionState.waiting
+                        snapshot.connectionState == ConnectionState.waiting
                             ? '...'
                             : (snapshot.data ?? 0).toString();
 
                     return Column(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           value,
                           style: const TextStyle(
-                            color:
-                                AdminWebTheme.textPrimary,
+                            color: AdminWebTheme.textPrimary,
                             fontSize: 25,
                             fontWeight: FontWeight.w800,
                           ),
@@ -359,8 +676,7 @@ class _OverviewStatCard extends StatelessWidget {
                         Text(
                           title,
                           style: const TextStyle(
-                            color:
-                                AdminWebTheme.textPrimary,
+                            color: AdminWebTheme.textPrimary,
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                           ),
@@ -369,8 +685,7 @@ class _OverviewStatCard extends StatelessWidget {
                         Text(
                           subtitle,
                           style: const TextStyle(
-                            color:
-                                AdminWebTheme.textSecondary,
+                            color: AdminWebTheme.textSecondary,
                             fontSize: 9.5,
                           ),
                         ),
@@ -417,45 +732,34 @@ class _SetupChecklist extends StatelessWidget {
           ),
           StreamBuilder<int>(
             stream: sessionsStream,
-            builder: (context, snapshot) {
-              return _ChecklistRow(
-                title: 'Create event sessions',
-                complete: (snapshot.data ?? 0) > 0,
-              );
-            },
+            builder: (context, snapshot) => _ChecklistRow(
+              title: 'Create event sessions',
+              complete: (snapshot.data ?? 0) > 0,
+            ),
           ),
           StreamBuilder<int>(
             stream: speakersStream,
-            builder: (context, snapshot) {
-              return _ChecklistRow(
-                title: 'Assign speakers',
-                complete: (snapshot.data ?? 0) > 0,
-              );
-            },
+            builder: (context, snapshot) => _ChecklistRow(
+              title: 'Assign speakers',
+              complete: (snapshot.data ?? 0) > 0,
+            ),
           ),
           StreamBuilder<int>(
             stream: moderatorsStream,
-            builder: (context, snapshot) {
-              return _ChecklistRow(
-                title: 'Assign moderators',
-                complete: (snapshot.data ?? 0) > 0,
-              );
-            },
+            builder: (context, snapshot) => _ChecklistRow(
+              title: 'Assign moderators',
+              complete: (snapshot.data ?? 0) > 0,
+            ),
           ),
           StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
                 .collection('events')
                 .doc(eventId)
                 .snapshots(),
-            builder: (context, snapshot) {
-              final active =
-                  snapshot.data?.data()?['isActive'] == true;
-
-              return _ChecklistRow(
-                title: 'Activate event for users',
-                complete: active,
-              );
-            },
+            builder: (context, snapshot) => _ChecklistRow(
+              title: 'Activate event for users',
+              complete: snapshot.data?.data()?['isActive'] == true,
+            ),
           ),
         ],
       ),
@@ -475,17 +779,12 @@ class _ChecklistRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 13,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFFAFBFD),
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(
-          color: AdminWebTheme.border,
-        ),
+        border: Border.all(color: AdminWebTheme.border),
       ),
       child: Row(
         children: [
@@ -493,9 +792,7 @@ class _ChecklistRow extends StatelessWidget {
             complete
                 ? Icons.check_circle_rounded
                 : Icons.radio_button_unchecked_rounded,
-            color: complete
-                ? Colors.green
-                : AdminWebTheme.textSecondary,
+            color: complete ? Colors.green : AdminWebTheme.textSecondary,
             size: 20,
           ),
           const SizedBox(width: 11),
@@ -549,14 +846,10 @@ class _EventManagement extends StatelessWidget {
           _ManagementActionButton(
             icon: Icons.manage_accounts_outlined,
             title: 'Manage Users',
-            subtitle:
-                'View and manage users assigned to this event.',
+            subtitle: 'View and manage users assigned to this event.',
             onTap: () => onNavigate('Users'),
           ),
-          _EventActivationTile(
-            eventId: eventId,
-            eventName: eventName,
-          ),
+          _EventActivationTile(eventId: eventId, eventName: eventName),
         ],
       ),
     );
@@ -589,9 +882,7 @@ class _ManagementActionButton extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              border: Border.all(
-                color: AdminWebTheme.border,
-              ),
+              border: Border.all(color: AdminWebTheme.border),
               borderRadius: BorderRadius.circular(9),
             ),
             child: Row(
@@ -600,8 +891,7 @@ class _ManagementActionButton extends StatelessWidget {
                   width: 38,
                   height: 38,
                   decoration: BoxDecoration(
-                    color: AdminWebTheme.primary
-                        .withOpacity(0.08),
+                    color: AdminWebTheme.primary.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -613,14 +903,12 @@ class _ManagementActionButton extends StatelessWidget {
                 const SizedBox(width: 11),
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
                         style: const TextStyle(
-                          color:
-                              AdminWebTheme.textPrimary,
+                          color: AdminWebTheme.textPrimary,
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
                         ),
@@ -629,8 +917,7 @@ class _ManagementActionButton extends StatelessWidget {
                       Text(
                         subtitle,
                         style: const TextStyle(
-                          color:
-                              AdminWebTheme.textSecondary,
+                          color: AdminWebTheme.textSecondary,
                           fontSize: 9.5,
                         ),
                       ),
@@ -661,28 +948,20 @@ class _EventActivationTile extends StatefulWidget {
   });
 
   @override
-  State<_EventActivationTile> createState() =>
-      _EventActivationTileState();
+  State<_EventActivationTile> createState() => _EventActivationTileState();
 }
 
-class _EventActivationTileState
-    extends State<_EventActivationTile> {
+class _EventActivationTileState extends State<_EventActivationTile> {
   bool _updating = false;
 
-  Future<bool> _confirmChange({
-    required bool activate,
-  }) async {
+  Future<bool> _confirmChange({required bool activate}) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           title: Text(
-            activate
-                ? 'Activate Event?'
-                : 'Deactivate Event?',
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-            ),
+            activate ? 'Activate Event?' : 'Deactivate Event?',
+            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
           content: Text(
             activate
@@ -693,18 +972,12 @@ class _EventActivationTileState
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
-              child: Text(
-                activate ? 'Activate' : 'Deactivate',
-              ),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(activate ? 'Activate' : 'Deactivate'),
             ),
           ],
         );
@@ -717,38 +990,24 @@ class _EventActivationTileState
   Future<void> _updateActiveState(bool value) async {
     if (_updating) return;
 
-    final confirmed = await _confirmChange(
-      activate: value,
-    );
-
+    final confirmed = await _confirmChange(activate: value);
     if (!confirmed) return;
 
-    setState(() {
-      _updating = true;
-    });
+    setState(() => _updating = true);
 
     try {
       final firestore = FirebaseFirestore.instance;
-
-      final eventsSnapshot =
-          await firestore.collection('events').get();
-
+      final eventsSnapshot = await firestore.collection('events').get();
       final batch = firestore.batch();
 
       for (final document in eventsSnapshot.docs) {
-        batch.update(
-          document.reference,
-          {
-            'isActive':
-                value && document.id == widget.eventId,
-            'updatedAt':
-                FieldValue.serverTimestamp(),
-          },
-        );
+        batch.update(document.reference, {
+          'isActive': value && document.id == widget.eventId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
       }
 
       await batch.commit();
-
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -767,43 +1026,34 @@ class _EventActivationTileState
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'Failed to update event activation: $error',
-          ),
+          content: Text('Failed to update event activation: $error'),
           behavior: SnackBarBehavior.floating,
           backgroundColor: Colors.redAccent,
         ),
       );
     } finally {
       if (mounted) {
-        setState(() {
-          _updating = false;
-        });
+        setState(() => _updating = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<
-        DocumentSnapshot<Map<String, dynamic>>>(
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('events')
           .doc(widget.eventId)
           .snapshots(),
       builder: (context, snapshot) {
-        final isActive =
-            snapshot.data?.data()?['isActive'] == true;
+        final isActive = snapshot.data?.data()?['isActive'] == true;
 
         return Container(
-          padding:
-              const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
           decoration: BoxDecoration(
             color: const Color(0xFFFAFBFD),
             borderRadius: BorderRadius.circular(9),
-            border: Border.all(
-              color: AdminWebTheme.border,
-            ),
+            border: Border.all(color: AdminWebTheme.border),
           ),
           child: Row(
             children: [
@@ -813,29 +1063,24 @@ class _EventActivationTileState
                 decoration: BoxDecoration(
                   color: isActive
                       ? Colors.green.withOpacity(0.10)
-                      : AdminWebTheme.primary
-                          .withOpacity(0.08),
+                      : AdminWebTheme.primary.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   Icons.toggle_on_rounded,
-                  color: isActive
-                      ? Colors.green
-                      : AdminWebTheme.primary,
+                  color: isActive ? Colors.green : AdminWebTheme.primary,
                   size: 21,
                 ),
               ),
               const SizedBox(width: 11),
               const Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Event Activation',
                       style: TextStyle(
-                        color:
-                            AdminWebTheme.textPrimary,
+                        color: AdminWebTheme.textPrimary,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w700,
                       ),
@@ -844,8 +1089,7 @@ class _EventActivationTileState
                     Text(
                       'Set this event as the active event shown to app users.',
                       style: TextStyle(
-                        color:
-                            AdminWebTheme.textSecondary,
+                        color: AdminWebTheme.textSecondary,
                         fontSize: 9.5,
                       ),
                     ),
@@ -856,9 +1100,7 @@ class _EventActivationTileState
                 const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 )
               else
                 Switch(
@@ -890,9 +1132,7 @@ class _WorkspaceCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(13),
-        border: Border.all(
-          color: AdminWebTheme.border,
-        ),
+        border: Border.all(color: AdminWebTheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

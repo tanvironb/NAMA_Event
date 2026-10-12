@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../admin_web_theme.dart';
+import '../utils/admin_event_user_delete_helper.dart';
 
 class AdminWebSpeakersScreen extends StatefulWidget {
   final String eventId;
@@ -77,6 +78,61 @@ class _AdminWebSpeakersScreenState
         sessions: sessions,
       ),
     );
+  }
+
+  Future<void> _confirmDeleteUserFromEvent({
+    required String userId,
+    required String name,
+    required String roleName,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Delete $roleName'),
+          content: Text(
+            'Are you sure you want to remove $name from this event? This will remove the user from attendance, sessions, merchandise collection, meetings, and certificates for this event.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              label: const Text('Delete'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AdminWebTheme.danger,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true) return;
+    try {
+      await AdminEventUserDeleteHelper.deleteUserFromEvent(
+        eventId: widget.eventId,
+        userId: userId,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$name has been removed from this event.'),
+          backgroundColor: AdminWebTheme.success,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete $name: $e'),
+          backgroundColor: AdminWebTheme.danger,
+        ),
+      );
+    }
   }
 
   @override
@@ -210,6 +266,16 @@ class _AdminWebSpeakersScreenState
                         speakerId: speakerId,
                         speakerData: speakerData,
                         sessions: sessions,
+                      );
+                    },
+                    onDelete: (
+                      speakerId,
+                      speakerData,
+                    ) {
+                      _confirmDeleteUserFromEvent(
+                        userId: speakerId,
+                        name: (speakerData['name'] ?? 'this speaker').toString(),
+                        roleName: 'speaker',
                       );
                     },
                   );
@@ -389,11 +455,16 @@ class _SpeakersTable extends StatelessWidget {
     String speakerId,
     Map<String, dynamic> speakerData,
   ) onEdit;
+  final void Function(
+    String speakerId,
+    Map<String, dynamic> speakerData,
+  ) onDelete;
 
   const _SpeakersTable({
     required this.speakers,
     required this.sessions,
     required this.onEdit,
+    required this.onDelete,
   });
 
   int _sessionCount(String speakerId) {
@@ -428,6 +499,7 @@ class _SpeakersTable extends StatelessWidget {
                   data: data,
                   sessionCount: _sessionCount(speaker.id),
                   onEdit: () => onEdit(speaker.id, data),
+                  onDelete: () => onDelete(speaker.id, data),
                 );
               }).toList(),
             );
@@ -597,31 +669,9 @@ class _SpeakersTable extends StatelessWidget {
                         ),
                       ),
                       DataCell(
-                        OutlinedButton.icon(
-                          onPressed: () =>
-                              onEdit(speaker.id, data),
-                          icon: const Icon(
-                            Icons.edit_outlined,
-                            size: 17,
-                          ),
-                          label: const Text('Edit'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor:
-                                AdminWebTheme.primary,
-                            side: const BorderSide(
-                              color: AdminWebTheme.border,
-                            ),
-                            padding:
-                                const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 8,
-                            ),
-                            minimumSize: const Size(72, 34),
-                            textStyle: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                        _TableActions(
+                          onEdit: () => onEdit(speaker.id, data),
+                          onDelete: () => onDelete(speaker.id, data),
                         ),
                       ),
                     ],
@@ -643,17 +693,61 @@ class _SpeakersTable extends StatelessWidget {
   }
 }
 
+class _TableActions extends StatelessWidget {
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _TableActions({
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        OutlinedButton.icon(
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined, size: 17),
+          label: const Text('Edit'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AdminWebTheme.primary,
+            side: const BorderSide(color: AdminWebTheme.border),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            minimumSize: const Size(72, 34),
+            textStyle: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        IconButton(
+          tooltip: 'Delete',
+          onPressed: onDelete,
+          icon: const Icon(Icons.delete_outline_rounded, size: 18),
+          color: AdminWebTheme.danger,
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
+    );
+  }
+}
+
 class _MobileSpeakerCard extends StatelessWidget {
   final String speakerId;
   final Map<String, dynamic> data;
   final int sessionCount;
   final VoidCallback onEdit;
+  final VoidCallback onDelete;
 
   const _MobileSpeakerCard({
     required this.speakerId,
     required this.data,
     required this.sessionCount,
     required this.onEdit,
+    required this.onDelete,
   });
 
   @override
@@ -713,6 +807,14 @@ class _MobileSpeakerCard extends StatelessWidget {
                 icon: const Icon(
                   Icons.edit_outlined,
                   color: AdminWebTheme.primary,
+                ),
+              ),
+              IconButton(
+                tooltip: 'Delete speaker',
+                onPressed: onDelete,
+                icon: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: AdminWebTheme.danger,
                 ),
               ),
             ],
