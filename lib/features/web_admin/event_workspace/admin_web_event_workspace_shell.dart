@@ -1,5 +1,6 @@
 // lib/features/web_admin/event_workspace/admin_web_event_workspace_shell.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/models/help_ticket_model.dart';
 import 'package:events_app_trueattempt/features/help/data/help_repository.dart';
@@ -74,6 +75,7 @@ class _AdminWebEventWorkspaceShellState
     ),
     _WorkspaceNavigationItem(
       title: 'Speaker Room',
+      svgAsset: 'assets/icons/admin_speaker_room.svg',
       icon: Icons.forum_outlined,
       selectedIcon: Icons.forum_rounded,
     ),
@@ -94,6 +96,7 @@ class _AdminWebEventWorkspaceShellState
     ),
     _WorkspaceNavigationItem(
       title: 'Merchandise',
+      svgAsset: 'assets/icons/admin_merchandise.svg',
       icon: Icons.card_giftcard_outlined,
       selectedIcon: Icons.card_giftcard_rounded,
     ),
@@ -611,11 +614,18 @@ class _SidebarItem extends StatelessWidget {
                     Positioned(
                       left: 0,
                       top: 1,
-                      child: Icon(
-                        selected ? item.selectedIcon : item.icon,
-                        color: Colors.white,
-                        size: 19,
-                      ),
+                      // These assets remain independent of the deployed icon font.
+                      child: item.svgAsset != null
+                          ? SvgPicture.asset(
+                              item.svgAsset!,
+                              width: 19,
+                              height: 19,
+                            )
+                          : Icon(
+                              selected ? item.selectedIcon : item.icon,
+                              color: Colors.white,
+                              size: 19,
+                            ),
                     ),
                     if (notificationCount > 0)
                       Positioned(
@@ -928,9 +938,11 @@ class _WorkspaceNavigationItem {
   final String title;
   final IconData icon;
   final IconData selectedIcon;
+  final String? svgAsset;
   const _WorkspaceNavigationItem({
     required this.title,
     required this.icon,
     required this.selectedIcon,
+    this.svgAsset,
   });
 }
