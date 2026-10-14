@@ -55,8 +55,8 @@ class NotificationService {
 
       await LocalNotificationService.initialize();
 
-      await _saveTokenToFirestore();
       await _setupInteractions();
+      await _saveTokenToFirestore();
 
       debugPrint(
         'NotificationService: Initialization completed successfully',
@@ -163,12 +163,7 @@ class NotificationService {
       if (initialMessage != null) {
         debugPrint('App opened from notification!');
 
-        Future.delayed(
-          const Duration(milliseconds: 500),
-          () {
-            NotificationHandler.handleNotificationTap(initialMessage);
-          },
-        );
+        NotificationHandler.handleNotificationTap(initialMessage);
       }
 
       debugPrint(

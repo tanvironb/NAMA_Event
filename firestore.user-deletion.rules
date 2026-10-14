@@ -1,0 +1,168 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        )
+        && get(
+          /databases/$(database)/documents/users/$(request.auth.uid)
+        ).data.role == "admin";
+    }
+
+    function changesUserRole() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasAny(["role"]);
+    }
+
+    function changesPersonalCode() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasAny(["personalCode"]);
+    }
+
+    function changesSessionAttendance() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasAny(["checkedInAttendees"]);
+    }
+
+    function changesSessionAdmissionSettings() {
+      return request.resource.data.diff(resource.data)
+        .affectedKeys().hasAny([
+          "category",
+          "attendanceLimitEnabled",
+          "maxAttendees",
+          "eventId"
+        ]);
+    }
+
+    // ------------------------------------------------------------
+    // USERS
+    // ------------------------------------------------------------
+    match /users/{userId} {
+      allow read: if isSignedIn();
+
+      allow create: if isSignedIn()
+        && !("personalCode" in request.resource.data)
+        && (
+          isAdmin()
+          || (
+            request.auth.uid == userId
+            && (
+              !("role" in request.resource.data)
+              || request.resource.data.role in ["attendee", "user"]
+            )
+          )
+        );
+
+      allow update: if isSignedIn()
+        && (request.auth.uid == userId || isAdmin())
+        && !changesPersonalCode()
+        && (!changesUserRole() || isAdmin());
+
+      allow delete: if isAdmin();
+
+      match /notifications/{notificationId} {
+        allow read, write: if isSignedIn()
+          && (request.auth.uid == userId || isAdmin());
+      }
+
+      // Preserve existing access to user subcollections.
+      match /{subCollection}/{document=**} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    // Only Cloud Functions manage personal-code mappings.
+    match /personalCodes/{document=**} {
+      allow read, write: if false;
+    }
+
+    // ------------------------------------------------------------
+    // EVENTS
+    // ------------------------------------------------------------
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+
+      match /registrations/{userId} {
+        allow read: if isSignedIn();
+
+        allow create, update: if isSignedIn()
+          && (request.auth.uid == userId || isAdmin());
+
+        allow delete: if isAdmin();
+      }
+
+      match /{subCollection}/{docId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+    }
+
+    // ------------------------------------------------------------
+    // SESSIONS
+    // ------------------------------------------------------------
+    match /sessions/{sessionId} {
+      allow read: if isSignedIn();
+
+      // Prevent deleting/recreating a session to bypass its settings.
+      allow create: if isAdmin()
+        && (
+          !("checkedInAttendees" in request.resource.data)
+          || request.resource.data.checkedInAttendees == []
+        );
+
+      allow delete: if isAdmin();
+
+      // Attendance is maintained by Cloud Functions.
+      // Only admin can change category, capacity, or event assignment.
+      allow update: if isSignedIn()
+        && (!changesSessionAttendance() || (isAdmin() && request.resource.data.checkedInAttendees is list && resource.data.checkedInAttendees is list && request.resource.data.checkedInAttendees.hasOnly(resource.data.checkedInAttendees) && request.resource.data.checkedInAttendees.size() < resource.data.checkedInAttendees.size()))
+        && (
+          isAdmin()
+          || !changesSessionAdmissionSettings()
+        );
+
+      match /checkins/{document=**} {
+        allow delete: if isAdmin();
+        allow read: if isSignedIn();
+        allow write: if false;
+      }
+
+      // Protect the older attendance path as well.
+      match /attendance/{document=**} {
+        allow delete: if isAdmin();
+        allow read: if isSignedIn();
+        allow write: if false;
+      }
+
+      // Preserve chat, feedback, photos, bookmarks, and other
+      // session subcollection access.
+      match /{subCollection}/{document=**} {
+        allow read: if isSignedIn();
+
+        allow write: if isSignedIn()
+          && subCollection != "checkins"
+          && subCollection != "attendance";
+      }
+    }
+
+    // ------------------------------------------------------------
+    // OTHER COLLECTIONS
+    // Preserve existing access without overriding protected rules.
+    // ------------------------------------------------------------
+    match /{collection}/{document=**} {
+      allow read, write: if isSignedIn()
+        && collection != "users"
+        && collection != "sessions"
+        && collection != "personalCodes";
+    }
+  }
+}

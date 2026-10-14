@@ -13,11 +13,7 @@ class AdminSessionManagementScreen extends ConsumerStatefulWidget {
   final String? eventId;
   final String? eventName;
 
-  const AdminSessionManagementScreen({
-    super.key,
-    this.eventId,
-    this.eventName,
-  });
+  const AdminSessionManagementScreen({super.key, this.eventId, this.eventName});
 
   bool get isEventSpecific => eventId != null && eventId!.isNotEmpty;
 
@@ -66,13 +62,13 @@ class _AdminSessionManagementScreenState
         .where('eventId', isEqualTo: widget.eventId)
         .snapshots()
         .map((snapshot) {
-      final sessions =
-      snapshot.docs.map((doc) => Session.fromFirestore(doc)).toList();
+          final sessions =
+              snapshot.docs.map((doc) => Session.fromFirestore(doc)).toList();
 
-      sessions.sort((a, b) => a.startTime.compareTo(b.startTime));
+          sessions.sort((a, b) => a.startTime.compareTo(b.startTime));
 
-      return sessions;
-    });
+          return sessions;
+        });
   }
 
   Map<DateTime, List<Session>> _groupSessionsByDate(List<Session> sessions) {
@@ -90,9 +86,7 @@ class _AdminSessionManagementScreenState
     }
 
     for (final date in groupedSessions.keys) {
-      groupedSessions[date]!.sort(
-            (a, b) => a.startTime.compareTo(b.startTime),
-      );
+      groupedSessions[date]!.sort((a, b) => a.startTime.compareTo(b.startTime));
     }
 
     return groupedSessions;
@@ -201,11 +195,12 @@ class _AdminSessionManagementScreenState
     final firestore = FirebaseFirestore.instance;
     final usersById = <String, _AssignableUser>{};
 
-    final linkedSnapshot = await firestore
-        .collection('users')
-        .where('role', isEqualTo: role)
-        .where('eventIds', arrayContains: eventId)
-        .get();
+    final linkedSnapshot =
+        await firestore
+            .collection('users')
+            .where('role', isEqualTo: role)
+            .where('eventIds', arrayContains: eventId)
+            .get();
 
     for (final doc in linkedSnapshot.docs) {
       final data = doc.data();
@@ -236,8 +231,10 @@ class _AdminSessionManagementScreenState
       }
     }
 
-    final users = usersById.values.toList()
-      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    final users =
+        usersById.values.toList()..sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
 
     return users;
   }
@@ -246,7 +243,10 @@ class _AdminSessionManagementScreenState
     final eventId = session.eventId.trim();
 
     if (eventId.isEmpty) {
-      _showMessage('This session is not linked to a valid event.', isError: true);
+      _showMessage(
+        'This session is not linked to a valid event.',
+        isError: true,
+      );
       return;
     }
 
@@ -275,11 +275,13 @@ class _AdminSessionManagementScreenState
     }
 
     final titleController = TextEditingController(text: session.title);
-    final descriptionController =
-    TextEditingController(text: session.description);
+    final descriptionController = TextEditingController(
+      text: session.description,
+    );
     final locationController = TextEditingController(text: session.location);
-    final liveStreamController =
-    TextEditingController(text: session.liveStreamUrl);
+    final liveStreamController = TextEditingController(
+      text: session.liveStreamUrl,
+    );
 
     DateTime selectedDate = DateTime(
       session.startTime.year,
@@ -292,7 +294,7 @@ class _AdminSessionManagementScreenState
 
     final rawCategory = session.category.trim();
     String selectedCategory =
-    _categories.contains(rawCategory) ? rawCategory : 'Other';
+        _categories.contains(rawCategory) ? rawCategory : 'Other';
 
     int selectedPriority = session.priority;
     if (selectedPriority < 1 || selectedPriority > 5) {
@@ -316,9 +318,9 @@ class _AdminSessionManagementScreenState
         builder: (context, child) {
           return Theme(
             data: Theme.of(context).copyWith(
-              colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: _primaryColor,
-              ),
+              colorScheme: Theme.of(
+                context,
+              ).colorScheme.copyWith(primary: _primaryColor),
             ),
             child: child!,
           );
@@ -337,9 +339,9 @@ class _AdminSessionManagementScreenState
         builder: (context, child) {
           return Theme(
             data: Theme.of(context).copyWith(
-              colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: _primaryColor,
-              ),
+              colorScheme: Theme.of(
+                context,
+              ).colorScheme.copyWith(primary: _primaryColor),
             ),
             child: child!,
           );
@@ -358,9 +360,9 @@ class _AdminSessionManagementScreenState
         builder: (context, child) {
           return Theme(
             data: Theme.of(context).copyWith(
-              colorScheme: Theme.of(context).colorScheme.copyWith(
-                primary: _primaryColor,
-              ),
+              colorScheme: Theme.of(
+                context,
+              ).colorScheme.copyWith(primary: _primaryColor),
             ),
             child: child!,
           );
@@ -373,13 +375,7 @@ class _AdminSessionManagementScreenState
     }
 
     DateTime combineDateAndTime(DateTime date, TimeOfDay time) {
-      return DateTime(
-        date.year,
-        date.month,
-        date.day,
-        time.hour,
-        time.minute,
-      );
+      return DateTime(date.year, date.month, date.day, time.hour, time.minute);
     }
 
     String formatDate(DateTime date) {
@@ -435,24 +431,26 @@ class _AdminSessionManagementScreenState
             .collection('sessions')
             .doc(session.id)
             .update({
-          'title': title,
-          'description': description,
-          'location': location,
-          'startTime': Timestamp.fromDate(newStartTime),
-          'endTime': Timestamp.fromDate(newEndTime),
-          'category': selectedCategory,
-          'speakerIds': _isNonSpeakingCategory(selectedCategory)
-              ? <String>[]
-              : selectedSpeakerIds.toList(),
-          'moderatorIds': _isNonSpeakingCategory(selectedCategory)
-              ? <String>[]
-              : selectedModeratorIds.toList(),
-          'priority': selectedPriority,
-          'liveStreamUrl': liveStreamUrl,
-          'isChatEnabled': isChatEnabled,
-          'closedBy': isChatEnabled ? '' : session.closedBy,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+              'title': title,
+              'description': description,
+              'location': location,
+              'startTime': Timestamp.fromDate(newStartTime),
+              'endTime': Timestamp.fromDate(newEndTime),
+              'category': selectedCategory,
+              'speakerIds':
+                  _isNonSpeakingCategory(selectedCategory)
+                      ? <String>[]
+                      : selectedSpeakerIds.toList(),
+              'moderatorIds':
+                  _isNonSpeakingCategory(selectedCategory)
+                      ? <String>[]
+                      : selectedModeratorIds.toList(),
+              'priority': selectedPriority,
+              'liveStreamUrl': liveStreamUrl,
+              'isChatEnabled': isChatEnabled,
+              'closedBy': isChatEnabled ? '' : session.closedBy,
+              'updatedAt': FieldValue.serverTimestamp(),
+            });
 
         if (!mounted) return;
 
@@ -473,9 +471,7 @@ class _AdminSessionManagementScreenState
       isScrollControlled: true,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(24),
-        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
         return StatefulBuilder(
@@ -516,7 +512,9 @@ class _AdminSessionManagementScreenState
                         ),
                         IconButton(
                           onPressed:
-                          isSaving ? null : () => Navigator.of(context).pop(),
+                              isSaving
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
                           icon: const Icon(
                             Icons.close_rounded,
                             color: _primaryColor,
@@ -564,7 +562,7 @@ class _AdminSessionManagementScreenState
                             value: formatDate(selectedDate),
                             icon: Icons.calendar_today_outlined,
                             onTap:
-                            isSaving ? null : () => pickDate(setSheetState),
+                                isSaving ? null : () => pickDate(setSheetState),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -573,9 +571,10 @@ class _AdminSessionManagementScreenState
                             label: 'Start',
                             value: formatTime(startTime),
                             icon: Icons.access_time_rounded,
-                            onTap: isSaving
-                                ? null
-                                : () => pickStartTime(setSheetState),
+                            onTap:
+                                isSaving
+                                    ? null
+                                    : () => pickStartTime(setSheetState),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -584,9 +583,10 @@ class _AdminSessionManagementScreenState
                             label: 'End',
                             value: formatTime(endTime),
                             icon: Icons.access_time_rounded,
-                            onTap: isSaving
-                                ? null
-                                : () => pickEndTime(setSheetState),
+                            onTap:
+                                isSaving
+                                    ? null
+                                    : () => pickEndTime(setSheetState),
                           ),
                         ),
                       ],
@@ -595,29 +595,31 @@ class _AdminSessionManagementScreenState
                     _EditCategoryDropdown(
                       value: selectedCategory,
                       items: _categories,
-                      onChanged: isSaving
-                          ? null
-                          : (value) {
-                        if (value == null) return;
-                        setSheetState(() {
-                          selectedCategory = value;
+                      onChanged:
+                          isSaving
+                              ? null
+                              : (value) {
+                                if (value == null) return;
+                                setSheetState(() {
+                                  selectedCategory = value;
 
-                          if (_isNonSpeakingCategory(value)) {
-                            selectedSpeakerIds.clear();
-                            selectedModeratorIds.clear();
-                          }
-                        });
-                      },
+                                  if (_isNonSpeakingCategory(value)) {
+                                    selectedSpeakerIds.clear();
+                                    selectedModeratorIds.clear();
+                                  }
+                                });
+                              },
                     ),
                     const SizedBox(height: 14),
                     _EditPriorityDropdown(
                       value: selectedPriority,
-                      onChanged: isSaving
-                          ? null
-                          : (value) {
-                        if (value == null) return;
-                        setSheetState(() => selectedPriority = value);
-                      },
+                      onChanged:
+                          isSaving
+                              ? null
+                              : (value) {
+                                if (value == null) return;
+                                setSheetState(() => selectedPriority = value);
+                              },
                     ),
                     const SizedBox(height: 14),
                     _EditInputField(
@@ -744,13 +746,14 @@ class _AdminSessionManagementScreenState
                           Switch(
                             value: isChatEnabled,
                             activeColor: AppColors.namaGoldenYellow,
-                            onChanged: isSaving
-                                ? null
-                                : (value) {
-                              setSheetState(() {
-                                isChatEnabled = value;
-                              });
-                            },
+                            onChanged:
+                                isSaving
+                                    ? null
+                                    : (value) {
+                                      setSheetState(() {
+                                        isChatEnabled = value;
+                                      });
+                                    },
                           ),
                         ],
                       ),
@@ -760,9 +763,10 @@ class _AdminSessionManagementScreenState
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: isSaving
-                                ? null
-                                : () => Navigator.of(context).pop(),
+                            onPressed:
+                                isSaving
+                                    ? null
+                                    : () => Navigator.of(context).pop(),
                             icon: const Icon(Icons.close_rounded, size: 18),
                             label: const Text(
                               'Cancel',
@@ -773,7 +777,11 @@ class _AdminSessionManagementScreenState
                             ),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: _primaryColor,
-                              side: BorderSide(color: AppColors.namaGoldenYellow.withOpacity(0.65)),
+                              side: BorderSide(
+                                color: AppColors.namaGoldenYellow.withOpacity(
+                                  0.65,
+                                ),
+                              ),
                               minimumSize: const Size(double.infinity, 46),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
@@ -785,17 +793,20 @@ class _AdminSessionManagementScreenState
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed:
-                            isSaving ? null : () => saveSession(setSheetState),
-                            icon: isSaving
-                                ? const SizedBox(
-                              height: 16,
-                              width: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                                : const Icon(Icons.check_rounded, size: 18),
+                                isSaving
+                                    ? null
+                                    : () => saveSession(setSheetState),
+                            icon:
+                                isSaving
+                                    ? const SizedBox(
+                                      height: 16,
+                                      width: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                    : const Icon(Icons.check_rounded, size: 18),
                             label: Text(
                               isSaving ? 'Saving...' : 'Save',
                               style: const TextStyle(
@@ -932,11 +943,7 @@ class _AdminSessionManagementScreenState
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 56,
-              color: AppColors.errorRed,
-            ),
+            Icon(Icons.error_outline, size: 56, color: AppColors.errorRed),
             const SizedBox(height: 14),
             const Text(
               'Error loading sessions',
@@ -1038,14 +1045,13 @@ class _AdminSessionManagementScreenState
           children: [
             _buildDateHeader(date, dateSessions),
             ...dateSessions.map(
-                  (session) => _AdminSessionCard(
+              (session) => _AdminSessionCard(
                 session: session,
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => AdminSessionDetailScreen(
-                        session: session,
-                      ),
+                      builder:
+                          (_) => AdminSessionDetailScreen(session: session),
                     ),
                   );
                 },
@@ -1166,14 +1172,12 @@ class _UserAssignmentSection extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: isRequired
-                      ? const Color(0xFFFFF3CD)
-                      : const Color(0xFFF1EEFB),
+                  color:
+                      isRequired
+                          ? const Color(0xFFFFF3CD)
+                          : const Color(0xFFF1EEFB),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -1208,92 +1212,89 @@ class _UserAssignmentSection extends StatelessWidget {
               child: Text(
                 emptyMessage,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: _textMuted,
-                  fontSize: 11.5,
-                ),
+                style: const TextStyle(color: _textMuted, fontSize: 11.5),
               ),
             )
           else
             Column(
-              children: users.map((user) {
-                final selected = selectedIds.contains(user.id);
-                final subtitleParts = <String>[
-                  if (user.company.trim().isNotEmpty) user.company.trim(),
-                  if (user.email.trim().isNotEmpty) user.email.trim(),
-                ];
+              children:
+                  users.map((user) {
+                    final selected = selectedIds.contains(user.id);
+                    final subtitleParts = <String>[
+                      if (user.company.trim().isNotEmpty) user.company.trim(),
+                      if (user.email.trim().isNotEmpty) user.email.trim(),
+                    ];
 
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: InkWell(
-                    onTap: enabled
-                        ? () => onToggle(user.id, !selected)
-                        : null,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 9,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? const Color(0xFFF1EEFB)
-                            : const Color(0xFFFAFAFA),
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: InkWell(
+                        onTap:
+                            enabled ? () => onToggle(user.id, !selected) : null,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: selected ? _primaryColor : _fieldBorder,
-                          width: selected ? 1.2 : 1,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Checkbox(
-                            value: selected,
-                            onChanged: enabled
-                                ? (value) => onToggle(
-                                      user.id,
-                                      value ?? false,
-                                    )
-                                : null,
-                            activeColor: _primaryColor,
-                            visualDensity: VisualDensity.compact,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 9,
                           ),
-                          const SizedBox(width: 4),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  user.name.trim().isEmpty
-                                      ? 'Unnamed User'
-                                      : user.name.trim(),
-                                  style: const TextStyle(
-                                    color: Color(0xFF1F2937),
-                                    fontSize: 12.5,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                if (subtitleParts.isNotEmpty) ...[
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    subtitleParts.join(' • '),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: _textMuted,
-                                      fontSize: 10.5,
-                                    ),
-                                  ),
-                                ],
-                              ],
+                          decoration: BoxDecoration(
+                            color:
+                                selected
+                                    ? const Color(0xFFF1EEFB)
+                                    : const Color(0xFFFAFAFA),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selected ? _primaryColor : _fieldBorder,
+                              width: selected ? 1.2 : 1,
                             ),
                           ),
-                        ],
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: selected,
+                                onChanged:
+                                    enabled
+                                        ? (value) =>
+                                            onToggle(user.id, value ?? false)
+                                        : null,
+                                activeColor: _primaryColor,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      user.name.trim().isEmpty
+                                          ? 'Unnamed User'
+                                          : user.name.trim(),
+                                      style: const TextStyle(
+                                        color: Color(0xFF1F2937),
+                                        fontSize: 12.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    if (subtitleParts.isNotEmpty) ...[
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        subtitleParts.join(' • '),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: _textMuted,
+                                          fontSize: 10.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                );
-              }).toList(),
+                    );
+                  }).toList(),
             ),
         ],
       ),
@@ -1331,9 +1332,10 @@ class _AdminSessionCard extends StatelessWidget {
         color: hasEnded ? const Color(0xFFF1F1F1) : Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isActive
-              ? AppColors.successGreen
-              : AppColors.namaGoldenYellow.withOpacity(0.36),
+          color:
+              isActive
+                  ? AppColors.successGreen
+                  : AppColors.namaGoldenYellow.withOpacity(0.36),
           width: isActive ? 1.6 : 1,
         ),
         boxShadow: [
@@ -1354,10 +1356,7 @@ class _AdminSessionCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  _StatusBadge(
-                    isActive: isActive,
-                    hasEnded: hasEnded,
-                  ),
+                  _StatusBadge(isActive: isActive, hasEnded: hasEnded),
                   const Spacer(),
                   Icon(
                     Icons.access_time,
@@ -1450,13 +1449,34 @@ class _AdminSessionCard extends StatelessWidget {
                             color: AppColors.namaGoldenYellow,
                             faded: hasEnded,
                           ),
-                        if (session.totalMessages > 0)
-                          _MiniChip(
-                            icon: Icons.chat_bubble_outline_rounded,
-                            label: '${session.totalMessages} messages',
-                            color: AppColors.infoBlue,
-                            faded: hasEnded,
-                          ),
+                        StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                          stream:
+                              FirebaseFirestore.instance
+                                  .collection('sessions')
+                                  .doc(session.id)
+                                  .collection('chat')
+                                  .snapshots(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData || snapshot.hasError) {
+                              return const SizedBox.shrink();
+                            }
+                            final count =
+                                snapshot.data!.docs
+                                    .where(
+                                      (d) =>
+                                          d.data()['deletedForEveryone'] !=
+                                          true,
+                                    )
+                                    .length;
+                            if (count == 0) return const SizedBox.shrink();
+                            return _MiniChip(
+                              icon: Icons.chat_bubble_outline_rounded,
+                              label: '$count messages',
+                              color: AppColors.infoBlue,
+                              faded: hasEnded,
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -1509,15 +1529,9 @@ class _SmallActionButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: color.withOpacity(0.08),
             borderRadius: BorderRadius.circular(11),
-            border: Border.all(
-              color: color.withOpacity(0.22),
-            ),
+            border: Border.all(color: color.withOpacity(0.22)),
           ),
-          child: Icon(
-            icon,
-            color: color,
-            size: 17,
-          ),
+          child: Icon(icon, color: color, size: 17),
         ),
       ),
     );
@@ -1528,10 +1542,7 @@ class _StatusBadge extends StatelessWidget {
   final bool isActive;
   final bool hasEnded;
 
-  const _StatusBadge({
-    required this.isActive,
-    required this.hasEnded,
-  });
+  const _StatusBadge({required this.isActive, required this.hasEnded});
 
   @override
   Widget build(BuildContext context) {
@@ -1545,11 +1556,7 @@ class _StatusBadge extends StatelessWidget {
         child: const Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.circle,
-              size: 7,
-              color: Colors.white,
-            ),
+            Icon(Icons.circle, size: 7, color: Colors.white),
             SizedBox(width: 5),
             Text(
               'LIVE',
@@ -1626,11 +1633,7 @@ class _MiniChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            icon,
-            size: 12,
-            color: chipColor,
-          ),
+          Icon(icon, size: 12, color: chipColor),
           const SizedBox(width: 4),
           Text(
             label,
@@ -1683,15 +1686,8 @@ class _EditInputField extends StatelessWidget {
           ),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: const TextStyle(
-              color: _textMuted,
-              fontSize: 12,
-            ),
-            prefixIcon: Icon(
-              icon,
-              color: _primaryColor,
-              size: 19,
-            ),
+            hintStyle: const TextStyle(color: _textMuted, fontSize: 12),
+            prefixIcon: Icon(icon, color: _primaryColor, size: 19),
             filled: true,
             fillColor: Colors.white,
             contentPadding: const EdgeInsets.symmetric(
@@ -1700,16 +1696,11 @@ class _EditInputField extends StatelessWidget {
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
-              borderSide: const BorderSide(
-                color: _fieldBorder,
-              ),
+              borderSide: const BorderSide(color: _fieldBorder),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(13),
-              borderSide: const BorderSide(
-                color: _primaryColor,
-                width: 1.1,
-              ),
+              borderSide: const BorderSide(color: _primaryColor, width: 1.1),
             ),
           ),
         ),
@@ -1750,17 +1741,11 @@ class _EditPickerField extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(13),
-              border: Border.all(
-                color: _fieldBorder,
-              ),
+              border: Border.all(color: _fieldBorder),
             ),
             child: Row(
               children: [
-                Icon(
-                  icon,
-                  color: _primaryColor,
-                  size: 18,
-                ),
+                Icon(icon, color: _primaryColor, size: 18),
                 const SizedBox(width: 7),
                 Expanded(
                   child: Text(
@@ -1846,21 +1831,16 @@ class _EditCategoryDropdown extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: _primaryColor,
-                  width: 1.1,
-                ),
+                borderSide: const BorderSide(color: _primaryColor, width: 1.1),
               ),
             ),
-            items: safeItems.map((item) {
-              return DropdownMenuItem<String>(
-                value: item,
-                child: Text(
-                  item,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              );
-            }).toList(),
+            items:
+                safeItems.map((item) {
+                  return DropdownMenuItem<String>(
+                    value: item,
+                    child: Text(item, overflow: TextOverflow.ellipsis),
+                  );
+                }).toList(),
           ),
         ),
       ],
@@ -1872,10 +1852,7 @@ class _EditPriorityDropdown extends StatelessWidget {
   final int value;
   final ValueChanged<int?>? onChanged;
 
-  const _EditPriorityDropdown({
-    required this.value,
-    required this.onChanged,
-  });
+  const _EditPriorityDropdown({required this.value, required this.onChanged});
 
   static const Color _primaryColor = Color(0xFF1B0F72);
   static const Color _fieldBorder = Color(0xFFE1DDF0);
@@ -1923,10 +1900,7 @@ class _EditPriorityDropdown extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(13),
-                borderSide: const BorderSide(
-                  color: _primaryColor,
-                  width: 1.1,
-                ),
+                borderSide: const BorderSide(color: _primaryColor, width: 1.1),
               ),
             ),
             items: const [

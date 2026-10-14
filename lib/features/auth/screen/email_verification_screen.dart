@@ -49,95 +49,93 @@ class _EmailVerificationScreenState
     super.dispose();
   }
 
-Future<void> _sendInitialVerificationEmail() async {
-  if (_autoEmailSent || _isSigningOut) return;
+  Future<void> _sendInitialVerificationEmail() async {
+    if (_autoEmailSent || _isSigningOut) return;
 
-  _autoEmailSent = true;
+    _autoEmailSent = true;
 
-  final user = FirebaseAuth.instance.currentUser;
+    final user = FirebaseAuth.instance.currentUser;
 
-  if (user == null || user.emailVerified) return;
+    if (user == null || user.emailVerified) return;
 
-  try {
-    await user.sendEmailVerification();
+    try {
+      await user.sendEmailVerification();
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _hasBeenSent = true;
-    });
+      setState(() {
+        _hasBeenSent = true;
+      });
 
-    _startCooldown();
+      _startCooldown();
 
-    _showSnackBar(
-      'Verification email sent! Check your inbox and spam folder.',
-      isError: false,
-    );
-  } catch (e) {
-    debugPrint('Auto verification email returned error, but email may still be sent: $e');
+      _showSnackBar(
+        'Verification email sent! Check your inbox and spam folder.',
+        isError: false,
+      );
+    } catch (e) {
+      debugPrint('Failed to send initial verification email: $e');
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    setState(() {
-      _hasBeenSent = true;
-    });
+      setState(() {
+        _hasBeenSent = false;
+      });
 
-    _startCooldown();
-
-    _showSnackBar(
-      'Verification email sent! Check your inbox and spam folder.',
-      isError: false,
-    );
+      _showSnackBar(
+        e is FirebaseAuthException
+            ? (e.message ??
+                'Unable to send verification email. Please try again.')
+            : 'Unable to send verification email. Check your connection and tap Resend.',
+        isError: true,
+      );
+    }
   }
-}
 
   void _startAutoCheck() {
     _autoCheckTimer?.cancel();
 
-    _autoCheckTimer = Timer.periodic(
-      const Duration(seconds: 4),
-      (timer) async {
-        if (!mounted) {
+    _autoCheckTimer = Timer.periodic(const Duration(seconds: 4), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_isSigningOut || _isChecking) return;
+
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        timer.cancel();
+        _returnToAuthGate();
+        return;
+      }
+
+      try {
+        await user.reload();
+
+        final refreshedUser = FirebaseAuth.instance.currentUser;
+
+        if (refreshedUser?.emailVerified == true) {
           timer.cancel();
-          return;
+
+          if (!mounted) return;
+
+          _showSnackBar(
+            'Email verified! Please login to continue.',
+            isError: false,
+          );
+
+          await Future.delayed(const Duration(milliseconds: 600));
+
+          if (!mounted) return;
+
+          await _signOutAndReturnToAuthGate();
         }
-
-        if (_isSigningOut || _isChecking) return;
-
-        final user = FirebaseAuth.instance.currentUser;
-
-        if (user == null) {
-          timer.cancel();
-          _returnToAuthGate();
-          return;
-        }
-
-        try {
-          await user.reload();
-
-          final refreshedUser = FirebaseAuth.instance.currentUser;
-
-          if (refreshedUser?.emailVerified == true) {
-            timer.cancel();
-
-            if (!mounted) return;
-
-            _showSnackBar(
-              'Email verified! Please login to continue.',
-              isError: false,
-            );
-
-            await Future.delayed(const Duration(milliseconds: 600));
-
-            if (!mounted) return;
-
-            await _signOutAndReturnToAuthGate();
-          }
-        } catch (e) {
-          debugPrint('EmailVerificationScreen auto-check error: $e');
-        }
-      },
-    );
+      } catch (e) {
+        debugPrint('EmailVerificationScreen auto-check error: $e');
+      }
+    });
   }
 
   Future<void> _signOutAndReturnToAuthGate() async {
@@ -195,23 +193,20 @@ Future<void> _sendInitialVerificationEmail() async {
 
     _cooldownTimer?.cancel();
 
-    _cooldownTimer = Timer.periodic(
-      const Duration(seconds: 1),
-      (timer) {
-        if (!mounted) {
-          timer.cancel();
-          return;
-        }
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
 
-        setState(() {
-          _cooldownSeconds--;
-        });
+      setState(() {
+        _cooldownSeconds--;
+      });
 
-        if (_cooldownSeconds <= 0) {
-          timer.cancel();
-        }
-      },
-    );
+      if (_cooldownSeconds <= 0) {
+        timer.cancel();
+      }
+    });
   }
 
   Future<void> _sendVerificationEmail() async {
@@ -247,8 +242,8 @@ Future<void> _sendInitialVerificationEmail() async {
         _startCooldown();
 
         _showSnackBar(
-          'Verification email was already sent. Please check your inbox and spam folder.',
-          isError: false,
+          'Too many email requests. Please wait a minute before trying again.',
+          isError: true,
         );
         return;
       }
@@ -320,16 +315,10 @@ Future<void> _sendInitialVerificationEmail() async {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 12.5),
-        ),
-        backgroundColor:
-            isError ? AppColors.errorRed : AppColors.successGreen,
+        content: Text(message, style: const TextStyle(fontSize: 12.5)),
+        backgroundColor: isError ? AppColors.errorRed : AppColors.successGreen,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
@@ -357,22 +346,23 @@ Future<void> _sendInitialVerificationEmail() async {
 
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: _isSigningOut
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : IconButton(
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          icon: const Icon(
-                            Icons.arrow_back,
-                            color: AppColors.namaNavyBlue,
-                            size: 21,
+                  child:
+                      _isSigningOut
+                          ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(
+                              Icons.arrow_back,
+                              color: AppColors.namaNavyBlue,
+                              size: 21,
+                            ),
+                            onPressed: _signOutAndReturnToAuthGate,
                           ),
-                          onPressed: _signOutAndReturnToAuthGate,
-                        ),
                 ),
 
                 const SizedBox(height: 54),
@@ -474,44 +464,45 @@ Future<void> _sendInitialVerificationEmail() async {
                 _isResending
                     ? const Center(child: LoadingIndicator())
                     : SizedBox(
-                        height: 46,
-                        child: ElevatedButton(
-                          onPressed: (_cooldownSeconds > 0 || _isSigningOut)
-                              ? null
-                              : _sendVerificationEmail,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.namaNavyBlue,
-                            foregroundColor: AppColors.namaWhite,
-                            disabledBackgroundColor: AppColors.namaLightGray,
-                            disabledForegroundColor:
-                                AppColors.namaMediumGray,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
+                      height: 46,
+                      child: ElevatedButton(
+                        onPressed:
+                            (_cooldownSeconds > 0 || _isSigningOut)
+                                ? null
+                                : _sendVerificationEmail,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.namaNavyBlue,
+                          foregroundColor: AppColors.namaWhite,
+                          disabledBackgroundColor: AppColors.namaLightGray,
+                          disabledForegroundColor: AppColors.namaMediumGray,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Text(
-                            _cooldownSeconds > 0
-                                ? 'Resend in ${_cooldownSeconds}s'
-                                : (_hasBeenSent
-                                    ? 'Resend Verification Email'
-                                    : 'Send Verification Email'),
-                            style: const TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          elevation: 0,
+                        ),
+                        child: Text(
+                          _cooldownSeconds > 0
+                              ? 'Resend in ${_cooldownSeconds}s'
+                              : (_hasBeenSent
+                                  ? 'Resend Verification Email'
+                                  : 'Send Verification Email'),
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
+                    ),
 
                 const SizedBox(height: 18),
 
                 SizedBox(
                   height: 46,
                   child: OutlinedButton(
-                    onPressed: (_isChecking || _isSigningOut)
-                        ? null
-                        : _checkVerificationStatus,
+                    onPressed:
+                        (_isChecking || _isSigningOut)
+                            ? null
+                            : _checkVerificationStatus,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppColors.namaNavyBlue,
                       side: const BorderSide(
@@ -522,50 +513,51 @@ Future<void> _sendInitialVerificationEmail() async {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: _isChecking
-                        ? const SizedBox(
-                            width: 17,
-                            height: 17,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                AppColors.namaNavyBlue,
+                    child:
+                        _isChecking
+                            ? const SizedBox(
+                              width: 17,
+                              height: 17,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  AppColors.namaNavyBlue,
+                                ),
+                              ),
+                            )
+                            : const Text(
+                              'Check Verification Status',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                          )
-                        : const Text(
-                            'Check Verification Status',
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
                   ),
                 ),
 
                 const SizedBox(height: 24),
 
                 TextButton(
-                  onPressed:
-                      _isSigningOut ? null : _signOutAndReturnToAuthGate,
-                  child: _isSigningOut
-                      ? const SizedBox(
-                          width: 15,
-                          height: 15,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              AppColors.namaMediumGray,
+                  onPressed: _isSigningOut ? null : _signOutAndReturnToAuthGate,
+                  child:
+                      _isSigningOut
+                          ? const SizedBox(
+                            width: 15,
+                            height: 15,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.namaMediumGray,
+                              ),
+                            ),
+                          )
+                          : const Text(
+                            'Sign Out',
+                            style: TextStyle(
+                              color: AppColors.namaMediumGray,
+                              fontSize: 12.5,
                             ),
                           ),
-                        )
-                      : const Text(
-                          'Sign Out',
-                          style: TextStyle(
-                            color: AppColors.namaMediumGray,
-                            fontSize: 12.5,
-                          ),
-                        ),
                 ),
 
                 const SizedBox(height: 30),

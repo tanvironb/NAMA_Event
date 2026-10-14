@@ -6,16 +6,21 @@ import 'package:intl/intl.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
+
 class SpeakerAudienceScreen extends ConsumerWidget {
   const SpeakerAudienceScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userId = ref.watch(firebaseAuthProvider).currentUser?.uid;
     final eventAsync = ref.watch(activeEventFutureProvider);
-    final allSessionsAsync = eventAsync.when<AsyncValue<List<_AudienceSession>>>(
-      data: (event) => event == null || userId == null
-          ? const AsyncData<List<_AudienceSession>>([])
-          : ref.watch(_audienceProvider((event.id, userId))),
+    final allSessionsAsync = eventAsync.when<
+      AsyncValue<List<_AudienceSession>>
+    >(
+      data:
+          (event) =>
+              event == null || userId == null
+                  ? const AsyncData<List<_AudienceSession>>([])
+                  : ref.watch(_audienceProvider((event.id, userId))),
       loading: () => const AsyncLoading<List<_AudienceSession>>(),
       error: (error, stack) => AsyncError<List<_AudienceSession>>(error, stack),
     );
@@ -41,10 +46,10 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                   Text(
                     'My Audience',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: AppColors.namaNavyBlue,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: AppColors.namaNavyBlue,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -52,27 +57,33 @@ class SpeakerAudienceScreen extends ConsumerWidget {
             Expanded(
               child: allSessionsAsync.when(
                 data: (allSessions) {
-                  final mySessions = allSessions
-                      .where((s) => s.assignedIds.contains(userId))
-                      .toList();
-                  final uniqueAttendees = mySessions
-                      .expand((s) => s.checkedInAttendees)
-                      .toSet()
-                      .length;
+                  final mySessions =
+                      allSessions
+                          .where((s) => s.assignedIds.contains(userId))
+                          .toList();
+                  final uniqueAttendees =
+                      mySessions
+                          .expand((s) => s.checkedInAttendees)
+                          .toSet()
+                          .length;
                   final totalCheckIns = mySessions.fold<int>(
                     0,
                     (sum, session) => sum + session.checkedInAttendees.length,
                   );
-                  final chatParticipants = mySessions
-                      .expand((s) => s.uniqueParticipants)
-                      .toSet()
-                      .length;
-                  final avgEngagementRate = mySessions.isNotEmpty
-                      ? (mySessions.fold<double>(
-                                  0, (sum, s) => sum + s.engagementRate) /
-                              mySessions.length)
-                          .toStringAsFixed(0)
-                      : '0';
+                  final chatParticipants =
+                      mySessions
+                          .expand((s) => s.uniqueParticipants)
+                          .toSet()
+                          .length;
+                  final avgEngagementRate =
+                      mySessions.isNotEmpty
+                          ? (mySessions.fold<double>(
+                                    0,
+                                    (sum, s) => sum + s.engagementRate,
+                                  ) /
+                                  mySessions.length)
+                              .toStringAsFixed(0)
+                          : '0';
                   return SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
                     child: Column(
@@ -80,22 +91,24 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                       children: [
                         Text(
                           'Audience Insights',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.namaNavyBlue,
-                                  ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleLarge?.copyWith(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.namaNavyBlue,
+                          ),
                         ),
                         const SizedBox(height: 6),
                         Text(
                           'Connect with attendees interested in your sessions',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: AppColors.namaMediumGray,
-                                    fontSize: 12.5,
-                                    height: 1.3,
-                                  ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.namaMediumGray,
+                            fontSize: 12.5,
+                            height: 1.3,
+                          ),
                         ),
                         const SizedBox(height: 22),
                         GridView.count(
@@ -111,44 +124,46 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                               value: '$uniqueAttendees',
                               label: 'Unique Attendees',
                               iconColor: AppColors.namaNavyBlue,
-                              backgroundTint:
-                                  AppColors.namaNavyBlue.withOpacity(0.08),
+                              backgroundTint: AppColors.namaNavyBlue
+                                  .withOpacity(0.08),
                             ),
                             _AudienceStatCard(
                               icon: Icons.qr_code_scanner_outlined,
                               value: '$totalCheckIns',
                               label: 'Total Check-ins',
                               iconColor: AppColors.namaGoldenYellow,
-                              backgroundTint:
-                                  AppColors.namaGoldenYellow.withOpacity(0.16),
+                              backgroundTint: AppColors.namaGoldenYellow
+                                  .withOpacity(0.16),
                             ),
                             _AudienceStatCard(
                               icon: Icons.chat_bubble_outline,
                               value: '$chatParticipants',
                               label: 'Chat Participants',
                               iconColor: AppColors.infoBlue,
-                              backgroundTint:
-                                  AppColors.infoBlue.withOpacity(0.08),
+                              backgroundTint: AppColors.infoBlue.withOpacity(
+                                0.08,
+                              ),
                             ),
                             _AudienceStatCard(
                               icon: Icons.percent_outlined,
                               value: '$avgEngagementRate%',
                               label: 'Engagement Rate',
                               iconColor: AppColors.successGreen,
-                              backgroundTint:
-                                  AppColors.successGreen.withOpacity(0.08),
+                              backgroundTint: AppColors.successGreen
+                                  .withOpacity(0.08),
                             ),
                           ],
                         ),
                         const SizedBox(height: 24),
                         Text(
                           'Session Breakdown',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.namaNavyBlue,
-                                  ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleLarge?.copyWith(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.namaNavyBlue,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         if (mySessions.isEmpty)
@@ -171,13 +186,12 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                             ),
                             child: Text(
                               'No sessions found for this speaker.',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: AppColors.namaMediumGray,
-                                    fontSize: 13,
-                                  ),
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.copyWith(
+                                color: AppColors.namaMediumGray,
+                                fontSize: 13,
+                              ),
                             ),
                           )
                         else
@@ -185,8 +199,8 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                             itemCount: mySessions.length,
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 12),
+                            separatorBuilder:
+                                (_, __) => const SizedBox(height: 12),
                             itemBuilder: (context, index) {
                               final session = mySessions[index];
                               final attendeeCount =
@@ -210,19 +224,20 @@ class SpeakerAudienceScreen extends ConsumerWidget {
                   );
                 },
                 loading: () => const LoadingIndicator(),
-                error: (err, stack) => Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'Error loading audience data: $err',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Colors.red,
+                error:
+                    (err, stack) => Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'Error loading audience data: $err',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.red,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
               ),
             ),
           ],
@@ -231,6 +246,7 @@ class SpeakerAudienceScreen extends ConsumerWidget {
     );
   }
 }
+
 class _AudienceStatCard extends StatelessWidget {
   final IconData icon;
   final String value;
@@ -262,36 +278,33 @@ class _AudienceStatCard extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            icon,
-            size: 22,
-            color: iconColor,
-          ),
+          Icon(icon, size: 22, color: iconColor),
           const SizedBox(height: 12),
           Text(
             value,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: iconColor,
-                  height: 1,
-                ),
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+              color: iconColor,
+              height: 1,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             label,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontSize: 12,
-                  color: AppColors.namaDarkGray,
-                  height: 1.2,
-                ),
+              fontSize: 12,
+              color: AppColors.namaDarkGray,
+              height: 1.2,
+            ),
           ),
         ],
       ),
     );
   }
 }
+
 class _SessionAudienceCard extends StatelessWidget {
   final String title;
   final String location;
@@ -331,11 +344,11 @@ class _SessionAudienceCard extends StatelessWidget {
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.namaNavyBlue,
-                  height: 1.2,
-                ),
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.namaNavyBlue,
+              height: 1.2,
+            ),
           ),
           const SizedBox(height: 10),
           Row(
@@ -350,9 +363,9 @@ class _SessionAudienceCard extends StatelessWidget {
                 child: Text(
                   timeText,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 11.5,
-                        color: AppColors.namaMediumGray,
-                      ),
+                    fontSize: 11.5,
+                    color: AppColors.namaMediumGray,
+                  ),
                 ),
               ),
             ],
@@ -372,9 +385,9 @@ class _SessionAudienceCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 11.5,
-                        color: AppColors.namaMediumGray,
-                      ),
+                    fontSize: 11.5,
+                    color: AppColors.namaMediumGray,
+                  ),
                 ),
               ),
             ],
@@ -412,6 +425,7 @@ class _SessionAudienceCard extends StatelessWidget {
     );
   }
 }
+
 class _MiniMetric extends StatelessWidget {
   final String label;
   final String value;
@@ -434,18 +448,18 @@ class _MiniMetric extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                ),
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 10.5,
-                  color: AppColors.namaDarkGray,
-                ),
+              fontSize: 10.5,
+              color: AppColors.namaDarkGray,
+            ),
           ),
         ],
       ),
@@ -456,8 +470,8 @@ class _MiniMetric extends StatelessWidget {
 // Read-only, scoped to this page: no admin documents or providers are changed.
 final _audienceProvider = StreamProvider.autoDispose
     .family<List<_AudienceSession>, (String, String)>((ref, key) {
-  return _watchAudience(key.$1, key.$2);
-});
+      return _watchAudience(key.$1, key.$2);
+    });
 
 Stream<List<_AudienceSession>> _watchAudience(String eventId, String uid) {
   final db = FirebaseFirestore.instance;
@@ -472,66 +486,109 @@ Stream<List<_AudienceSession>> _watchAudience(String eventId, String uid) {
 
   void emit() {
     if (stopped || controller.isClosed) return;
-    if (sessions.any((s) => !checkins.containsKey(s.id) || !chats.containsKey(s.id))) {
+    if (sessions.any(
+      (s) => !checkins.containsKey(s.id) || !chats.containsKey(s.id),
+    )) {
       return;
     }
-    controller.add(sessions.map((s) => _AudienceSession(
-      s.data(), checkins[s.id]!.docs, chats[s.id]!.docs,
-    )).toList());
+    controller.add(
+      sessions
+          .map(
+            (s) => _AudienceSession(
+              s.data(),
+              checkins[s.id]!.docs,
+              chats[s.id]!.docs,
+            ),
+          )
+          .toList(),
+    );
   }
 
   controller = StreamController<List<_AudienceSession>>(
     onListen: () {
-      sessionsSub = db.collection('sessions')
-          .where('eventId', isEqualTo: eventId).snapshots().listen((snapshot) async {
-        final token = ++generation;
-        final previous = List.of(children);
-        children.clear();
-        for (final sub in previous) { await sub.cancel(); }
-        if (stopped || token != generation) return;
-        sessions = snapshot.docs.where((document) {
-          final data = document.data();
-          return _ids(data['speakerIds']).contains(uid) ||
-              _ids(data['moderatorIds']).contains(uid);
-        }).toList();
-        checkins.clear();
-        chats.clear();
-        if (sessions.isEmpty) { emit(); return; }
-        for (final session in sessions) {
-          final base = db.collection('sessions').doc(session.id);
-          children.add(base.collection('checkins').snapshots().listen((records) {
-            if (stopped || token != generation) return;
-            checkins[session.id] = records;
-            emit();
-          }, onError: (Object error, StackTrace stack) {
-            if (!stopped && token == generation) controller.addError(error, stack);
-          }));
-          children.add(base.collection('chat').snapshots().listen((records) {
-            if (stopped || token != generation) return;
-            chats[session.id] = records;
-            emit();
-          }, onError: (Object error, StackTrace stack) {
-            if (!stopped && token == generation) controller.addError(error, stack);
-          }));
-        }
-      }, onError: (Object error, StackTrace stack) {
-        if (!stopped) controller.addError(error, stack);
-      });
+      sessionsSub = db
+          .collection('sessions')
+          .where('eventId', isEqualTo: eventId)
+          .snapshots()
+          .listen(
+            (snapshot) async {
+              final token = ++generation;
+              final previous = List.of(children);
+              children.clear();
+              for (final sub in previous) {
+                await sub.cancel();
+              }
+              if (stopped || token != generation) return;
+              sessions =
+                  snapshot.docs.where((document) {
+                    final data = document.data();
+                    return _ids(data['speakerIds']).contains(uid) ||
+                        _ids(data['moderatorIds']).contains(uid);
+                  }).toList();
+              checkins.clear();
+              chats.clear();
+              if (sessions.isEmpty) {
+                emit();
+                return;
+              }
+              for (final session in sessions) {
+                final base = db.collection('sessions').doc(session.id);
+                children.add(
+                  base
+                      .collection('checkins')
+                      .snapshots()
+                      .listen(
+                        (records) {
+                          if (stopped || token != generation) return;
+                          checkins[session.id] = records;
+                          emit();
+                        },
+                        onError: (Object error, StackTrace stack) {
+                          if (!stopped && token == generation)
+                            controller.addError(error, stack);
+                        },
+                      ),
+                );
+                children.add(
+                  base
+                      .collection('chat')
+                      .snapshots()
+                      .listen(
+                        (records) {
+                          if (stopped || token != generation) return;
+                          chats[session.id] = records;
+                          emit();
+                        },
+                        onError: (Object error, StackTrace stack) {
+                          if (!stopped && token == generation)
+                            controller.addError(error, stack);
+                        },
+                      ),
+                );
+              }
+            },
+            onError: (Object error, StackTrace stack) {
+              if (!stopped) controller.addError(error, stack);
+            },
+          );
     },
     onCancel: () async {
       stopped = true;
       generation++;
       await sessionsSub?.cancel();
-      for (final sub in children) { await sub.cancel(); }
+      for (final sub in children) {
+        await sub.cancel();
+      }
       children.clear();
     },
   );
   return controller.stream;
 }
 
-Set<String> _ids(dynamic value) => value is List
-    ? value.whereType<String>().where((id) => id.trim().isNotEmpty).toSet()
-    : <String>{};
+Set<String> _ids(dynamic value) =>
+    value is List
+        ? value.whereType<String>().where((id) => id.trim().isNotEmpty).toSet()
+        : <String>{};
 
 DateTime? _date(dynamic value) {
   if (value is Timestamp) return value.toDate();
@@ -547,7 +604,8 @@ class _AudienceSession {
   _AudienceSession(this.data, this.checkins, this.messages);
 
   Set<String> get assignedIds => {
-    ..._ids(data['speakerIds']), ..._ids(data['moderatorIds']),
+    ..._ids(data['speakerIds']),
+    ..._ids(data['moderatorIds']),
   };
   String get title => (data['title'] ?? 'Session').toString();
   String get location => (data['location'] ?? '—').toString();
@@ -555,15 +613,28 @@ class _AudienceSession {
   DateTime get endTime => _date(data['endTime']) ?? startTime;
 
   // Records are authoritative, including removals. Do not merge stale session arrays.
-  Set<String> get checkedInAttendees => checkins.map((document) {
-    final record = document.data();
-    return (record['userId'] ?? record['attendeeId'] ?? record['uid'] ?? document.id)
-        .toString().trim();
-  }).where((id) => id.isNotEmpty).toSet();
+  Set<String> get checkedInAttendees =>
+      checkins
+          .map((document) {
+            final record = document.data();
+            return (record['userId'] ??
+                    record['attendeeId'] ??
+                    record['uid'] ??
+                    document.id)
+                .toString()
+                .trim();
+          })
+          .where((id) => id.isNotEmpty)
+          .toSet();
 
-  Set<String> get uniqueParticipants => messages.map((document) =>
-    (document.data()['senderId'] ?? '').toString().trim()
-  ).where((id) => id.isNotEmpty).toSet();
+  Set<String> get uniqueParticipants =>
+      messages
+          .where((document) => document.data()['deletedForEveryone'] != true)
+          .map(
+            (document) => (document.data()['senderId'] ?? '').toString().trim(),
+          )
+          .where((id) => id.isNotEmpty)
+          .toSet();
 
   double get engagementRate {
     final attendees = checkedInAttendees;

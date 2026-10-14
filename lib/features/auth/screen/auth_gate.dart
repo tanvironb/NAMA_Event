@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -26,13 +27,15 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
   String? _userId;
   Future<User?>? _userFuture;
-  Future<DocumentSnapshot<Map<String, dynamic>>>? _profileFuture;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _profileStream;
+  String? _lastAccessStatus;
   Future<bool>? _admissionFuture;
 
   void _clearCachedState() {
     _userId = null;
     _userFuture = null;
-    _profileFuture = null;
+    _profileStream = null;
+    _lastAccessStatus = null;
     _admissionFuture = null;
   }
 
@@ -47,6 +50,30 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   void _retry() {
     if (!mounted) return;
     setState(_clearCachedState);
+  }
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> _watchUserProfile(
+    User user,
+  ) async* {
+    // Keep verification synchronization, then listen for staff/admin changes.
+    await _loadUserProfileAndSyncVerification(user);
+    yield* _db.collection('users').doc(user.uid).snapshots();
+  }
+
+  void _reactToAccessStatus(String status) {
+    if (_lastAccessStatus == status) return;
+    _lastAccessStatus = status;
+    _admissionFuture = null;
+    if (status == 'approved') return;
+    NotificationHandler.setNavigationReady(false);
+    // A detail/chat route may be above AuthGate. Close those routes as well,
+    // otherwise the restricted user could keep interacting with that page.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _lastAccessStatus != status) return;
+      NotificationHandler.navigatorKey.currentState?.popUntil(
+        (route) => route.isFirst,
+      );
+    });
   }
 
   Future<void> _signOut() async {
@@ -65,36 +92,34 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     return FirebaseAuth.instance.currentUser;
   }
 
-  Future<DocumentSnapshot<Map<String, dynamic>>> _loadUserProfile(
-    String uid,
-  ) {
-    return _db.collection('users').doc(uid).get().timeout(
-      const Duration(seconds: 12),
-      onTimeout: () {
-        throw Exception(
-          'Profile loading timed out. Please check your connection.',
+  Future<DocumentSnapshot<Map<String, dynamic>>> _loadUserProfile(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .get()
+        .timeout(
+          const Duration(seconds: 12),
+          onTimeout: () {
+            throw Exception(
+              'Profile loading timed out. Please check your connection.',
+            );
+          },
         );
-      },
-    );
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>>
-      _loadUserProfileAndSyncVerification(User user) async {
+  _loadUserProfileAndSyncVerification(User user) async {
     final profile = await _loadUserProfile(user.uid);
 
     // Do not create a missing profile during verification syncing.
     if (!profile.exists) return profile;
 
-    if (user.emailVerified &&
-        profile.data()?['emailVerified'] != true) {
-      await profile.reference.set(
-        {
-          'emailVerified': true,
-          'emailVerifiedAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+    if (user.emailVerified && profile.data()?['emailVerified'] != true) {
+      await profile.reference.set({
+        'emailVerified': true,
+        'emailVerifiedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       return _loadUserProfile(user.uid);
     }
 
@@ -130,19 +155,15 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       if (!event.exists) continue;
 
       final eventData = event.data() ?? {};
-      final status = (eventData['status'] ?? '')
-          .toString()
-          .trim()
-          .toLowerCase();
+      final status =
+          (eventData['status'] ?? '').toString().trim().toLowerCase();
 
       if (eventData['isActive'] != true || status == 'archived') {
         continue;
       }
 
-      final registration = await eventRef
-          .collection('registrations')
-          .doc(uid)
-          .get();
+      final registration =
+          await eventRef.collection('registrations').doc(uid).get();
 
       if (registration.data()?['admissionVerified'] == true) {
         return true;
@@ -152,10 +173,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     return false;
   }
 
-  Future<String> _joinEvent(
-    String credential, {
-    required bool fromQr,
-  }) async {
+  Future<String> _joinEvent(String credential, {required bool fromQr}) async {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
@@ -197,10 +215,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     }
   }
 
-  Future<void> _onEventJoined(
-    BuildContext context,
-    String eventId,
-  ) async {
+  Future<void> _onEventJoined(BuildContext context, String eventId) async {
     if (!mounted) return;
 
     // Re-read the profile and server-written registration before routing.
@@ -224,11 +239,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 60,
-                color: Theme.of(context).colorScheme.error,
-              ),
+              Icon(icon, size: 60, color: Theme.of(context).colorScheme.error),
               const SizedBox(height: 16),
               Text(
                 title,
@@ -243,16 +254,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
               ),
               const SizedBox(height: 20),
               if (allowRetry) ...[
-                ElevatedButton(
-                  onPressed: _retry,
-                  child: const Text('Retry'),
-                ),
+                ElevatedButton(onPressed: _retry, child: const Text('Retry')),
                 const SizedBox(height: 10),
               ],
-              TextButton(
-                onPressed: _signOut,
-                child: const Text('Sign Out'),
-              ),
+              TextButton(onPressed: _signOut, child: const Text('Sign Out')),
             ],
           ),
         ),
@@ -260,14 +265,9 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     );
   }
 
-  Widget _approvedScreen(
-    User user,
-    Map<String, dynamic> userData,
-  ) {
-    final role = (userData['role'] ?? 'attendee')
-        .toString()
-        .trim()
-        .toLowerCase();
+  Widget _approvedScreen(User user, Map<String, dynamic> userData) {
+    final role =
+        (userData['role'] ?? 'attendee').toString().trim().toLowerCase();
 
     if (role == 'admin' || role == 'superadmin') {
       return const MainHubScreen();
@@ -337,20 +337,17 @@ class _AuthGateState extends ConsumerState<AuthGate> {
             if (!refreshedUser.emailVerified) {
               // Allow a later rebuild after verification to reload the user.
               _userFuture = null;
-              _profileFuture = null;
+              _profileStream = null;
               _admissionFuture = null;
               return const EmailVerificationScreen();
             }
 
-            _profileFuture ??=
-                _loadUserProfileAndSyncVerification(refreshedUser);
+            _profileStream ??= _watchUserProfile(refreshedUser);
 
-            return FutureBuilder<
-                DocumentSnapshot<Map<String, dynamic>>>(
-              future: _profileFuture,
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: _profileStream,
               builder: (context, profileSnapshot) {
-                if (profileSnapshot.connectionState !=
-                    ConnectionState.done) {
+                if (!profileSnapshot.hasData && !profileSnapshot.hasError) {
                   return _loading();
                 }
 
@@ -365,6 +362,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
                 final profile = profileSnapshot.data;
                 if (profile == null || !profile.exists) {
+                  _reactToAccessStatus('missing');
                   return _messageScreen(
                     title: 'Profile Not Found',
                     message:
@@ -374,10 +372,12 @@ class _AuthGateState extends ConsumerState<AuthGate> {
                 }
 
                 final data = profile.data() ?? {};
-                final status = (data['status'] ?? 'pending')
-                    .toString()
-                    .trim()
-                    .toLowerCase();
+                final status =
+                    (data['status'] ?? 'pending')
+                        .toString()
+                        .trim()
+                        .toLowerCase();
+                _reactToAccessStatus(status);
 
                 switch (status) {
                   case 'approved':
@@ -400,12 +400,13 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         );
       },
       loading: _loading,
-      error: (error, stack) => _messageScreen(
-        title: 'Authentication Error',
-        message: '$error',
-        icon: Icons.error_outline,
-        allowRetry: true,
-      ),
+      error:
+          (error, stack) => _messageScreen(
+            title: 'Authentication Error',
+            message: '$error',
+            icon: Icons.error_outline,
+            allowRetry: true,
+          ),
     );
   }
 }

@@ -1,6 +1,7 @@
 // lib/features/main_hub/screen/main_hub_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -45,12 +46,15 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      NotificationHandler.setNavigationReady(true);
       _startUsageTrackingForActiveEvent();
     });
   }
 
   @override
   void dispose() {
+    NotificationHandler.setNavigationReady(false);
     WidgetsBinding.instance.removeObserver(this);
 
     if (_trackedEventId != null && _trackedEventId!.isNotEmpty) {

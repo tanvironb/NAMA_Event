@@ -28,12 +28,13 @@ class _SessionChatTabState extends State<SessionChatTab> {
 
   late Stream<QuerySnapshot<Map<String, dynamic>>> _messages;
   bool _sending = false;
+  final Set<String> _selectedMessages = {};
+  bool _deletingSelected = false;
 
-  CollectionReference<Map<String, dynamic>> get _chat =>
-      widget.repository.db
-          .collection('sessions')
-          .doc(widget.repository.sessionId)
-          .collection('chat');
+  CollectionReference<Map<String, dynamic>> get _chat => widget.repository.db
+      .collection('sessions')
+      .doc(widget.repository.sessionId)
+      .collection('chat');
 
   @override
   void initState() {
@@ -51,6 +52,7 @@ class _SessionChatTabState extends State<SessionChatTab> {
   }
 
   void _connect() {
+    _selectedMessages.clear();
     _messages = _chat.snapshots();
   }
 
@@ -64,17 +66,15 @@ class _SessionChatTabState extends State<SessionChatTab> {
   void _showError(Object error) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Chat action failed: $error')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Chat action failed: $error')));
   }
 
   Future<void> _send() async {
     final text = _input.text.trim();
 
-    if (_sending ||
-        text.isEmpty ||
-        widget.data['isChatEnabled'] == false) {
+    if (_sending || text.isEmpty || widget.data['isChatEnabled'] == false) {
       return;
     }
 
@@ -123,13 +123,109 @@ class _SessionChatTabState extends State<SessionChatTab> {
     }
   }
 
-Future<void> _removeMessage(String id) async {
-  try {
-    await _chat.doc(id).delete();
-  } catch (error) {
-    _showError(error);
+  Future<void> _removeMessage(String id) async {
+    try {
+      await widget.repository.deleteMessage(id);
+    } catch (error) {
+      _showError(error);
+    }
   }
-}
+
+  Future<void> _deleteSelected(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> messages,
+  ) async {
+    if (_deletingSelected) return;
+    final selected =
+        messages.where((doc) => _selectedMessages.contains(doc.id)).toList();
+    if (selected.isEmpty) return;
+    final repository = widget.repository;
+    setState(() => _deletingSelected = true);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: const Text('Delete selected messages?'),
+              content: Text(
+                'Permanently delete ${selected.length} selected messages from this session for everyone?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                  ),
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+      );
+      if (confirmed != true || !mounted || widget.repository != repository)
+        return;
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw StateError('Sign in to delete messages.');
+      final profile =
+          await repository.db.collection('users').doc(user.uid).get();
+      if ((profile.data()?['role'] ?? '').toString().toLowerCase() != 'admin') {
+        throw StateError('Administrator access is required.');
+      }
+      for (final doc in selected) {
+        await repository.deleteMessage(doc.id);
+        if (mounted && widget.repository == repository) {
+          setState(() => _selectedMessages.remove(doc.id));
+        }
+      }
+    } catch (error) {
+      _showError(error);
+    } finally {
+      if (mounted) setState(() => _deletingSelected = false);
+    }
+  }
+
+  Widget _selectionToolbar(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> messages,
+  ) {
+    final ids = messages.map((doc) => doc.id).toSet();
+    final count = ids.intersection(_selectedMessages).length;
+    final allSelected = ids.isNotEmpty && count == ids.length;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text('$count selected'),
+          TextButton(
+            onPressed:
+                _deletingSelected
+                    ? null
+                    : () => setState(() {
+                      if (allSelected) {
+                        _selectedMessages.removeAll(ids);
+                      } else {
+                        _selectedMessages.addAll(ids);
+                      }
+                    }),
+            child: Text(allSelected ? 'Deselect All' : 'Select All'),
+          ),
+          FilledButton.icon(
+            onPressed:
+                _deletingSelected || count == 0
+                    ? null
+                    : () => _deleteSelected(messages),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            icon: const Icon(Icons.delete_outline),
+            label: Text(_deletingSelected ? 'Deleting…' : 'Delete Selected'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _setMuted(String uid, bool muted) async {
     try {
@@ -141,10 +237,7 @@ Future<void> _removeMessage(String id) async {
 
   Widget _header(bool enabled) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 12,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
           Container(
@@ -154,11 +247,7 @@ Future<void> _removeMessage(String id) async {
               color: _primary.withOpacity(0.08),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.forum_rounded,
-              color: _primary,
-              size: 20,
-            ),
+            child: const Icon(Icons.forum_rounded, color: _primary, size: 20),
           ),
           const SizedBox(width: 11),
           Expanded(
@@ -179,39 +268,29 @@ Future<void> _removeMessage(String id) async {
                     Icon(
                       Icons.circle,
                       size: 7,
-                      color: enabled
-                          ? const Color(0xFF00AA66)
-                          : _muted,
+                      color: enabled ? const Color(0xFF00AA66) : _muted,
                     ),
                     const SizedBox(width: 6),
                     Text(
                       enabled ? 'Chat enabled' : 'Chat disabled',
-                      style: const TextStyle(
-                        color: _muted,
-                        fontSize: 11,
-                      ),
+                      style: const TextStyle(color: _muted, fontSize: 11),
                     ),
                   ],
                 ),
               ],
             ),
           ),
-          Switch(
-            value: enabled,
-            activeColor: _primary,
-            onChanged: _changeChat,
-          ),
+          Switch(value: enabled, activeColor: _primary, onChanged: _changeChat),
         ],
       ),
     );
   }
 
   Widget _avatar(String name, String imageUrl) {
-    final initial = name.trim().isEmpty
-        ? '?'
-        : String.fromCharCode(
-            name.trim().runes.first,
-          ).toUpperCase();
+    final initial =
+        name.trim().isEmpty
+            ? '?'
+            : String.fromCharCode(name.trim().runes.first).toUpperCase();
 
     final fallback = Center(
       child: Text(
@@ -232,23 +311,20 @@ Future<void> _removeMessage(String id) async {
         color: Color(0xFFE7EAF7),
         shape: BoxShape.circle,
       ),
-      child: imageUrl.isEmpty
-          ? fallback
-          : Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => fallback,
-            ),
+      child:
+          imageUrl.isEmpty
+              ? fallback
+              : Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => fallback,
+              ),
     );
   }
 
-  Widget _attachment(
-    Map<String, dynamic> message,
-    bool isMe,
-  ) {
+  Widget _attachment(Map<String, dynamic> message, bool isMe) {
     final url = (message['fileUrl'] ?? '').toString().trim();
-    final fileName =
-        (message['fileName'] ?? 'Attachment').toString();
+    final fileName = (message['fileName'] ?? 'Attachment').toString();
 
     if (message['messageType'] == 'image') {
       return ClipRRect(
@@ -257,13 +333,14 @@ Future<void> _removeMessage(String id) async {
           url,
           height: 180,
           fit: BoxFit.contain,
-          errorBuilder: (_, __, ___) => Text(
-            'Image unavailable',
-            style: TextStyle(
-              color: isMe ? Colors.white70 : _muted,
-              fontSize: 12,
-            ),
-          ),
+          errorBuilder:
+              (_, __, ___) => Text(
+                'Image unavailable',
+                style: TextStyle(
+                  color: isMe ? Colors.white70 : _muted,
+                  fontSize: 12,
+                ),
+              ),
         ),
       );
     }
@@ -271,9 +348,7 @@ Future<void> _removeMessage(String id) async {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isMe
-            ? Colors.white.withOpacity(0.12)
-            : const Color(0xFFF1F3F9),
+        color: isMe ? Colors.white.withOpacity(0.12) : const Color(0xFFF1F3F9),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -326,20 +401,18 @@ Future<void> _removeMessage(String id) async {
     final isMe = currentUid != null && uid == currentUid;
     final deleted = message['deletedForEveryone'] == true;
     final name = monitoring.monitorName(message);
-    final role =
-        (message['senderRole'] ?? 'attendee').toString();
+    final role = (message['senderRole'] ?? 'attendee').toString();
     final text = (message['text'] ?? '').toString();
-    final imageUrl =
-        (message['senderImageUrl'] ?? '').toString().trim();
-    final fileUrl =
-        (message['fileUrl'] ?? '').toString().trim();
+    final imageUrl = (message['senderImageUrl'] ?? '').toString().trim();
+    final fileUrl = (message['fileUrl'] ?? '').toString().trim();
 
     final mutedUsers = widget.data['mutedUsers'];
     final muted = mutedUsers is List && mutedUsers.contains(uid);
 
-    final bubbleWidth = availableWidth < 600
-        ? availableWidth * 0.78
-        : availableWidth * 0.65 < 520
+    final bubbleWidth =
+        availableWidth < 600
+            ? availableWidth * 0.78
+            : availableWidth * 0.65 < 520
             ? availableWidth * 0.65
             : 520.0;
 
@@ -357,9 +430,7 @@ Future<void> _removeMessage(String id) async {
           bottomLeft: Radius.circular(isMe ? 15 : 4),
           bottomRight: Radius.circular(isMe ? 4 : 15),
         ),
-        border: isMe
-            ? null
-            : Border.all(color: const Color(0xFFE7EAF2)),
+        border: isMe ? null : Border.all(color: const Color(0xFFE7EAF2)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.025),
@@ -387,14 +458,11 @@ Future<void> _removeMessage(String id) async {
               ),
               const SizedBox(width: 8),
               PopupMenuButton<String>(
+                enabled: !_deletingSelected,
                 tooltip: 'Message actions',
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
-                icon: Icon(
-                  Icons.more_horiz,
-                  color: secondary,
-                  size: 18,
-                ),
+                icon: Icon(Icons.more_horiz, color: secondary, size: 18),
                 onSelected: (action) {
                   if (action == 'delete') {
                     _removeMessage(document.id);
@@ -402,39 +470,31 @@ Future<void> _removeMessage(String id) async {
                     _setMuted(uid, !muted);
                   }
                 },
-itemBuilder: (_) => [
-  const PopupMenuItem<String>(
-    value: 'delete',
-    child: Text('Remove message'),
-  ),
-  if (!isMe && uid.isNotEmpty)
-    PopupMenuItem<String>(
-      value: 'mute',
-      child: Text(
-        muted ? 'Unmute user' : 'Mute user',
-      ),
-    ),
-],
+                itemBuilder:
+                    (_) => [
+                      const PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Text('Remove message'),
+                      ),
+                      if (!isMe && uid.isNotEmpty)
+                        PopupMenuItem<String>(
+                          value: 'mute',
+                          child: Text(muted ? 'Unmute user' : 'Mute user'),
+                        ),
+                    ],
               ),
             ],
           ),
           Text(
             '$role${muted ? ' • Muted' : ''}',
-            style: TextStyle(
-              color: secondary,
-              fontSize: 10,
-            ),
+            style: TextStyle(color: secondary, fontSize: 10),
           ),
           const SizedBox(height: 7),
           if (deleted)
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.block,
-                  size: 13,
-                  color: secondary,
-                ),
+                Icon(Icons.block, size: 13, color: secondary),
                 const SizedBox(width: 5),
                 Flexible(
                   child: Text(
@@ -452,25 +512,17 @@ itemBuilder: (_) => [
             if (text.isNotEmpty)
               SelectableText(
                 text,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 13,
-                  height: 1.45,
-                ),
+                style: TextStyle(color: foreground, fontSize: 13, height: 1.45),
               ),
             if (fileUrl.isNotEmpty) ...[
-              if (text.isNotEmpty)
-                const SizedBox(height: 8),
+              if (text.isNotEmpty) const SizedBox(height: 8),
               _attachment(message, isMe),
             ],
           ],
           const SizedBox(height: 7),
           Text(
             monitoring.monitorTime(message['timestamp']),
-            style: TextStyle(
-              color: secondary,
-              fontSize: 9,
-            ),
+            style: TextStyle(color: secondary, fontSize: 9),
           ),
         ],
       ),
@@ -483,10 +535,20 @@ itemBuilder: (_) => [
             isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (!isMe) ...[
-            _avatar(name, imageUrl),
-            const SizedBox(width: 8),
-          ],
+          Checkbox(
+            value: _selectedMessages.contains(document.id),
+            onChanged:
+                _deletingSelected
+                    ? null
+                    : (selected) => setState(() {
+                      if (selected == true) {
+                        _selectedMessages.add(document.id);
+                      } else {
+                        _selectedMessages.remove(document.id);
+                      }
+                    }),
+          ),
+          if (!isMe) ...[_avatar(name, imageUrl), const SizedBox(width: 8)],
           Flexible(child: bubble),
         ],
       ),
@@ -501,15 +563,15 @@ itemBuilder: (_) => [
 
         return SizedBox(
           height: mobile ? 360 : 420,
-          child: StreamBuilder<
-              QuerySnapshot<Map<String, dynamic>>>(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: _messages,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 final error = snapshot.error;
-                final details = error is FirebaseException
-                    ? '${error.code}: ${error.message ?? ''}'
-                    : error.toString();
+                final details =
+                    error is FirebaseException
+                        ? '${error.code}: ${error.message ?? ''}'
+                        : error.toString();
 
                 return Center(
                   child: Padding(
@@ -517,10 +579,7 @@ itemBuilder: (_) => [
                     child: SelectableText(
                       'Unable to load chat.\n$details',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: _muted,
-                        fontSize: 12,
-                      ),
+                      style: const TextStyle(color: _muted, fontSize: 12),
                     ),
                   ),
                 );
@@ -539,12 +598,8 @@ itemBuilder: (_) => [
 
               // Newest first; reverse:true places newest at the bottom.
               documents.sort((a, b) {
-                final first = monitoring.monitorDate(
-                  a.data()['timestamp'],
-                );
-                final second = monitoring.monitorDate(
-                  b.data()['timestamp'],
-                );
+                final first = monitoring.monitorDate(a.data()['timestamp']);
+                final second = monitoring.monitorDate(b.data()['timestamp']);
 
                 if (first == null && second == null) {
                   return b.id.compareTo(a.id);
@@ -554,9 +609,7 @@ itemBuilder: (_) => [
 
                 final comparison = second.compareTo(first);
 
-                return comparison == 0
-                    ? b.id.compareTo(a.id)
-                    : comparison;
+                return comparison == 0 ? b.id.compareTo(a.id) : comparison;
               });
 
               if (documents.isEmpty) {
@@ -581,29 +634,34 @@ itemBuilder: (_) => [
                       const SizedBox(height: 5),
                       const Text(
                         'Session messages will appear here.',
-                        style: TextStyle(
-                          color: _muted,
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: _muted, fontSize: 12),
                       ),
                     ],
                   ),
                 );
               }
 
-              return Scrollbar(
-                controller: _scroll,
-                child: ListView.builder(
-                  controller: _scroll,
-                  primary: false,
-                  reverse: true,
-                  padding: EdgeInsets.all(padding),
-                  itemCount: documents.length,
-                  itemBuilder: (_, index) => _message(
-                    documents[index],
-                    constraints.maxWidth - padding * 2,
+              return Column(
+                children: [
+                  _selectionToolbar(documents),
+                  Expanded(
+                    child: Scrollbar(
+                      controller: _scroll,
+                      child: ListView.builder(
+                        controller: _scroll,
+                        primary: false,
+                        reverse: true,
+                        padding: EdgeInsets.all(padding),
+                        itemCount: documents.length,
+                        itemBuilder:
+                            (_, index) => _message(
+                              documents[index],
+                              constraints.maxWidth - padding * 2,
+                            ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               );
             },
           ),
@@ -617,9 +675,7 @@ itemBuilder: (_) => [
       padding: const EdgeInsets.all(12),
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Color(0xFFE9ECF3)),
-        ),
+        border: Border(top: BorderSide(color: Color(0xFFE9ECF3))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
@@ -632,18 +688,11 @@ itemBuilder: (_) => [
               maxLines: 4,
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _send(),
-              style: const TextStyle(
-                color: _ink,
-                fontSize: 13,
-              ),
+              style: const TextStyle(color: _ink, fontSize: 13),
               decoration: InputDecoration(
-                hintText: enabled
-                    ? 'Type a message…'
-                    : 'Session chat is disabled',
-                hintStyle: const TextStyle(
-                  color: _muted,
-                  fontSize: 13,
-                ),
+                hintText:
+                    enabled ? 'Type a message…' : 'Session chat is disabled',
+                hintStyle: const TextStyle(color: _muted, fontSize: 13),
                 filled: true,
                 fillColor: const Color(0xFFF3F5FA),
                 contentPadding: const EdgeInsets.symmetric(
@@ -660,9 +709,7 @@ itemBuilder: (_) => [
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide(
-                    color: _primary.withOpacity(0.3),
-                  ),
+                  borderSide: BorderSide(color: _primary.withOpacity(0.3)),
                 ),
               ),
             ),
@@ -679,16 +726,17 @@ itemBuilder: (_) => [
                 shape: const CircleBorder(),
               ),
               onPressed: enabled && !_sending ? _send : null,
-              icon: _sending
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.send_rounded, size: 20),
+              icon:
+                  _sending
+                      ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                      : const Icon(Icons.send_rounded, size: 20),
             ),
           ),
         ],
@@ -718,15 +766,8 @@ itemBuilder: (_) => [
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _header(enabled),
-          const Divider(
-            height: 1,
-            thickness: 1,
-            color: Color(0xFFE9ECF3),
-          ),
-          Container(
-            color: const Color(0xFFF5F7FB),
-            child: _messageList(),
-          ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE9ECF3)),
+          Container(color: const Color(0xFFF5F7FB), child: _messageList()),
           _composer(enabled),
         ],
       ),

@@ -957,6 +957,7 @@ class _EditStaffDialogState extends State<_EditStaffDialog> {
   late final TextEditingController _profileImageController;
   late String _selectedRole;
   late String _status;
+  bool _statusSaving = false;
   late String _profileVisibility;
   bool _saving = false;
   static const Map<String, String> _roles = {
@@ -1030,13 +1031,7 @@ class _EditStaffDialogState extends State<_EditStaffDialog> {
         (widget.staffData['status'] ?? 'approved')
             .toString()
             .toLowerCase();
-    _status = const [
-      'approved',
-      'pending',
-      'suspended',
-    ].contains(rawStatus)
-        ? rawStatus
-        : 'approved';
+    _status = rawStatus == 'approved' ? 'approved' : 'pending';
     final visibility =
         (widget.staffData['profileVisibility'] ?? 'full')
             .toString()
@@ -1067,6 +1062,44 @@ class _EditStaffDialogState extends State<_EditStaffDialog> {
     _profileImageController.dispose();
     super.dispose();
   }
+
+  Future<void> _changeAccountStatus(String? value) async {
+    if (value == null || value == _status || _saving || _statusSaving) return;
+
+    final previous = _status;
+    setState(() {
+      _status = value;
+      _statusSaving = true;
+    });
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.staffId)
+          .update({
+            'status': value,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account status updated.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _status = previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: $error'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _statusSaving = false);
+    }
+  }
+
   Future<bool> _confirmRoleChange() async {
     final oldRole =
         (widget.staffData['role'] ?? 'staff')
@@ -1108,7 +1141,7 @@ class _EditStaffDialogState extends State<_EditStaffDialog> {
   }
   Future<void> _saveChanges() async {
     FocusScope.of(context).unfocus();
-    if (_saving || !_formKey.currentState!.validate()) {
+    if (_saving || _statusSaving || !_formKey.currentState!.validate()) {
       return;
     }
     final confirmed = await _confirmRoleChange();
@@ -1363,18 +1396,17 @@ class _EditStaffDialogState extends State<_EditStaffDialog> {
                         },
                       ),
                       _DialogDropdown(
+                        key: ValueKey('staff-status-$_status'),
                         label: 'Account Status',
                         value: _status,
                         icon: Icons.verified_user_outlined,
                         items: const {
                           'approved': 'Approved',
                           'pending': 'Pending',
-                          'suspended': 'Suspended',
                         },
-                        onChanged: (value) {
-                          if (value == null) return;
-                          setState(() => _status = value);
-                        },
+                        onChanged: _statusSaving || _saving
+                            ? null
+                            : _changeAccountStatus,
                       ),
                     ],
                   ),
@@ -1400,7 +1432,7 @@ class _EditStaffDialogState extends State<_EditStaffDialog> {
             ),
             const SizedBox(height: 20),
             _DialogActions(
-              saving: _saving,
+              saving: _saving || _statusSaving,
               onCancel: () => Navigator.of(context).pop(),
               onSubmit: _saveChanges,
             ),
@@ -1749,8 +1781,9 @@ class _DialogDropdown extends StatelessWidget {
   final String value;
   final IconData icon;
   final Map<String, String> items;
-  final ValueChanged<String?> onChanged;
+  final ValueChanged<String?>? onChanged;
   const _DialogDropdown({
+    super.key,
     required this.label,
     required this.value,
     required this.icon,

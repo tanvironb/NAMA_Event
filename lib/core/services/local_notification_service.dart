@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'notification_handler.dart';
 
 class LocalNotificationService {
   LocalNotificationService._();
@@ -47,11 +48,14 @@ class LocalNotificationService {
     await _plugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        debugPrint(
-          'Local notification tapped. Payload: ${response.payload}',
-        );
+        _handlePayload(response.payload);
       },
     );
+
+    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp == true) {
+      _handlePayload(launchDetails?.notificationResponse?.payload);
+    }
 
     final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
         _plugin.resolvePlatformSpecificImplementation<
@@ -136,5 +140,15 @@ class LocalNotificationService {
       notificationDetails,
       payload: payload,
     );
+  }
+
+  static void _handlePayload(String? payload) {
+    if (payload == null || payload.isEmpty) return;
+    try {
+      final data = Map<String, dynamic>.from(jsonDecode(payload) as Map);
+      NotificationHandler.handleNotificationTap(RemoteMessage(data: data));
+    } catch (error) {
+      debugPrint('Invalid local notification payload: $error');
+    }
   }
 }

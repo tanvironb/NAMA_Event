@@ -113,10 +113,13 @@ class AdminEventUserDeleteHelper {
     final meetingsSnapshot = await firestore
         .collection('meetings')
         .where('eventId', isEqualTo: eventId)
-        .where('memberIds', arrayContains: userId)
         .get();
 
     for (final meetingDoc in meetingsSnapshot.docs) {
+      // Filter within this event so removal does not depend on a composite
+      // eventId/memberIds index being deployed.
+      final memberIds = meetingDoc.data()['memberIds'];
+      if (memberIds is! List || !memberIds.contains(userId)) continue;
       batchDelete(meetingDoc.reference);
       await commitBatchIfNeeded();
     }

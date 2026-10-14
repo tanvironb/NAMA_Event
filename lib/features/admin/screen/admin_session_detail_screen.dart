@@ -1,5 +1,7 @@
 // lib/features/admin/screen/admin_session_detail_screen.dart
 import 'dart:math';
+import 'package:events_app_trueattempt/common_widgets/session_statistics_builder.dart';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -15,10 +17,7 @@ import 'package:intl/intl.dart';
 class AdminSessionDetailScreen extends ConsumerStatefulWidget {
   final Session session;
 
-  const AdminSessionDetailScreen({
-    super.key,
-    required this.session,
-  });
+  const AdminSessionDetailScreen({super.key, required this.session});
 
   @override
   ConsumerState<AdminSessionDetailScreen> createState() =>
@@ -28,6 +27,8 @@ class AdminSessionDetailScreen extends ConsumerStatefulWidget {
 class _AdminSessionDetailScreenState
     extends ConsumerState<AdminSessionDetailScreen> {
   late Session _currentSession;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+  _sessionSubscription;
   String _currentQRPayload = '';
   String _sessionCode = '';
   bool _isPreparingCode = true;
@@ -41,8 +42,27 @@ class _AdminSessionDetailScreenState
   void initState() {
     super.initState();
     _currentSession = widget.session;
+    _sessionSubscription = FirebaseFirestore.instance
+        .collection('sessions')
+        .doc(widget.session.id)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (!mounted || !snapshot.exists) return;
+            setState(() => _currentSession = Session.fromFirestore(snapshot));
+          },
+          onError: (Object error) {
+            debugPrint('Unable to refresh session statistics: $error');
+          },
+        );
     _currentQRPayload = widget.session.qrCodePayload;
     _prepareSessionCode();
+  }
+
+  @override
+  void dispose() {
+    _sessionSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _prepareSessionCode() async {
@@ -90,18 +110,15 @@ class _AdminSessionDetailScreenState
   Future<void> _generateQRCode() async {
     final generatedQR = await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => QRGenerationLoadingScreen(
-          session: _currentSession,
-        ),
+        builder:
+            (context) => QRGenerationLoadingScreen(session: _currentSession),
       ),
     );
 
     if (generatedQR != null && mounted) {
       setState(() {
         _currentQRPayload = generatedQR;
-        _currentSession = _copySessionWith(
-          qrCodePayload: generatedQR,
-        );
+        _currentSession = _copySessionWith(qrCodePayload: generatedQR);
       });
     }
   }
@@ -114,9 +131,7 @@ class _AdminSessionDetailScreenState
 
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => SessionQRViewerScreen(
-          session: _currentSession,
-        ),
+        builder: (context) => SessionQRViewerScreen(session: _currentSession),
       ),
     );
   }
@@ -158,9 +173,7 @@ class _AdminSessionDetailScreenState
       barrierDismissible: false,
       builder: (context) {
         return const Center(
-          child: CircularProgressIndicator(
-            color: _primaryColor,
-          ),
+          child: CircularProgressIndicator(color: _primaryColor),
         );
       },
     );
@@ -175,20 +188,18 @@ class _AdminSessionDetailScreenState
           .collection('sessions')
           .doc(_currentSession.id)
           .update({
-        'qrCodePayload': newPayload,
-        'checkInCode': newSessionCode,
-        'lastQRRegenerationAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+            'qrCodePayload': newPayload,
+            'checkInCode': newSessionCode,
+            'lastQRRegenerationAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
 
       if (!mounted) return;
 
       setState(() {
         _currentQRPayload = newPayload;
         _sessionCode = newSessionCode;
-        _currentSession = _copySessionWith(
-          qrCodePayload: newPayload,
-        );
+        _currentSession = _copySessionWith(qrCodePayload: newPayload);
       });
 
       Navigator.of(context).pop();
@@ -215,10 +226,11 @@ class _AdminSessionDetailScreenState
 
   Future<DateTime?> _getLastRegenerationTime() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('sessions')
-          .doc(_currentSession.id)
-          .get();
+      final doc =
+          await FirebaseFirestore.instance
+              .collection('sessions')
+              .doc(_currentSession.id)
+              .get();
 
       final data = doc.data();
 
@@ -270,10 +282,10 @@ class _AdminSessionDetailScreenState
           .collection('sessions')
           .doc(_currentSession.id)
           .update({
-        'isChatEnabled': newChatState,
-        'closedBy': closedByValue,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+            'isChatEnabled': newChatState,
+            'closedBy': closedByValue,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
 
       if (!mounted) return;
 
@@ -306,9 +318,7 @@ class _AdminSessionDetailScreenState
   Future<void> _openSessionChat() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => SessionChatScreen(
-          session: _currentSession,
-        ),
+        builder: (context) => SessionChatScreen(session: _currentSession),
       ),
     );
   }
@@ -316,9 +326,7 @@ class _AdminSessionDetailScreenState
   Future<void> _copySessionCode() async {
     if (_sessionCode.isEmpty) return;
 
-    await Clipboard.setData(
-      ClipboardData(text: _sessionCode),
-    );
+    await Clipboard.setData(ClipboardData(text: _sessionCode));
 
     if (!mounted) return;
 
@@ -415,11 +423,7 @@ class _AdminSessionDetailScreenState
           borderRadius: BorderRadius.circular(20),
           child: const Padding(
             padding: EdgeInsets.all(6),
-            child: Icon(
-              Icons.arrow_back,
-              color: _primaryColor,
-              size: 22,
-            ),
+            child: Icon(Icons.arrow_back, color: _primaryColor, size: 22),
           ),
         ),
         const SizedBox(width: 10),
@@ -461,9 +465,10 @@ class _AdminSessionDetailScreenState
         const SizedBox(height: 8),
         _InfoLine(
           icon: Icons.location_on,
-          text: _currentSession.location.isEmpty
-              ? 'Location not provided'
-              : _currentSession.location,
+          text:
+              _currentSession.location.isEmpty
+                  ? 'Location not provided'
+                  : _currentSession.location,
         ),
       ],
     );
@@ -517,10 +522,7 @@ class _AdminSessionDetailScreenState
             borderRadius: BorderRadius.circular(16),
             child: Container(
               width: 250,
-              padding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 13,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
               decoration: BoxDecoration(
                 color: _softPurple,
                 borderRadius: BorderRadius.circular(16),
@@ -538,22 +540,22 @@ class _AdminSessionDetailScreenState
                   const SizedBox(height: 5),
                   _isPreparingCode
                       ? const SizedBox(
-                          height: 18,
-                          width: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: _primaryColor,
-                          ),
-                        )
-                      : Text(
-                          _sessionCode,
-                          style: const TextStyle(
-                            color: _primaryColor,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 0.8,
-                          ),
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: _primaryColor,
                         ),
+                      )
+                      : Text(
+                        _sessionCode,
+                        style: const TextStyle(
+                          color: _primaryColor,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
                 ],
               ),
             ),
@@ -590,35 +592,39 @@ class _AdminSessionDetailScreenState
   Widget _buildStatsCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: 14,
-        vertical: 22,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 22),
       decoration: BoxDecoration(
         color: const Color(0xFFF7F6F3),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _StatItem(
-              value: '${_currentSession.checkedInAttendees.length}',
-              label: 'Check-ins',
+      child: SessionStatisticsBuilder(
+        sessionId: widget.session.id,
+        builder:
+            (context, stats) => Row(
+              children: [
+                Expanded(
+                  child: _StatItem(
+                    value: '${_currentSession.checkedInAttendees.length}',
+                    label: 'Check-ins',
+                  ),
+                ),
+                Expanded(
+                  child: _StatItem(
+                    value: stats == null ? '—' : '${stats.messages}',
+                    label: 'Messages',
+                  ),
+                ),
+                Expanded(
+                  child: _StatItem(
+                    value:
+                        stats == null || stats.feedback == 0
+                            ? '—'
+                            : stats.averageRating.toStringAsFixed(1),
+                    label: 'Avg Rating',
+                  ),
+                ),
+              ],
             ),
-          ),
-          Expanded(
-            child: _StatItem(
-              value: '${_currentSession.totalMessages}',
-              label: 'Messages',
-            ),
-          ),
-          Expanded(
-            child: _StatItem(
-              value: _currentSession.averageRating.toStringAsFixed(1),
-              label: 'Avg Rating',
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -651,19 +657,21 @@ class _AdminSessionDetailScreenState
         Center(
           child: _ActionButton(
             width: 250,
-            label: _currentSession.isChatEnabled
-                ? 'Disable Chat'
-                : 'Enable Chat',
-            icon: _currentSession.isChatEnabled
-                ? Icons.speaker_notes_off_outlined
-                : Icons.chat_outlined,
-            backgroundColor: _currentSession.isChatEnabled
-                ? AppColors.errorRed
-                : Colors.green.shade700,
+            label:
+                _currentSession.isChatEnabled ? 'Disable Chat' : 'Enable Chat',
+            icon:
+                _currentSession.isChatEnabled
+                    ? Icons.speaker_notes_off_outlined
+                    : Icons.chat_outlined,
+            backgroundColor:
+                _currentSession.isChatEnabled
+                    ? AppColors.errorRed
+                    : Colors.green.shade700,
             foregroundColor: Colors.white,
-            borderColor: _currentSession.isChatEnabled
-                ? AppColors.errorRed
-                : Colors.green.shade700,
+            borderColor:
+                _currentSession.isChatEnabled
+                    ? AppColors.errorRed
+                    : Colors.green.shade700,
             onTap: _toggleChatEnabled,
           ),
         ),
@@ -676,9 +684,7 @@ class _AdminSessionDetailScreenState
             decoration: BoxDecoration(
               color: AppColors.warningAmber.withOpacity(0.16),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: AppColors.warningAmber,
-              ),
+              border: Border.all(color: AppColors.warningAmber),
             ),
             child: Row(
               children: [
@@ -711,20 +717,13 @@ class _InfoLine extends StatelessWidget {
   final IconData icon;
   final String text;
 
-  const _InfoLine({
-    required this.icon,
-    required this.text,
-  });
+  const _InfoLine({required this.icon, required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(
-          icon,
-          color: Colors.grey,
-          size: 16,
-        ),
+        Icon(icon, color: Colors.grey, size: 16),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
@@ -767,25 +766,16 @@ class _ActionButton extends StatelessWidget {
       height: 38,
       child: ElevatedButton.icon(
         onPressed: onTap,
-        icon: Icon(
-          icon,
-          size: 17,
-        ),
+        icon: Icon(icon, size: 17),
         label: Text(
           label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
         ),
         style: ElevatedButton.styleFrom(
           elevation: 0,
           backgroundColor: backgroundColor,
           foregroundColor: foregroundColor,
-          side: BorderSide(
-            color: borderColor,
-            width: 1.2,
-          ),
+          side: BorderSide(color: borderColor, width: 1.2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),
@@ -799,10 +789,7 @@ class _StatItem extends StatelessWidget {
   final String value;
   final String label;
 
-  const _StatItem({
-    required this.value,
-    required this.label,
-  });
+  const _StatItem({required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -877,15 +864,10 @@ class _TimedConfirmationDialogState extends State<_TimedConfirmationDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Text(
         widget.title,
-        style: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w700,
-        ),
+        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -893,10 +875,7 @@ class _TimedConfirmationDialogState extends State<_TimedConfirmationDialog> {
         children: [
           Text(
             widget.message,
-            style: const TextStyle(
-              fontSize: 13.5,
-              height: 1.35,
-            ),
+            style: const TextStyle(fontSize: 13.5, height: 1.35),
           ),
           if (!_canConfirm) ...[
             const SizedBox(height: 16),
@@ -911,10 +890,7 @@ class _TimedConfirmationDialogState extends State<_TimedConfirmationDialog> {
             Center(
               child: Text(
                 'Please wait $_secondsLeft second${_secondsLeft != 1 ? 's' : ''}...',
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
               ),
             ),
           ],
@@ -923,10 +899,7 @@ class _TimedConfirmationDialogState extends State<_TimedConfirmationDialog> {
       actions: [
         TextButton(
           onPressed: widget.onCancel,
-          child: const Text(
-            'Cancel',
-            style: TextStyle(fontSize: 13),
-          ),
+          child: const Text('Cancel', style: TextStyle(fontSize: 13)),
         ),
         ElevatedButton(
           onPressed: _canConfirm ? widget.onConfirm : null,

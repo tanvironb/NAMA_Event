@@ -1,5 +1,6 @@
 // lib/features/chat/data/chat_repository.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/core/services/session_chat_deletion.dart';
 import 'package:events_app_trueattempt/core/models/message_model.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
 class ChatRepository {
@@ -27,7 +28,9 @@ class ChatRepository {
   // ============================================================================
   Stream<List<Message>> getSessionMessagesStream(String sessionId) {
     return _firestoreService.getChatCollectionStream(sessionId).map((snapshot) {
-      return snapshot.docs.map((doc) => Message.fromFirestore(doc)).toList();
+      return snapshot.docs
+          .where((doc) => (doc.data() as Map<String, dynamic>?)?['deletedForEveryone'] != true)
+          .map((doc) => Message.fromFirestore(doc)).toList();
     });
   }
   // ============================================================================
@@ -335,12 +338,11 @@ class ChatRepository {
   // DELETE FROM EVERYONE - SESSION CHAT
   // ============================================================================
   Future<void> deleteMessage(String sessionId, String messageId) async {
-    await _firestoreService.deleteChatMessage(sessionId, messageId);
-    final sessionRef =
-        FirebaseFirestore.instance.collection('sessions').doc(sessionId);
-    await sessionRef.update({
-      'deletedMessagesCount': FieldValue.increment(1),
-    });
+    await deleteSessionChatMessage(
+      db: FirebaseFirestore.instance,
+      sessionId: sessionId,
+      messageId: messageId,
+    );
   }
   // ============================================================================
   // SESSION ANALYTICS

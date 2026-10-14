@@ -57,10 +57,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       fillColor: const Color(0xFFE5E5E5),
       suffixIcon: suffixIcon,
       suffixIconColor: Colors.grey.shade700,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 22,
-        vertical: 16,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(18),
         borderSide: BorderSide.none,
@@ -81,9 +78,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         borderRadius: BorderRadius.circular(18),
         borderSide: BorderSide.none,
       ),
-      errorStyle: const TextStyle(
-        fontSize: 11,
-      ),
+      errorStyle: const TextStyle(fontSize: 11),
     );
   }
 
@@ -102,7 +97,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       return 'Please enter your email';
     }
 
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+    final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
 
     if (!emailRegex.hasMatch(value.trim())) {
       return 'Please enter a valid email';
@@ -136,46 +131,59 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Future<void> _handleRegister() async {
+    if (ref.read(authViewModelProvider).isLoading) return;
     if (!_formKey.currentState!.validate()) return;
 
     final viewModel = ref.read(authViewModelProvider.notifier);
 
-    await viewModel.signUp(
-      _emailController.text.trim(),
-      _passwordController.text,
-      name: _nameController.text.trim(),
-    );
+    try {
+      await viewModel.signUp(
+        _emailController.text.trim(),
+        _passwordController.text,
+        name: _nameController.text.trim(),
+      );
+    } catch (error) {
+      if (!mounted) return;
 
-    if (!mounted) return;
-
-    final authState = ref.read(authViewModelProvider);
-
-    if (authState.hasError) {
-      final error = authState.error;
-
-      final message = error is FirebaseAuthException
-          ? (error.message ?? 'Registration failed.')
-          : 'Registration failed. Please try again.';
+      final String message;
+      if (error is FirebaseAuthException) {
+        message = switch (error.code) {
+          'email-already-in-use' =>
+            'This email address already exists. Please try a different one.',
+          'invalid-email' => 'Please enter a valid email address.',
+          'weak-password' =>
+            'Please choose a stronger password with at least 6 characters.',
+          'network-request-failed' =>
+            'Unable to connect. Check your internet connection and try again.',
+          'too-many-requests' =>
+            'Too many attempts. Please wait a few minutes and try again.',
+          'operation-not-allowed' =>
+            'Sign-up is currently unavailable. Please contact the event support team.',
+          _ =>
+            error.message ?? 'Unable to create your account. Please try again.',
+        };
+      } else if (error is FirebaseException) {
+        message =
+            'We could not finish setting up your profile. Please contact event support (${error.code}).';
+      } else {
+        message =
+            'Unable to create your account. Check your connection and try again.';
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            message,
-            style: const TextStyle(fontSize: 13),
-          ),
+          content: Text(message, style: const TextStyle(fontSize: 13)),
           backgroundColor: AppColors.errorRed,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           duration: const Duration(seconds: 5),
         ),
       );
-    } else {
+      return;
+    }
+    if (mounted) {
       Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const EmailVerificationScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const EmailVerificationScreen()),
       );
     }
   }
@@ -190,11 +198,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: AppColors.namaNavyBlue,
-            size: 22,
-          ),
+          icon: Icon(Icons.arrow_back, color: AppColors.namaNavyBlue, size: 22),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -211,11 +215,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   Image.asset(
                     AppConstants.logoEmblemPath,
                     height: 72,
-                    errorBuilder: (context, error, stackTrace) => Icon(
-                      Icons.account_circle,
-                      size: 72,
-                      color: AppColors.namaNavyBlue,
-                    ),
+                    errorBuilder:
+                        (context, error, stackTrace) => Icon(
+                          Icons.account_circle,
+                          size: 72,
+                          color: AppColors.namaNavyBlue,
+                        ),
                   ),
 
                   const SizedBox(height: 20),
@@ -322,8 +327,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         onPressed: () {
                           setState(() {
-                            _obscureConfirmPassword =
-                                !_obscureConfirmPassword;
+                            _obscureConfirmPassword = !_obscureConfirmPassword;
                           });
                         },
                       ),
@@ -335,28 +339,28 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   authState.isLoading
                       ? const LoadingIndicator()
                       : SizedBox(
-                          width: 130,
-                          height: 42,
-                          child: ElevatedButton(
-                            onPressed: _handleRegister,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3D3D9E),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(13),
-                              ),
+                        width: 130,
+                        height: 42,
+                        child: ElevatedButton(
+                          onPressed: _handleRegister,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF3D3D9E),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(13),
                             ),
-                            child: const Text(
-                              'Sign Up',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.6,
-                              ),
+                          ),
+                          child: const Text(
+                            'Sign Up',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.6,
                             ),
                           ),
                         ),
+                      ),
 
                   const SizedBox(height: 28),
 

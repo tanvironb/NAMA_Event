@@ -1,0 +1,5 @@
+{
+  "firestore": {
+    "rules": "firestore.user-deletion.rules"
+  }
+}

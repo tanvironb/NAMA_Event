@@ -3173,7 +3173,7 @@ export const cleanupArchivedEvents = onSchedule(
     }
   }
 );
-export {deleteMyAccount} from "./account_deletion";
+export {adminDeleteUser, deleteMyAccount} from "./account_deletion";
 
 // Admin-only attendance removal. Bookmarks and feedback are preserved.
 export const removeSessionAttendance = onCall(

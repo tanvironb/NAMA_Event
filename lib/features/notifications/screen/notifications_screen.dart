@@ -62,15 +62,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('readNotifications')
-          .doc(id)
-          .set({
-        'notificationId': id,
-        'openedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await ref.read(notificationRepositoryProvider).markAsRead(user.uid, id);
     } catch (e) {
       debugPrint('Failed to mark notification as opened: $e');
     }
@@ -81,7 +73,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   ) {
     final id = notification.id.trim();
     if (id.isEmpty) return false;
-    return openedIds.contains(id) || _localOpenedNotificationIds.contains(id);
+    return notification.isRead || openedIds.contains(id) || _localOpenedNotificationIds.contains(id);
   }
   List<AppNotification> _applyFilters(List<AppNotification> notifications) {
     final query = _searchQuery.trim().toLowerCase();

@@ -9,10 +9,7 @@ import 'package:intl/intl.dart';
 class SessionFeedbackDetailScreen extends ConsumerStatefulWidget {
   final Session session;
 
-  const SessionFeedbackDetailScreen({
-    super.key,
-    required this.session,
-  });
+  const SessionFeedbackDetailScreen({super.key, required this.session});
 
   @override
   ConsumerState<SessionFeedbackDetailScreen> createState() =>
@@ -34,30 +31,34 @@ class _SessionFeedbackDetailScreenState
   List<_ReviewItem> _parseReviews(
     QuerySnapshot<Map<String, dynamic>> snapshot,
   ) {
-    final reviews = snapshot.docs.map((doc) {
-      final data = doc.data();
+    final reviews =
+        snapshot.docs
+            .map((doc) {
+              final data = doc.data();
 
-      final timestampValue = data['timestamp'];
-      DateTime timestamp = DateTime.now();
+              final timestampValue = data['timestamp'];
+              DateTime timestamp = DateTime.now();
 
-      if (timestampValue is Timestamp) {
-        timestamp = timestampValue.toDate();
-      }
+              if (timestampValue is Timestamp) {
+                timestamp = timestampValue.toDate();
+              }
 
-      return _ReviewItem(
-        id: doc.id,
-        sessionId: (data['sessionId'] ?? '').toString(),
-        userId: (data['userId'] ?? '').toString(),
-        userName: (data['userName'] ?? 'Anonymous').toString(),
-        isAnonymous: data['isAnonymous'] == true,
-        rating: (data['rating'] as num?)?.toInt() ?? 0,
-        comment: (data['comment'] ?? '').toString(),
-        userRole: (data['userRole'] ?? '').toString(),
-        timestamp: timestamp,
-      );
-    }).where((review) {
-      return review.rating > 0;
-    }).toList();
+              return _ReviewItem(
+                id: doc.id,
+                sessionId: (data['sessionId'] ?? '').toString(),
+                userId: (data['userId'] ?? '').toString(),
+                userName: (data['userName'] ?? 'Anonymous').toString(),
+                isAnonymous: data['isAnonymous'] == true,
+                rating: (data['rating'] as num?)?.toInt() ?? 0,
+                comment: (data['comment'] ?? '').toString(),
+                userRole: (data['userRole'] ?? '').toString(),
+                timestamp: timestamp,
+              );
+            })
+            .where((review) {
+              return review.rating > 0;
+            })
+            .toList();
 
     reviews.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
@@ -87,10 +88,10 @@ class _SessionFeedbackDetailScreenState
                   Text(
                     'Session Reviews',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: AppColors.namaNavyBlue,
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                        ),
+                      color: AppColors.namaNavyBlue,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -106,19 +107,18 @@ class _SessionFeedbackDetailScreenState
                   }
 
                   if (snapshot.hasError) {
-                    return _ErrorState(
-                      error: snapshot.error.toString(),
-                    );
+                    return _ErrorState(error: snapshot.error.toString());
                   }
 
-                  final reviews = snapshot.hasData
-                      ? _parseReviews(snapshot.data!)
-                      : <_ReviewItem>[];
+                  final reviews =
+                      snapshot.hasData
+                          ? _parseReviews(snapshot.data!)
+                          : <_ReviewItem>[];
 
                   if (reviews.isEmpty) {
                     return _EmptyState(
                       sessionTitle: widget.session.title,
-                      expectedCount: widget.session.totalFeedbacks,
+                      expectedCount: 0,
                     );
                   }
 
@@ -129,14 +129,15 @@ class _SessionFeedbackDetailScreenState
                         (ratingDistribution[review.rating] ?? 0) + 1;
                   }
 
-                  final filteredReviews = _selectedRatingFilter == null
-                      ? reviews
-                      : reviews
-                          .where(
-                            (review) =>
-                                review.rating == _selectedRatingFilter,
-                          )
-                          .toList();
+                  final filteredReviews =
+                      _selectedRatingFilter == null
+                          ? reviews
+                          : reviews
+                              .where(
+                                (review) =>
+                                    review.rating == _selectedRatingFilter,
+                              )
+                              .toList();
 
                   final totalRating = reviews.fold<int>(
                     0,
@@ -177,9 +178,10 @@ class _SessionFeedbackDetailScreenState
                                     selectedColor: AppColors.namaNavyBlue,
                                     checkmarkColor: Colors.white,
                                     labelStyle: TextStyle(
-                                      color: _selectedRatingFilter == null
-                                          ? Colors.white
-                                          : AppColors.namaNavyBlue,
+                                      color:
+                                          _selectedRatingFilter == null
+                                              ? Colors.white
+                                              : AppColors.namaNavyBlue,
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -240,21 +242,23 @@ class _SessionFeedbackDetailScreenState
 
                         Text(
                           'Reviews',
-                          style:
-                              Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppColors.namaNavyBlue,
-                                  ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleLarge?.copyWith(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.namaNavyBlue,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${filteredReviews.length} ${filteredReviews.length == 1 ? 'review' : 'reviews'}${_selectedRatingFilter != null ? ' with $_selectedRatingFilter ${_selectedRatingFilter == 1 ? 'star' : 'stars'}' : ' from attendees'}',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: AppColors.namaMediumGray,
-                                    fontSize: 12,
-                                  ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            color: AppColors.namaMediumGray,
+                            fontSize: 12,
+                          ),
                         ),
 
                         const SizedBox(height: 12),
@@ -312,36 +316,32 @@ class _SessionSummaryCard extends StatelessWidget {
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: AppColors.namaNavyBlue,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  height: 1.2,
-                ),
+              color: AppColors.namaNavyBlue,
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
+              height: 1.2,
+            ),
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              Icon(
-                Icons.star,
-                size: 20,
-                color: AppColors.namaGoldenYellow,
-              ),
+              Icon(Icons.star, size: 20, color: AppColors.namaGoldenYellow),
               const SizedBox(width: 6),
               Text(
                 averageRating.toStringAsFixed(1),
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: AppColors.namaNavyBlue,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  color: AppColors.namaNavyBlue,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
                 '($reviewCount ${reviewCount == 1 ? 'review' : 'reviews'})',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppColors.namaMediumGray,
-                      fontSize: 12,
-                    ),
+                  color: AppColors.namaMediumGray,
+                  fontSize: 12,
+                ),
               ),
             ],
           ),
@@ -354,15 +354,14 @@ class _SessionSummaryCard extends StatelessWidget {
 class _ReviewCard extends StatelessWidget {
   final _ReviewItem review;
 
-  const _ReviewCard({
-    required this.review,
-  });
+  const _ReviewCard({required this.review});
 
   @override
   Widget build(BuildContext context) {
-    final displayName = review.isAnonymous || review.userName.trim().isEmpty
-        ? 'Anonymous'
-        : review.userName;
+    final displayName =
+        review.isAnonymous || review.userName.trim().isEmpty
+            ? 'Anonymous'
+            : review.userName;
 
     return Container(
       width: double.infinity,
@@ -386,14 +385,16 @@ class _ReviewCard extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 18,
-                backgroundColor: review.isAnonymous
-                    ? AppColors.namaMediumGray.withOpacity(0.35)
-                    : AppColors.namaLightBlue,
+                backgroundColor:
+                    review.isAnonymous
+                        ? AppColors.namaMediumGray.withOpacity(0.35)
+                        : AppColors.namaLightBlue,
                 child: Icon(
                   review.isAnonymous ? Icons.person_off : Icons.person,
-                  color: review.isAnonymous
-                      ? AppColors.namaMediumGray
-                      : AppColors.namaNavyBlue,
+                  color:
+                      review.isAnonymous
+                          ? AppColors.namaMediumGray
+                          : AppColors.namaNavyBlue,
                   size: 18,
                 ),
               ),
@@ -404,10 +405,10 @@ class _ReviewCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: AppColors.namaNavyBlue,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: AppColors.namaNavyBlue,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
               Row(
@@ -427,9 +428,9 @@ class _ReviewCard extends StatelessWidget {
           Text(
             DateFormat('MMM dd, yyyy • hh:mm a').format(review.timestamp),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: AppColors.namaMediumGray,
-                  fontSize: 11,
-                ),
+              color: AppColors.namaMediumGray,
+              fontSize: 11,
+            ),
           ),
 
           if (review.comment.trim().isNotEmpty) ...[
@@ -444,10 +445,10 @@ class _ReviewCard extends StatelessWidget {
               child: Text(
                 review.comment,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: AppColors.namaDarkGray,
-                      fontSize: 12.5,
-                      height: 1.35,
-                    ),
+                  color: AppColors.namaDarkGray,
+                  fontSize: 12.5,
+                  height: 1.35,
+                ),
               ),
             ),
           ],
@@ -461,16 +462,14 @@ class _EmptyState extends StatelessWidget {
   final String sessionTitle;
   final int expectedCount;
 
-  const _EmptyState({
-    required this.sessionTitle,
-    required this.expectedCount,
-  });
+  const _EmptyState({required this.sessionTitle, required this.expectedCount});
 
   @override
   Widget build(BuildContext context) {
-    final message = expectedCount > 0
-        ? 'This session summary shows $expectedCount feedback, but no feedback document exists under this session.'
-        : 'Reviews from attendees will appear here';
+    final message =
+        expectedCount > 0
+            ? 'This session summary shows $expectedCount feedback, but no feedback document exists under this session.'
+            : 'Reviews from attendees will appear here';
 
     return Center(
       child: Padding(
@@ -487,20 +486,20 @@ class _EmptyState extends StatelessWidget {
             Text(
               'No Reviews Yet',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppColors.namaDarkGray,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: AppColors.namaDarkGray,
+                fontSize: 19,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               message,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppColors.namaMediumGray,
-                    fontSize: 12.5,
-                    height: 1.35,
-                  ),
+                color: AppColors.namaMediumGray,
+                fontSize: 12.5,
+                height: 1.35,
+              ),
             ),
             const SizedBox(height: 10),
             Text(
@@ -509,10 +508,10 @@ class _EmptyState extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.namaNavyBlue,
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: AppColors.namaNavyBlue,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ),
@@ -524,9 +523,7 @@ class _EmptyState extends StatelessWidget {
 class _ErrorState extends StatelessWidget {
   final String error;
 
-  const _ErrorState({
-    required this.error,
-  });
+  const _ErrorState({required this.error});
 
   @override
   Widget build(BuildContext context) {
@@ -536,29 +533,25 @@ class _ErrorState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 50,
-              color: AppColors.errorRed,
-            ),
+            Icon(Icons.error_outline, size: 50, color: AppColors.errorRed),
             const SizedBox(height: 14),
             Text(
               'Error loading reviews',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: AppColors.namaDarkGray,
-                    fontSize: 19,
-                    fontWeight: FontWeight.w600,
-                  ),
+                color: AppColors.namaDarkGray,
+                fontSize: 19,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               error,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.namaMediumGray,
-                    fontSize: 12,
-                    height: 1.35,
-                  ),
+                color: AppColors.namaMediumGray,
+                fontSize: 12,
+                height: 1.35,
+              ),
             ),
           ],
         ),

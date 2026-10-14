@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:events_app_trueattempt/common_widgets/session_statistics_builder.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:intl/intl.dart';
@@ -19,7 +20,8 @@ class SessionCardWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final isUpcoming = session.startTime.isAfter(now);
-    final isOngoing = now.isAfter(session.startTime) && now.isBefore(session.endTime);
+    final isOngoing =
+        now.isAfter(session.startTime) && now.isBefore(session.endTime);
     final isCompleted = session.endTime.isBefore(now);
 
     return Card(
@@ -42,14 +44,11 @@ class SessionCardWidget extends StatelessWidget {
                     isCompleted: isCompleted,
                   ),
                   const Spacer(),
-                  Icon(
-                    Icons.chevron_right,
-                    color: AppColors.namaMediumGray,
-                  ),
+                  Icon(Icons.chevron_right, color: AppColors.namaMediumGray),
                 ],
               ),
               const SizedBox(height: 12),
-              
+
               // Session Title
               Text(
                 session.title,
@@ -61,15 +60,16 @@ class SessionCardWidget extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
-              
+
               // Time Info
               _buildInfoRow(
                 icon: Icons.schedule_outlined,
-                text: '${DateFormat.jm().format(session.startTime)} - ${DateFormat.jm().format(session.endTime)}',
+                text:
+                    '${DateFormat.jm().format(session.startTime)} - ${DateFormat.jm().format(session.endTime)}',
                 context: context,
               ),
               const SizedBox(height: 4),
-              
+
               // Location Info
               _buildInfoRow(
                 icon: Icons.location_on_outlined,
@@ -77,7 +77,7 @@ class SessionCardWidget extends StatelessWidget {
                 context: context,
               ),
               const SizedBox(height: 4),
-              
+
               // Stats Row
               Row(
                 children: [
@@ -86,9 +86,16 @@ class SessionCardWidget extends StatelessWidget {
                     label: '${session.checkedInAttendees.length} attendees',
                   ),
                   const SizedBox(width: 8),
-                  _buildStatChip(
-                    icon: Icons.chat_bubble_outline,
-                    label: '${session.totalMessages} messages',
+                  SessionStatisticsBuilder(
+                    sessionId: session.id,
+                    builder:
+                        (context, stats) => _buildStatChip(
+                          icon: Icons.chat_bubble_outline,
+                          label:
+                              stats == null
+                                  ? '— messages'
+                                  : '${stats.messages} messages',
+                        ),
                   ),
                 ],
               ),
@@ -151,9 +158,9 @@ class SessionCardWidget extends StatelessWidget {
         Expanded(
           child: Text(
             text,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.namaDarkGray,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AppColors.namaDarkGray),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -162,10 +169,7 @@ class SessionCardWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildStatChip({
-    required IconData icon,
-    required String label,
-  }) {
+  Widget _buildStatChip({required IconData icon, required String label}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
@@ -179,10 +183,7 @@ class SessionCardWidget extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.namaDarkGray,
-            ),
+            style: const TextStyle(fontSize: 12, color: AppColors.namaDarkGray),
           ),
         ],
       ),

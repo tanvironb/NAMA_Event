@@ -15,12 +15,31 @@ import 'package:events_app_trueattempt/features/notifications/screen/widgets/not
 /// Handles deep linking and navigation based on notification type
 class NotificationHandler {
   static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static bool _navigationReady = false;
+  static RemoteMessage? _pendingMessage;
+
+  static void setNavigationReady(bool ready) {
+    _navigationReady = ready;
+    if (!ready) return;
+    final message = _pendingMessage;
+    if (message == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_navigationReady || navigatorKey.currentContext == null) return;
+      _pendingMessage = null;
+      handleNotificationTap(message);
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
 
   /// Get current user ID safely
   static String? get _currentUserId => FirebaseAuth.instance.currentUser?.uid;
 
   /// Handle notification tap and navigate to appropriate screen
   static void handleNotificationTap(RemoteMessage message) {
+    if (!_navigationReady || navigatorKey.currentContext == null || _currentUserId == null) {
+      _pendingMessage = message;
+      return;
+    }
     debugPrint('NotificationHandler: Handling notification tap');
     debugPrint('Notification data: ${message.data}');
 

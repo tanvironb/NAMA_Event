@@ -89,8 +89,6 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
     final possibleStatuses = [
       'pending',
       'approved',
-      'rejected',
-      'blocked',
     ];
 
     final currentRole = possibleRoles.contains(widget.user.role)
@@ -220,7 +218,9 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
                     DropdownButtonFormField<String>(
                       value: currentStatus,
                       isExpanded: true,
-                      icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                      icon: Icon(isCurrentUserStaff
+                          ? Icons.lock_outline_rounded
+                          : Icons.keyboard_arrow_down_rounded),
                       items: possibleStatuses
                           .map(
                             (status) => DropdownMenuItem(
@@ -245,8 +245,9 @@ class _UserDetailAdminScreenState extends ConsumerState<UserDetailAdminScreen> {
                             ),
                           )
                           .toList(),
-                      onChanged: (newStatus) =>
-                          _handleStatusChange(newStatus),
+                      onChanged: isCurrentUserStaff
+                          ? null
+                          : (newStatus) => _handleStatusChange(newStatus),
                       decoration: _inputDecoration('Change Status'),
                     ),
 

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/core/services/session_chat_deletion.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 class SessionMonitoringRepository {
@@ -59,11 +60,12 @@ class SessionMonitoringRepository {
   }
 
   Future<void> deleteMessage(String id) {
-    return db.collection(messagesPath).doc(id).update({
-      'deletedForEveryone': true,
-      'deletedBy': FirebaseAuth.instance.currentUser?.uid,
-      'deletedAt': FieldValue.serverTimestamp(),
-    });
+    return deleteSessionChatMessage(
+      db: db,
+      sessionId: sessionId,
+      messageId: id,
+      deletedBy: FirebaseAuth.instance.currentUser?.uid,
+    );
   }
 
   Future<void> mute(String uid, bool muted) async {

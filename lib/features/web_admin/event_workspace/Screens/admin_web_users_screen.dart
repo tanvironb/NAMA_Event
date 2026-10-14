@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../admin_web_theme.dart';
 
-import '../utils/admin_event_user_delete_helper.dart';
+import '../utils/admin_user_delete_service.dart';
 
 class AdminWebUsersScreen extends StatefulWidget {
 
@@ -106,7 +106,7 @@ class _AdminWebUsersScreenState extends State<AdminWebUsersScreen> {
         return AlertDialog(
           title: const Text('Delete user'),
           content: Text(
-            'Are you sure you want to remove $name${email.isNotEmpty ? ' ($email)' : ''} from ${widget.eventName}?\n\nThis will remove this user from this event, attendance, merchandise collection, session assignments, meetings, and certificates.',
+            'Permanently delete $name${email.isNotEmpty ? ' ($email)' : ''} from Firebase? This deletes their sign-in account and profile, removes their event data, and anonymizes historical attendance and feedback.',
           ),
           actions: [
             TextButton(
@@ -129,17 +129,16 @@ class _AdminWebUsersScreenState extends State<AdminWebUsersScreen> {
     if (confirmed != true) return;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Removing user...')),
+      const SnackBar(content: Text('Deleting user...')),
     );
     try {
-      await AdminEventUserDeleteHelper.deleteUserFromEvent(
-        eventId: widget.eventId,
+      await AdminUserDeleteService.permanentlyDeleteUser(
         userId: userId,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$name removed from this event.'),
+          content: Text('$name was deleted from Firebase.'),
           backgroundColor: AdminWebTheme.success,
         ),
       );
@@ -915,6 +914,8 @@ class _EditUserDialogState extends State<_EditUserDialog> {
 
   late String _status;
 
+  bool _statusSaving = false;
+
   late String _profileVisibility;
 
   bool _saving = false;
@@ -1061,19 +1062,7 @@ class _EditUserDialogState extends State<_EditUserDialog> {
 
             .toLowerCase();
 
-    _status = const [
-
-      'approved',
-
-      'pending',
-
-      'suspended',
-
-    ].contains(rawStatus)
-
-        ? rawStatus
-
-        : 'approved';
+    _status = rawStatus == 'approved' ? 'approved' : 'pending';
 
     final visibility =
 
@@ -1133,6 +1122,43 @@ class _EditUserDialogState extends State<_EditUserDialog> {
 
     super.dispose();
 
+  }
+
+  Future<void> _changeAccountStatus(String? value) async {
+    if (value == null || value == _status || _saving || _statusSaving) return;
+
+    final previous = _status;
+    setState(() {
+      _status = value;
+      _statusSaving = true;
+    });
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.userId)
+          .update({
+            'status': value,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account status updated.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _status = previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: $error'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _statusSaving = false);
+    }
   }
 
   Future<bool> _confirmRoleChange() async {
@@ -1217,7 +1243,7 @@ class _EditUserDialogState extends State<_EditUserDialog> {
 
     FocusScope.of(context).unfocus();
 
-    if (_saving || !_formKey.currentState!.validate()) {
+    if (_saving || _statusSaving || !_formKey.currentState!.validate()) {
 
       return;
 
@@ -1727,6 +1753,8 @@ class _EditUserDialogState extends State<_EditUserDialog> {
 
                       _DialogDropdown(
 
+                        key: ValueKey('user-status-$_status'),
+
                         label: 'Account Status',
 
                         value: _status,
@@ -1739,17 +1767,11 @@ class _EditUserDialogState extends State<_EditUserDialog> {
 
                           'pending': 'Pending',
 
-                          'suspended': 'Suspended',
-
                         },
 
-                        onChanged: (value) {
-
-                          if (value == null) return;
-
-                          setState(() => _status = value);
-
-                        },
+                        onChanged: _statusSaving || _saving
+                            ? null
+                            : _changeAccountStatus,
 
                       ),
 
@@ -1801,7 +1823,7 @@ class _EditUserDialogState extends State<_EditUserDialog> {
 
             _DialogActions(
 
-              saving: _saving,
+              saving: _saving || _statusSaving,
 
               onCancel: () => Navigator.of(context).pop(),
 
@@ -2499,9 +2521,11 @@ class _DialogDropdown extends StatelessWidget {
 
   final Map<String, String> items;
 
-  final ValueChanged<String?> onChanged;
+  final ValueChanged<String?>? onChanged;
 
   const _DialogDropdown({
+
+    super.key,
 
     required this.label,
 

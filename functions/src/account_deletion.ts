@@ -1,5 +1,3 @@
-/* functions/src/account_deletion.ts */
-
 /* eslint-disable max-len */
 /* eslint-disable require-jsdoc */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -90,6 +88,7 @@ async function deleteStorageFile(path: string): Promise<void> {
   }
 }
 
+// Existing self-service deletion helpers are retained.
 async function processEvents(
   uid: string,
   anonId: string,
@@ -125,6 +124,7 @@ async function processEvents(
           anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       });
+
       attendance++;
     }
 
@@ -147,11 +147,11 @@ async function processEvents(
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       });
+
       registrations++;
     }
 
-    const certificateDocs =
-      await eventRef.collection("certificates").get();
+    const certificateDocs = await eventRef.collection("certificates").get();
     const certificateOps: WriteOperation[] = [];
 
     for (const certificate of certificateDocs.docs) {
@@ -170,6 +170,7 @@ async function processEvents(
           anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       });
+
       certificates++;
     }
 
@@ -201,6 +202,7 @@ async function processEvents(
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
         });
+
         approvedPhotos++;
       } else {
         await deleteStorageFile((data.storagePath ?? "").toString());
@@ -228,22 +230,16 @@ async function processEvents(
 
     if (containsUid) {
       await eventRef.update({
-        checkedInAttendees:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        speakerIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        moderatorIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        staffIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        volunteerIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        attendeeIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        participantIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
+        checkedInAttendees: admin.firestore.FieldValue.arrayRemove(uid),
+        speakerIds: admin.firestore.FieldValue.arrayRemove(uid),
+        moderatorIds: admin.firestore.FieldValue.arrayRemove(uid),
+        staffIds: admin.firestore.FieldValue.arrayRemove(uid),
+        volunteerIds: admin.firestore.FieldValue.arrayRemove(uid),
+        attendeeIds: admin.firestore.FieldValue.arrayRemove(uid),
+        participantIds: admin.firestore.FieldValue.arrayRemove(uid),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
       eventsUpdated++;
     }
   }
@@ -288,6 +284,7 @@ async function processSessions(
           anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       });
+
       checkins++;
     }
 
@@ -306,6 +303,7 @@ async function processSessions(
           anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       });
+
       legacyCheckins++;
     }
 
@@ -327,6 +325,7 @@ async function processSessions(
           anonymizedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       });
+
       feedback++;
     }
 
@@ -360,18 +359,14 @@ async function processSessions(
 
     if (containsUid) {
       await sessionRef.update({
-        checkedInAttendees:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        speakerIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        moderatorIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        staffIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        volunteerIds:
-          admin.firestore.FieldValue.arrayRemove(uid),
+        checkedInAttendees: admin.firestore.FieldValue.arrayRemove(uid),
+        speakerIds: admin.firestore.FieldValue.arrayRemove(uid),
+        moderatorIds: admin.firestore.FieldValue.arrayRemove(uid),
+        staffIds: admin.firestore.FieldValue.arrayRemove(uid),
+        volunteerIds: admin.firestore.FieldValue.arrayRemove(uid),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
       sessionsUpdated++;
     }
   }
@@ -418,6 +413,7 @@ async function processTopLevelPhotos(
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       });
+
       anonymized++;
     } else {
       await deleteStorageFile((data.storagePath ?? "").toString());
@@ -441,27 +437,22 @@ async function removeConnections(uid: string): Promise<number> {
 
     const data = user.data();
     const iScanned = Array.isArray(data.usersIScanned) ?
-      data.usersIScanned :
-      [];
+      data.usersIScanned : [];
     const scannedMe = Array.isArray(data.scannedByUsers) ?
-      data.scannedByUsers :
-      [];
+      data.scannedByUsers : [];
 
-    if (!iScanned.includes(uid) && !scannedMe.includes(uid)) {
-      continue;
-    }
+    if (!iScanned.includes(uid) && !scannedMe.includes(uid)) continue;
 
     operations.push({
       type: "update",
       ref: user.ref,
       data: {
-        usersIScanned:
-          admin.firestore.FieldValue.arrayRemove(uid),
-        scannedByUsers:
-          admin.firestore.FieldValue.arrayRemove(uid),
+        usersIScanned: admin.firestore.FieldValue.arrayRemove(uid),
+        scannedByUsers: admin.firestore.FieldValue.arrayRemove(uid),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
     });
+
     count++;
   }
 
@@ -651,28 +642,16 @@ export const deleteMyAccount = onCall(
       await processSessions(uid, anonId, summary);
       await processTopLevelPhotos(uid, anonId, summary);
 
-      summary.connectionProfilesUpdated =
-        await removeConnections(uid);
-      summary.helpTickets =
-        await anonymizeHelpTickets(uid, anonId);
-      summary.topLevelMessagesDeleted =
-        await deleteTopLevelMessages(uid);
-      summary.meetingsDeleted =
-        await deleteMeetings(uid);
+      summary.connectionProfilesUpdated = await removeConnections(uid);
+      summary.helpTickets = await anonymizeHelpTickets(uid, anonId);
+      summary.topLevelMessagesDeleted = await deleteTopLevelMessages(uid);
+      summary.meetingsDeleted = await deleteMeetings(uid);
 
       await deleteProfileStorage(uid);
-
-      // Deletes users/{uid} and its private subcollections.
       await db().recursiveDelete(userRef);
-
-      // Authentication is deleted last.
       await admin.auth().deleteUser(uid);
 
-      console.log("Account deletion completed.", {
-        uid,
-        anonId,
-        summary,
-      });
+      console.log("Account deletion completed.", {uid, anonId, summary});
 
       return {
         success: true,
@@ -687,13 +666,408 @@ export const deleteMyAccount = onCall(
         error,
       });
 
-      if (error instanceof HttpsError) {
-        throw error;
-      }
+      if (error instanceof HttpsError) throw error;
 
       throw new HttpsError(
         "internal",
         "Account deletion could not be completed. Please try again.",
+        {summary}
+      );
+    }
+  }
+);
+
+// Admin deletion removes matching records instead of anonymizing them.
+const PURGE_COLLECTIONS = new Set([
+  "attendance",
+  "checkins",
+  "checkIns",
+  "registrations",
+  "feedback",
+  "photos",
+  "eventPhotos",
+  "sessionPhotos",
+  "certificates",
+  "bookmarks",
+  "chat",
+  "messages",
+  "direct_messages",
+  "directMessages",
+  "help_tickets",
+  "merchandiseCollections",
+  "connections",
+  "personalCodes",
+  "meetings",
+  "app_usage",
+  "appUsage",
+  "usage_tracking",
+  "usageTracking",
+]);
+
+const PURGE_ARRAYS = [
+  "checkedInAttendees",
+  "speakerIds",
+  "moderatorIds",
+  "staffIds",
+  "volunteerIds",
+  "attendeeIds",
+  "participantIds",
+  "mutedUsers",
+  "uniqueParticipants",
+  "bookmarkedBy",
+  "usersIScanned",
+  "scannedByUsers",
+  "readBy",
+];
+
+function ownsRecord(
+  collection: string,
+  id: string,
+  data: DocumentData,
+  identities: string[]
+): boolean {
+  if (!PURGE_COLLECTIONS.has(collection)) return false;
+  if (identities.includes(id)) return true;
+
+  const fields = [
+    "userId",
+    "uid",
+    "attendeeId",
+    "senderId",
+    "uploaderId",
+    "uploadedBy",
+    "ownerId",
+    "collectedUserId",
+    "requesterId",
+    "recipientId",
+  ];
+
+  return fields.some((field) =>
+    typeof data[field] === "string" &&
+    identities.includes(data[field])
+  );
+}
+
+async function deleteOwnedStorage(data: DocumentData): Promise<void> {
+  const bucket = admin.storage().bucket();
+  const paths = new Set<string>();
+
+  for (const field of [
+    "storagePath",
+    "imageStoragePath",
+    "photoStoragePath",
+    "fileStoragePath",
+    "certificateStoragePath",
+    "profileImageStoragePath",
+  ]) {
+    const value = data[field];
+
+    if (typeof value === "string" && value.trim()) {
+      paths.add(value.trim());
+    }
+  }
+
+  for (const field of [
+    "imageUrl",
+    "photoUrl",
+    "url",
+    "downloadUrl",
+    "fileUrl",
+    "certificateUrl",
+    "profileImageUrl",
+  ]) {
+    const value = data[field];
+    if (typeof value !== "string" || !value.trim()) continue;
+
+    try {
+      if (value.startsWith(`gs://${bucket.name}/`)) {
+        paths.add(value.slice(`gs://${bucket.name}/`.length));
+        continue;
+      }
+
+      const url = new URL(value);
+      const match = url.pathname.match(/^\/v0\/b\/([^/]+)\/o\/(.+)$/);
+
+      if (
+        url.hostname === "firebasestorage.googleapis.com" &&
+        match &&
+        decodeURIComponent(match[1]) === bucket.name
+      ) {
+        paths.add(decodeURIComponent(match[2]));
+      } else if (
+        url.hostname === "storage.googleapis.com" &&
+        url.pathname.startsWith(`/${bucket.name}/`)
+      ) {
+        paths.add(
+          decodeURIComponent(
+            url.pathname.slice(bucket.name.length + 2)
+          )
+        );
+      }
+    } catch (_) {
+      // External URLs are not Firebase Storage objects.
+    }
+  }
+
+  for (const path of paths) {
+    await bucket.file(path).delete({ignoreNotFound: true});
+  }
+}
+
+async function purgeCollection(
+  collection: admin.firestore.CollectionReference,
+  uid: string,
+  identities: string[],
+  summary: Record<string, number>
+): Promise<void> {
+  let cursor: admin.firestore.QueryDocumentSnapshot | undefined;
+
+  for (;;) {
+    let query = collection
+      .orderBy(admin.firestore.FieldPath.documentId())
+      .limit(100);
+
+    if (cursor) {
+      query = query.startAfter(cursor);
+    }
+
+    const snapshot = await query.get();
+    if (snapshot.empty) break;
+
+    for (const document of snapshot.docs) {
+      const data = document.data();
+
+      // Keep the profile until cleanup finishes so failed runs can retry.
+      if (document.ref.path === `users/${uid}`) continue;
+
+      if (ownsRecord(collection.id, document.id, data, identities)) {
+        await deleteOwnedStorage(data);
+        await purgeChildren(document.ref, uid, identities, summary);
+        await db().recursiveDelete(document.ref);
+
+        summary.recordsDeleted = (summary.recordsDeleted ?? 0) + 1;
+        continue;
+      }
+
+      const update: UpdateData = {};
+
+      for (const field of PURGE_ARRAYS) {
+        if (
+          Array.isArray(data[field]) &&
+          data[field].some((value: unknown) =>
+            identities.includes(String(value))
+          )
+        ) {
+          update[field] =
+            admin.firestore.FieldValue.arrayRemove(...identities);
+        }
+      }
+
+      for (const field of [
+        "bookmarkTimes",
+        "mutedBy",
+        "mutedUserDetails",
+      ]) {
+        const map = data[field];
+
+        if (map && typeof map === "object" && !Array.isArray(map)) {
+          for (const identity of identities) {
+            if (Object.prototype.hasOwnProperty.call(map, identity)) {
+              await document.ref.update(
+                new admin.firestore.FieldPath(field, identity),
+                admin.firestore.FieldValue.delete()
+              );
+            }
+          }
+        }
+      }
+
+      if (Object.keys(update).length) {
+        await document.ref.update(update);
+        summary.referencesUpdated =
+          (summary.referencesUpdated ?? 0) + 1;
+      }
+
+      await purgeChildren(document.ref, uid, identities, summary);
+    }
+
+    cursor = snapshot.docs[snapshot.docs.length - 1];
+    if (snapshot.size < 100) break;
+  }
+}
+
+async function purgeChildren(
+  reference: DocRef,
+  uid: string,
+  identities: string[],
+  summary: Record<string, number>
+): Promise<void> {
+  const children = await reference.listCollections();
+
+  for (const child of children) {
+    await purgeCollection(child, uid, identities, summary);
+  }
+}
+
+async function purgeAdminUser(
+  uid: string,
+  summary: Record<string, number>
+): Promise<void> {
+  const userRef = db().collection("users").doc(uid);
+  const profile = await userRef.get();
+
+  // Include records created by the previous anonymizing implementation.
+  const identities = [uid, anonymousId(uid)];
+  const roots = await db().listCollections();
+
+  for (const root of roots) {
+    await purgeCollection(root, uid, identities, summary);
+  }
+
+  await deleteOwnedStorage(profile.data() ?? {});
+
+  const bucket = admin.storage().bucket();
+
+  await bucket.file(`profile/${uid}.jpg`).delete({
+    ignoreNotFound: true,
+  });
+
+  for (const prefix of [
+    `profile_images/${uid}/`,
+    `users/${uid}/`,
+    `profile/${uid}/`,
+  ]) {
+    await bucket.deleteFiles({prefix});
+  }
+
+  // Remove orphan uploads whose object paths explicitly identify this user.
+  let query: any = {
+    autoPaginate: false,
+    maxResults: 200,
+  };
+
+  do {
+    const [files, nextQuery] = await bucket.getFiles(query);
+
+    for (const file of files) {
+      const owned = file.name.split("/").some((segment: string) =>
+        segment === uid ||
+        segment.startsWith(`${uid}_`) ||
+        segment === `${uid}.jpg` ||
+        segment === `${uid}.png`
+      );
+
+      if (owned) {
+        await file.delete({ignoreNotFound: true});
+      }
+    }
+
+    query = nextQuery;
+  } while (query);
+
+  await db().recursiveDelete(userRef);
+
+  try {
+    await admin.auth().deleteUser(uid);
+  } catch (error: any) {
+    if (error?.code !== "auth/user-not-found") throw error;
+  }
+}
+
+export const adminDeleteUser = onCall(
+  {
+    region: FUNCTION_REGION,
+    timeoutSeconds: 540,
+    memory: "1GiB",
+  },
+  async (request) => {
+    const requesterUid = request.auth?.uid;
+
+    if (!requesterUid) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Please sign in before deleting a user."
+      );
+    }
+
+    const requester = await db()
+      .collection("users")
+      .doc(requesterUid)
+      .get();
+
+    const requesterData = requester.data() ?? {};
+
+    if (
+      !requester.exists ||
+      String(requesterData.role ?? "").trim().toLowerCase() !== "admin" ||
+      String(requesterData.status ?? "approved")
+        .trim()
+        .toLowerCase() !== "approved"
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only an approved administrator can delete user accounts."
+      );
+    }
+
+    const targetUid = typeof request.data?.userId === "string" ?
+      request.data.userId.trim() : "";
+
+    if (
+      !targetUid ||
+      targetUid.includes("/") ||
+      targetUid.length > 128
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "A valid userId is required."
+      );
+    }
+
+    if (targetUid === requesterUid) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Use account settings to delete your own administrator account."
+      );
+    }
+
+    const profile = await db()
+      .collection("users")
+      .doc(targetUid)
+      .get();
+
+    await verifyLastAdmin(targetUid, profile.data() ?? {});
+
+    const summary: Record<string, number> = {};
+
+    try {
+      // Disable sign-in while cleanup runs.
+      try {
+        await admin.auth().updateUser(targetUid, {disabled: true});
+        await admin.auth().revokeRefreshTokens(targetUid);
+      } catch (error: any) {
+        if (error?.code !== "auth/user-not-found") throw error;
+      }
+
+      await purgeAdminUser(targetUid, summary);
+
+      return {
+        success: true,
+        summary,
+      };
+    } catch (error) {
+      console.error("adminDeleteUser cleanup failed", {
+        targetUid,
+        summary,
+        error,
+      });
+
+      if (error instanceof HttpsError) throw error;
+
+      throw new HttpsError(
+        "internal",
+        "User deletion was not completed. Please retry; " +
+          "the account remains disabled.",
         {summary}
       );
     }

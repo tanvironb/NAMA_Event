@@ -1092,6 +1092,7 @@ class _EditModeratorDialogState
   late final TextEditingController _profileImageController;
 
   late String _status;
+  bool _statusSaving = false;
   late String _profileVisibility;
 
   final Set<String> _selectedSessionIds = {};
@@ -1160,13 +1161,7 @@ class _EditModeratorDialogState
             .toString()
             .toLowerCase();
 
-    _status = const [
-      'approved',
-      'pending',
-      'suspended',
-    ].contains(rawStatus)
-        ? rawStatus
-        : 'approved';
+    _status = rawStatus == 'approved' ? 'approved' : 'pending';
 
     final visibility =
         (widget.moderatorData['profileVisibility'] ?? 'full')
@@ -1213,10 +1208,47 @@ class _EditModeratorDialogState
     super.dispose();
   }
 
+  Future<void> _changeAccountStatus(String? value) async {
+    if (value == null || value == _status || _saving || _statusSaving) return;
+
+    final previous = _status;
+    setState(() {
+      _status = value;
+      _statusSaving = true;
+    });
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.moderatorId)
+          .update({
+            'status': value,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Account status updated.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _status = previous);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update status: $error'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _statusSaving = false);
+    }
+  }
+
   Future<void> _saveChanges() async {
     FocusScope.of(context).unfocus();
 
-    if (_saving || !_formKey.currentState!.validate()) {
+    if (_saving || _statusSaving || !_formKey.currentState!.validate()) {
       return;
     }
 
@@ -1428,6 +1460,7 @@ class _EditModeratorDialogState
                   _ResponsiveDialogFields(
                     children: [
                       _DialogDropdown(
+                        key: ValueKey('moderator-status-$_status'),
                         label: 'Account Status',
                         value: _status,
                         icon:
@@ -1435,13 +1468,10 @@ class _EditModeratorDialogState
                         items: const {
                           'approved': 'Approved',
                           'pending': 'Pending',
-                          'suspended': 'Suspended',
                         },
-                        onChanged: (value) {
-                          if (value == null) return;
-
-                          setState(() => _status = value);
-                        },
+                        onChanged: _statusSaving || _saving
+                            ? null
+                            : _changeAccountStatus,
                       ),
                       _DialogDropdown(
                         label: 'Profile Visibility',
@@ -1573,7 +1603,7 @@ class _EditModeratorDialogState
             ),
             const SizedBox(height: 20),
             _DialogActions(
-              saving: _saving,
+              saving: _saving || _statusSaving,
               cancelLabel: 'Cancel',
               submitLabel: 'Save Changes',
               submitIcon: Icons.save_outlined,
@@ -1945,9 +1975,10 @@ class _DialogDropdown extends StatelessWidget {
   final String value;
   final IconData icon;
   final Map<String, String> items;
-  final ValueChanged<String?> onChanged;
+  final ValueChanged<String?>? onChanged;
 
   const _DialogDropdown({
+    super.key,
     required this.label,
     required this.value,
     required this.icon,

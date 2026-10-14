@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:events_app_trueattempt/common_widgets/session_statistics_builder.dart';
 import 'dart:math';
+import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -12,10 +14,7 @@ import 'package:intl/intl.dart';
 class StaffSessionManagementScreen extends StatefulWidget {
   final Session session;
 
-  const StaffSessionManagementScreen({
-    super.key,
-    required this.session,
-  });
+  const StaffSessionManagementScreen({super.key, required this.session});
 
   @override
   State<StaffSessionManagementScreen> createState() =>
@@ -25,6 +24,8 @@ class StaffSessionManagementScreen extends StatefulWidget {
 class _StaffSessionManagementScreenState
     extends State<StaffSessionManagementScreen> {
   late Session _currentSession;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+  _sessionSubscription;
 
   String _currentQRPayload = '';
   String _currentCheckInCode = '';
@@ -36,7 +37,26 @@ class _StaffSessionManagementScreenState
   void initState() {
     super.initState();
     _currentSession = widget.session;
+    _sessionSubscription = FirebaseFirestore.instance
+        .collection('sessions')
+        .doc(widget.session.id)
+        .snapshots()
+        .listen(
+          (snapshot) {
+            if (!mounted || !snapshot.exists) return;
+            setState(() => _currentSession = Session.fromFirestore(snapshot));
+          },
+          onError: (Object error) {
+            debugPrint('Unable to refresh session statistics: $error');
+          },
+        );
     _loadOrCreateSessionCode();
+  }
+
+  @override
+  void dispose() {
+    _sessionSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadOrCreateSessionCode() async {
@@ -92,10 +112,7 @@ class _StaffSessionManagementScreenState
   }
 
   String _buildQrPayload(String code) {
-    return jsonEncode({
-      'type': 'session_checkin',
-      'code': code,
-    });
+    return jsonEncode({'type': 'session_checkin', 'code': code});
   }
 
   Future<String> _generateUniqueSessionCode() async {
@@ -105,11 +122,12 @@ class _StaffSessionManagementScreenState
       final number = 100000 + random.nextInt(900000);
       final code = 'SES-$number';
 
-      final existing = await FirebaseFirestore.instance
-          .collection('sessions')
-          .where('checkInCode', isEqualTo: code)
-          .limit(1)
-          .get();
+      final existing =
+          await FirebaseFirestore.instance
+              .collection('sessions')
+              .where('checkInCode', isEqualTo: code)
+              .limit(1)
+              .get();
 
       if (existing.docs.isEmpty) return code;
     }
@@ -119,10 +137,11 @@ class _StaffSessionManagementScreenState
 
   Future<DateTime?> _getLastRegenerationTime() async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('sessions')
-          .doc(_currentSession.id)
-          .get();
+      final doc =
+          await FirebaseFirestore.instance
+              .collection('sessions')
+              .doc(_currentSession.id)
+              .get();
 
       final data = doc.data();
 
@@ -146,11 +165,12 @@ class _StaffSessionManagementScreenState
 
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => StaffSessionQRViewerScreen(
-          session: _currentSession,
-          checkInCode: _currentCheckInCode,
-          qrPayload: _currentQRPayload,
-        ),
+        builder:
+            (_) => StaffSessionQRViewerScreen(
+              session: _currentSession,
+              checkInCode: _currentCheckInCode,
+              qrPayload: _currentQRPayload,
+            ),
       ),
     );
   }
@@ -198,12 +218,12 @@ class _StaffSessionManagementScreenState
           .collection('sessions')
           .doc(_currentSession.id)
           .update({
-        'checkInCode': newCode,
-        'qrCodePayload': newPayload,
-        'qrType': 'session_checkin',
-        'lastQRRegenerationAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+            'checkInCode': newCode,
+            'qrCodePayload': newPayload,
+            'qrType': 'session_checkin',
+            'lastQRRegenerationAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
 
       if (!mounted) return;
 
@@ -243,10 +263,7 @@ class _StaffSessionManagementScreenState
       await FirebaseFirestore.instance
           .collection('sessions')
           .doc(_currentSession.id)
-          .update({
-        'isChatEnabled': newChatState,
-        'closedBy': closedByValue,
-      });
+          .update({'isChatEnabled': newChatState, 'closedBy': closedByValue});
 
       setState(() {
         _currentSession = Session(
@@ -320,18 +337,19 @@ class _StaffSessionManagementScreenState
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => _TimedConfirmationDialog(
-        title: title,
-        message: message,
-        onConfirm: () {
-          confirmed = true;
-          Navigator.of(context).pop();
-        },
-        onCancel: () {
-          confirmed = false;
-          Navigator.of(context).pop();
-        },
-      ),
+      builder:
+          (_) => _TimedConfirmationDialog(
+            title: title,
+            message: message,
+            onConfirm: () {
+              confirmed = true;
+              Navigator.of(context).pop();
+            },
+            onCancel: () {
+              confirmed = false;
+              Navigator.of(context).pop();
+            },
+          ),
     );
 
     return confirmed;
@@ -343,7 +361,8 @@ class _StaffSessionManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-    final hasQR = _currentCheckInCode.isNotEmpty && _currentQRPayload.isNotEmpty;
+    final hasQR =
+        _currentCheckInCode.isNotEmpty && _currentQRPayload.isNotEmpty;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -370,11 +389,7 @@ class _StaffSessionManagementScreenState
 
               Row(
                 children: [
-                  const Icon(
-                    Icons.access_time,
-                    size: 16,
-                    color: Colors.grey,
-                  ),
+                  const Icon(Icons.access_time, size: 16, color: Colors.grey),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -392,11 +407,7 @@ class _StaffSessionManagementScreenState
 
               Row(
                 children: [
-                  const Icon(
-                    Icons.location_on,
-                    size: 16,
-                    color: Colors.grey,
-                  ),
+                  const Icon(Icons.location_on, size: 16, color: Colors.grey),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -545,13 +556,16 @@ class _StaffSessionManagementScreenState
                     height: 38,
                     child: OutlinedButton.icon(
                       onPressed: _isGeneratingQr ? null : _regenerateQR,
-                      icon: _isGeneratingQr
-                          ? const SizedBox(
-                              width: 15,
-                              height: 15,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.refresh, size: 17),
+                      icon:
+                          _isGeneratingQr
+                              ? const SizedBox(
+                                width: 15,
+                                height: 15,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : const Icon(Icons.refresh, size: 17),
                       label: Text(
                         _isGeneratingQr
                             ? 'Regenerating...'
@@ -584,22 +598,30 @@ class _StaffSessionManagementScreenState
                   color: AppColors.namaLightGray,
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    _buildStatItem(
-                      value: '${_currentSession.checkedInAttendees.length}',
-                      label: 'Check-ins',
-                    ),
-                    _buildStatItem(
-                      value: '${_currentSession.totalMessages}',
-                      label: 'Messages',
-                    ),
-                    _buildStatItem(
-                      value: _currentSession.averageRating.toStringAsFixed(1),
-                      label: 'Avg Rating',
-                    ),
-                  ],
+                child: SessionStatisticsBuilder(
+                  sessionId: widget.session.id,
+                  builder:
+                      (context, stats) => Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildStatItem(
+                            value:
+                                '${_currentSession.checkedInAttendees.length}',
+                            label: 'Check-ins',
+                          ),
+                          _buildStatItem(
+                            value: stats == null ? '—' : '${stats.messages}',
+                            label: 'Messages',
+                          ),
+                          _buildStatItem(
+                            value:
+                                stats == null || stats.feedback == 0
+                                    ? '—'
+                                    : stats.averageRating.toStringAsFixed(1),
+                            label: 'Avg Rating',
+                          ),
+                        ],
+                      ),
                 ),
               ),
 
@@ -660,9 +682,10 @@ class _StaffSessionManagementScreenState
                       style: const TextStyle(fontSize: 13),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _currentSession.isChatEnabled
-                          ? AppColors.errorRed
-                          : AppColors.successGreen,
+                      backgroundColor:
+                          _currentSession.isChatEnabled
+                              ? AppColors.errorRed
+                              : AppColors.successGreen,
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -741,10 +764,7 @@ class _StaffSessionManagementScreenState
     );
   }
 
-  Widget _buildStatItem({
-    required String value,
-    required String label,
-  }) {
+  Widget _buildStatItem({required String value, required String label}) {
     return Column(
       children: [
         Text(
@@ -758,10 +778,7 @@ class _StaffSessionManagementScreenState
         const SizedBox(height: 4),
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 12.5,
-            color: Colors.black54,
-          ),
+          style: const TextStyle(fontSize: 12.5, color: Colors.black54),
         ),
       ],
     );
@@ -815,24 +832,16 @@ class _TimedConfirmationDialogState extends State<_TimedConfirmationDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Text(
         widget.title,
-        style: const TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.w700,
-        ),
+        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.message,
-            style: const TextStyle(fontSize: 13.5),
-          ),
+          Text(widget.message, style: const TextStyle(fontSize: 13.5)),
           if (!_canConfirm) ...[
             const SizedBox(height: 16),
             LinearProgressIndicator(
@@ -846,10 +855,7 @@ class _TimedConfirmationDialogState extends State<_TimedConfirmationDialog> {
             Center(
               child: Text(
                 'Please wait $_secondsLeft second${_secondsLeft != 1 ? 's' : ''}...',
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
               ),
             ),
           ],
@@ -858,10 +864,7 @@ class _TimedConfirmationDialogState extends State<_TimedConfirmationDialog> {
       actions: [
         TextButton(
           onPressed: widget.onCancel,
-          child: const Text(
-            'Cancel',
-            style: TextStyle(fontSize: 13),
-          ),
+          child: const Text('Cancel', style: TextStyle(fontSize: 13)),
         ),
         ElevatedButton(
           onPressed: _canConfirm ? widget.onConfirm : null,

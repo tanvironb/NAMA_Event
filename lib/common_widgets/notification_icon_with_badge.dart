@@ -70,6 +70,7 @@ class NotificationIconWithBadge extends ConsumerWidget {
     int count = 0;
 
     for (final notification in notifications) {
+      if (notification.isRead) continue;
       if (notification.type == AppNotificationType.chat) {
         continue;
       }
