@@ -153,6 +153,10 @@ final notificationServiceProvider =
 
 final activeEventFutureProvider = FutureProvider<Event>((ref) async {
 
+  // Re-run when the signed-in user changes so a new session never sees the
+  // previous user's cached event.
+  ref.watch(authStateChangesProvider);
+
   final auth = ref.watch(firebaseAuthProvider);
 
   final repo = ref.watch(eventRepositoryProvider);
@@ -304,6 +308,8 @@ String _normalizeEventRole(dynamic value) {
 final userAppProfileStreamProvider =
 
     StreamProvider.autoDispose<AppUser?>((ref) {
+
+  ref.watch(authStateChangesProvider);
 
   final auth = ref.watch(firebaseAuthProvider);
 
