@@ -477,53 +477,53 @@ export const createEventRoleAccount = onCall(
     // Everything after the login exists is inside one try block so that any
     // failure (profile write, link generation, email) can be rolled back.
     try {
-    const existingUserDoc = await userRef.get();
-    existingData = existingUserDoc.data() || {};
+      const existingUserDoc = await userRef.get();
+      existingData = existingUserDoc.data() || {};
 
-    const existingEventIds: string[] = Array.isArray(existingData.eventIds) ?
-      existingData.eventIds.map((item: unknown) => String(item)) :
-      [];
+      const existingEventIds: string[] = Array.isArray(existingData.eventIds) ?
+        existingData.eventIds.map((item: unknown) => String(item)) :
+        [];
 
-    wasAlreadyInThisEvent = existingEventIds.includes(payload.eventId);
+      wasAlreadyInThisEvent = existingEventIds.includes(payload.eventId);
 
-    await userRef.set(
-      {
-        uid: authUser.uid,
-        name: payload.name,
-        email: payload.email,
-        role: payload.role,
-        company: payload.company,
-        title: getEventRoleLabel(payload.role),
-        position: existingData.position || "",
-        bio: existingData.bio || "",
-        profileImageUrl: existingData.profileImageUrl || "",
-        status: "approved",
-        points: existingData.points || 0,
-        eventIds: admin.firestore.FieldValue.arrayUnion(payload.eventId),
-        activeEventId: payload.eventId,
-        currentEventId: payload.eventId,
-        profileVisibility: existingData.profileVisibility || "full",
-        needsPrivacySelection: false,
-        createdByAdmin: true,
-        authAccountCreated: true,
-        emailVerificationRequired: sendFullInvitation,
-        ...(sendFullInvitation ?
-          {
+      await userRef.set(
+        {
+          uid: authUser.uid,
+          name: payload.name,
+          email: payload.email,
+          role: payload.role,
+          company: payload.company,
+          title: getEventRoleLabel(payload.role),
+          position: existingData.position || "",
+          bio: existingData.bio || "",
+          profileImageUrl: existingData.profileImageUrl || "",
+          status: "approved",
+          points: existingData.points || 0,
+          eventIds: admin.firestore.FieldValue.arrayUnion(payload.eventId),
+          activeEventId: payload.eventId,
+          currentEventId: payload.eventId,
+          profileVisibility: existingData.profileVisibility || "full",
+          needsPrivacySelection: false,
+          createdByAdmin: true,
+          authAccountCreated: true,
+          emailVerificationRequired: sendFullInvitation,
+          ...(sendFullInvitation ?
+            {
             // The app forces a password change until
             // completeForcedPasswordChange clears this.
-            mustChangePassword: true,
-            tempPasswordIssuedAtMs: Date.now(),
-          } :
-          {}),
-        emailVerified: authUser.emailVerified,
-        invitationManagedByCallable: true,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        createdAt:
+              mustChangePassword: true,
+              tempPasswordIssuedAtMs: Date.now(),
+            } :
+            {}),
+          emailVerified: authUser.emailVerified,
+          invitationManagedByCallable: true,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt:
           existingData.createdAt ||
           admin.firestore.FieldValue.serverTimestamp(),
-      },
-      {merge: true}
-    );
+        },
+        {merge: true}
+      );
 
       if (sendFullInvitation) {
         // NEW SPEAKER / MODERATOR / STAFF:
