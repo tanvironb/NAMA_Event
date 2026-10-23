@@ -296,6 +296,51 @@ function buildEventInvitationText({
   ].join("\n");
 }
 
+export const completeForcedPasswordChange = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    const uid = request.auth?.uid;
+
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Please sign in first.");
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    const userDoc = await userRef.get();
+    const data = userDoc.data() || {};
+
+    if (data.mustChangePassword !== true) {
+      return {success: true, cleared: false};
+    }
+
+    // Changing a password revokes refresh tokens, which moves
+    // tokensValidAfterTime past the moment the temporary one was issued.
+    const authUser = await admin.auth().getUser(uid);
+    const validAfterMs = authUser.tokensValidAfterTime ?
+      Date.parse(authUser.tokensValidAfterTime) :
+      0;
+    const issuedAtMs = Number(data.tempPasswordIssuedAtMs) || 0;
+
+    if (!(validAfterMs > issuedAtMs)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The temporary password has not been changed yet."
+      );
+    }
+
+    await userRef.set(
+      {
+        mustChangePassword: false,
+        passwordChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true}
+    );
+
+    return {success: true, cleared: true};
+  }
+);
+
 export const createEventRoleAccount = onCall(
   {
     region: FUNCTION_REGION,
@@ -462,6 +507,14 @@ export const createEventRoleAccount = onCall(
         createdByAdmin: true,
         authAccountCreated: true,
         emailVerificationRequired: sendFullInvitation,
+        ...(sendFullInvitation ?
+          {
+            // The app forces a password change until
+            // completeForcedPasswordChange clears this.
+            mustChangePassword: true,
+            tempPasswordIssuedAtMs: Date.now(),
+          } :
+          {}),
         emailVerified: authUser.emailVerified,
         invitationManagedByCallable: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
