@@ -5,6 +5,7 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
 import 'package:events_app_trueattempt/features/auth/data/account_deletion_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -131,10 +132,25 @@ class AuthRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      await _firestoreService.createUserDocument(
-        uid: userCredential.user!.uid,
-        userData: userData,
-      );
+      try {
+        await _firestoreService.createUserDocument(
+          uid: userCredential.user!.uid,
+          userData: userData,
+        );
+      } catch (e) {
+        // Do not leave a login without a profile: the user could neither
+        // sign in nor register again with the same email.
+        try {
+          await userCredential.user?.delete();
+        } catch (cleanupError) {
+          debugPrint(
+            'AuthRepository: Failed to remove login after profile error: '
+            '$cleanupError',
+          );
+          await _firebaseAuth.signOut();
+        }
+        rethrow;
+      }
 
       return userCredential;
     } on FirebaseAuthException catch (e) {
@@ -176,6 +192,16 @@ class AuthRepository {
           'on sign-out: $e',
         );
       }
+    }
+
+    // Invalidate this device's push token so the next user on the device
+    // does not receive the previous user's notifications.
+    try {
+      await FirebaseMessaging.instance.deleteToken().timeout(
+        const Duration(seconds: 5),
+      );
+    } catch (e) {
+      debugPrint('Warning: Failed to delete FCM token on sign-out: $e');
     }
 
     await _firebaseAuth.signOut();

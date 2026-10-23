@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
-import 'package:events_app_trueattempt/features/auth/screen/email_verification_screen.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
@@ -181,10 +180,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
       return;
     }
+    // AuthGate switches to the verification screen as soon as the login
+    // exists. Pushing a second one would send a duplicate verification email
+    // (and trip Firebase's rate limit), so just return to the root.
     if (mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const EmailVerificationScreen()),
-      );
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 

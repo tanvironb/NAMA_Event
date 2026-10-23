@@ -1,12 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/config/app_icons.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/features/auth/data/auth_repository.dart';
 
 class ChangePasswordScreen extends ConsumerStatefulWidget {
-  const ChangePasswordScreen({super.key});
+  /// When true the user signed in with an admin-issued temporary password.
+  /// The screen cannot be dismissed; the auth gate removes it once the
+  /// server clears `mustChangePassword` on the user's profile.
+  final bool forced;
+
+  const ChangePasswordScreen({super.key, this.forced = false});
 
   @override
   ConsumerState<ChangePasswordScreen> createState() =>
@@ -23,6 +30,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+  bool _passwordUpdated = false;
 
   @override
   void dispose() {
@@ -62,8 +70,35 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     return null;
   }
 
+  Future<void> _clearForcedFlag() async {
+    await FirebaseFunctions.instanceFor(region: 'asia-southeast1')
+        .httpsCallable('completeForcedPasswordChange')
+        .call();
+  }
+
   Future<void> _changePassword() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // The password already changed but clearing the flag failed: retry only
+    // that step (the old password no longer works).
+    if (widget.forced && _passwordUpdated) {
+      setState(() => _isLoading = true);
+      try {
+        await _clearForcedFlag();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not finish. Please try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
+      return;
+    }
 
     final shouldContinue = await showDialog<bool>(
       context: context,
@@ -103,6 +138,14 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
       await user.reauthenticateWithCredential(credential);
       await user.updatePassword(_newPasswordController.text);
+
+      if (widget.forced) {
+        _passwordUpdated = true;
+        await user.getIdToken(true);
+        await _clearForcedFlag();
+        // AuthGate watches the profile and leaves this screen on its own.
+        return;
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -149,6 +192,13 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !widget.forced,
+      child: _buildScaffold(context),
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.namaWhite,
       body: SafeArea(
@@ -162,6 +212,7 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                 Stack(
                   alignment: Alignment.center,
                   children: [
+                    if (!widget.forced)
                     Align(
                       alignment: Alignment.centerLeft,
                       child: IconButton(
@@ -203,9 +254,13 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                         size: 21,
                       ),
                       const SizedBox(width: 12),
-                      const Expanded(
+                      Expanded(
                         child: Text(
-                          'Enter your current password and choose a new password',
+                          widget.forced
+                              ? 'You signed in with a temporary password. '
+                                  'Enter it as your current password and '
+                                  'choose a new password to continue.'
+                              : 'Enter your current password and choose a new password',
                           style: TextStyle(
                             color: AppColors.namaNavyBlue,
                             fontSize: 13,
@@ -292,6 +347,13 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
                     ),
                   ),
                 ),
+                if (widget.forced)
+                  TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () => ref.read(authRepositoryProvider).signOut(),
+                    child: const Text('Sign Out'),
+                  ),
               ],
             ),
           ),

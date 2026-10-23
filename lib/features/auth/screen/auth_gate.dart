@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/features/privacy/screens/change_password_screen.dart';
 import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -381,6 +382,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
                 switch (status) {
                   case 'approved':
+                    // Admin-created accounts must replace the emailed
+                    // temporary password before using the app.
+                    if (data['mustChangePassword'] == true) {
+                      return const ChangePasswordScreen(forced: true);
+                    }
                     return _approvedScreen(refreshedUser, data);
                   case 'blocked':
                     return const BlockedScreen();

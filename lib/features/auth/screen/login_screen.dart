@@ -47,34 +47,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     final viewModel = ref.read(authViewModelProvider.notifier);
 
-    await viewModel.signIn(
-      _emailController.text.trim(),
-      _passwordController.text,
-    );
+    try {
+      await viewModel.signIn(
+        _emailController.text.trim(),
+        _passwordController.text,
+      );
+    } catch (error) {
+      // AuthViewModel.signIn rethrows, so the error must be handled here;
+      // otherwise failed sign-ins show nothing to the user.
+      if (!mounted) return;
 
-    if (!mounted) return;
-
-    final authState = ref.read(authViewModelProvider);
-
-    if (authState.hasError) {
-      final error = authState.error;
       final code = error is FirebaseAuthException ? error.code : null;
       _showSnackBar(_friendlyMessage(code), isError: true);
 
-      ref.read(authViewModelProvider.notifier).resetState();
+      viewModel.resetState();
     }
   }
 
   String _friendlyMessage(String? code) {
     switch (code) {
       case 'email-not-verified':
-        return 'Your email is not verified.';
+        return 'Your email is not verified. Open the verification link we '
+            'emailed you (check spam), then sign in again.';
       case 'user-not-found':
       case 'wrong-password':
       case 'invalid-credential':
         return 'Incorrect email or password.';
       case 'user-disabled':
         return 'Account disabled.';
+      case 'user-not-authorized':
+        return 'Account not found. Please register or contact event support.';
       case 'too-many-requests':
         return 'Too many attempts. Try later.';
       default:

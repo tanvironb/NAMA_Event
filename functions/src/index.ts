@@ -296,6 +296,51 @@ function buildEventInvitationText({
   ].join("\n");
 }
 
+export const completeForcedPasswordChange = onCall(
+  {region: FUNCTION_REGION},
+  async (request) => {
+    const uid = request.auth?.uid;
+
+    if (!uid) {
+      throw new HttpsError("unauthenticated", "Please sign in first.");
+    }
+
+    const userRef = db.collection("users").doc(uid);
+    const userDoc = await userRef.get();
+    const data = userDoc.data() || {};
+
+    if (data.mustChangePassword !== true) {
+      return {success: true, cleared: false};
+    }
+
+    // Changing a password revokes refresh tokens, which moves
+    // tokensValidAfterTime past the moment the temporary one was issued.
+    const authUser = await admin.auth().getUser(uid);
+    const validAfterMs = authUser.tokensValidAfterTime ?
+      Date.parse(authUser.tokensValidAfterTime) :
+      0;
+    const issuedAtMs = Number(data.tempPasswordIssuedAtMs) || 0;
+
+    if (!(validAfterMs > issuedAtMs)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The temporary password has not been changed yet."
+      );
+    }
+
+    await userRef.set(
+      {
+        mustChangePassword: false,
+        passwordChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      {merge: true}
+    );
+
+    return {success: true, cleared: true};
+  }
+);
+
 export const createEventRoleAccount = onCall(
   {
     region: FUNCTION_REGION,
@@ -359,6 +404,7 @@ export const createEventRoleAccount = onCall(
 
     let authUser: admin.auth.UserRecord | null = null;
     let accountCreated = false;
+    let credentialsReset = false;
     let temporaryPassword = "";
 
     try {
@@ -394,22 +440,51 @@ export const createEventRoleAccount = onCall(
 
         throw new HttpsError("internal", "Failed to create the user account.");
       }
-    } else if (authUser.displayName !== payload.name) {
-      authUser = await admin.auth().updateUser(authUser.uid, {
-        displayName: payload.name,
-      });
+    } else {
+      // An existing login that is unverified or disabled cannot sign in, and
+      // nobody knows its password (it may be a half-created account from a
+      // failed earlier invite). Issue fresh credentials so it is not stuck.
+      credentialsReset = authUser.disabled || !authUser.emailVerified;
+
+      const update: admin.auth.UpdateRequest = {displayName: payload.name};
+
+      if (credentialsReset) {
+        temporaryPassword = generateTemporaryPassword();
+        update.password = temporaryPassword;
+        update.disabled = false;
+      }
+
+      try {
+        authUser = await admin.auth().updateUser(authUser.uid, update);
+      } catch (error) {
+        console.error("Failed to update existing Auth user:", error);
+        throw new HttpsError("internal", "Failed to update the user account.");
+      }
     }
 
+    const sendFullInvitation = accountCreated || credentialsReset;
+
     const userRef = db.collection("users").doc(authUser.uid);
+    const resend = new Resend(resendApiKey.value());
+    const roleLabel = getEventRoleLabel(payload.role);
+
+    let existingData: admin.firestore.DocumentData = {};
+    let wasAlreadyInThisEvent = false;
+    let invitationSent = false;
+    let existingInvitationSent = false;
+    let emailType = "";
+
+    // Everything after the login exists is inside one try block so that any
+    // failure (profile write, link generation, email) can be rolled back.
+    try {
     const existingUserDoc = await userRef.get();
-    const existingData = existingUserDoc.data() || {};
+    existingData = existingUserDoc.data() || {};
 
     const existingEventIds: string[] = Array.isArray(existingData.eventIds) ?
       existingData.eventIds.map((item: unknown) => String(item)) :
       [];
 
-    const wasAlreadyInThisEvent =
-      existingEventIds.includes(payload.eventId);
+    wasAlreadyInThisEvent = existingEventIds.includes(payload.eventId);
 
     await userRef.set(
       {
@@ -431,7 +506,15 @@ export const createEventRoleAccount = onCall(
         needsPrivacySelection: false,
         createdByAdmin: true,
         authAccountCreated: true,
-        emailVerificationRequired: accountCreated,
+        emailVerificationRequired: sendFullInvitation,
+        ...(sendFullInvitation ?
+          {
+            // The app forces a password change until
+            // completeForcedPasswordChange clears this.
+            mustChangePassword: true,
+            tempPasswordIssuedAtMs: Date.now(),
+          } :
+          {}),
         emailVerified: authUser.emailVerified,
         invitationManagedByCallable: true,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -442,15 +525,7 @@ export const createEventRoleAccount = onCall(
       {merge: true}
     );
 
-    const resend = new Resend(resendApiKey.value());
-    const roleLabel = getEventRoleLabel(payload.role);
-
-    let invitationSent = false;
-    let existingInvitationSent = false;
-    let emailType = "";
-
-    try {
-      if (accountCreated) {
+      if (sendFullInvitation) {
         // NEW SPEAKER / MODERATOR / STAFF:
         // Keep the existing working invitation flow with temporary password
         // and Firebase Admin verification link.
@@ -547,21 +622,45 @@ export const createEventRoleAccount = onCall(
         );
       }
     } catch (error) {
-      console.error("Failed to send event invitation email:", error);
+      console.error("Failed to complete event invitation:", error);
 
-      await userRef.set(
-        {
-          lastEventInvitationFailed: true,
-          lastEventInvitationError:
-            error instanceof Error ? error.message : String(error),
-          lastEventInvitationEventId: payload.eventId,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        {merge: true}
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
-      // Roll back ONLY a newly-created account.
-      // Never delete an existing account if its event invitation email fails.
+      // Keep a durable record: the user profile may be deleted by the
+      // rollback below, so the failure also goes to its own collection.
+      try {
+        await db.collection("emailLogs").add({
+          kind: "event-invitation",
+          uid: authUser.uid,
+          email: payload.email,
+          eventId: payload.eventId,
+          role: payload.role,
+          status: "failed",
+          error: errorMessage,
+          accountCreated,
+          credentialsReset,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        if (!accountCreated) {
+          await userRef.set(
+            {
+              lastEventInvitationFailed: true,
+              lastEventInvitationError: errorMessage,
+              lastEventInvitationEventId: payload.eventId,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            },
+            {merge: true}
+          );
+        }
+      } catch (logError) {
+        console.error("Failed to record invitation failure:", logError);
+      }
+
+      // Roll back ONLY a newly-created account. If the rollback itself
+      // fails, the next attempt finds an unverified login and re-issues
+      // credentials (see credentialsReset above), so nobody stays locked out.
       if (accountCreated) {
         try {
           await admin.auth().deleteUser(authUser.uid);
@@ -573,8 +672,8 @@ export const createEventRoleAccount = onCall(
 
       throw new HttpsError(
         "internal",
-        accountCreated ?
-          "The account could not be completed because the invitation email failed." :
+        sendFullInvitation ?
+          "The account could not be completed because the invitation email failed. Please try again." :
           "The existing account was added to the event, but the invitation email could not be sent."
       );
     }
@@ -585,6 +684,7 @@ export const createEventRoleAccount = onCall(
       accountCreated,
       existingAccount: !accountCreated,
       wasAlreadyInThisEvent,
+      credentialsReset,
       invitationSent,
       existingInvitationSent,
       emailType,
@@ -2102,37 +2202,26 @@ export const manuallyVerifyEmails = onCall(
   async (request) => {
     console.log("=== Start Manual Email Verification ===");
 
-    let emails: string[];
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "Please sign in first.");
+    }
 
-    if (!request.auth || !request.auth.uid) {
-      console.log("Running in HARDCODED mode");
+    const adminDoc = await db.collection("users").doc(request.auth.uid).get();
 
-      emails = [
-        "adminuser@gmail.com",
-        "testuser1@gmail.com",
-        "speaker1@gmail.com",
-        "testuser3@gmail.com",
-      ];
-    } else {
-      const adminUid = request.auth.uid;
+    if (!adminDoc.exists || adminDoc.data()?.role !== "admin") {
+      throw new HttpsError(
+        "permission-denied",
+        "Only admins can manually verify emails."
+      );
+    }
 
-      const adminDoc = await db.collection("users").doc(adminUid).get();
+    const emails: unknown = request.data?.emails;
 
-      if (!adminDoc.exists || adminDoc.data()?.role !== "admin") {
-        throw new HttpsError(
-          "permission-denied",
-          "Only admins can manually verify emails."
-        );
-      }
-
-      emails = request.data.emails;
-
-      if (!emails || !Array.isArray(emails) || emails.length === 0) {
-        throw new HttpsError(
-          "invalid-argument",
-          "An array of email addresses is required."
-        );
-      }
+    if (!Array.isArray(emails) || emails.length === 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        "An array of email addresses is required."
+      );
     }
 
     const results = [];
