@@ -15,14 +15,13 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
 
   Future<void> _markUserLoggedIn(User user) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
         {
           'lastSeen': FieldValue.serverTimestamp(),
           'lastLoginAt': FieldValue.serverTimestamp(),
           'isOnline': true,
           'updatedAt': FieldValue.serverTimestamp(),
         },
-        SetOptions(merge: true),
       );
     } catch (e) {
       debugPrint('AuthViewModel: failed to update login status: $e');
@@ -31,13 +30,12 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
 
   Future<void> _markUserLoggedOut(User user) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
         {
           'lastSeen': FieldValue.serverTimestamp(),
           'isOnline': false,
           'updatedAt': FieldValue.serverTimestamp(),
         },
-        SetOptions(merge: true),
       );
     } catch (e) {
       debugPrint('AuthViewModel: failed to update logout status: $e');
