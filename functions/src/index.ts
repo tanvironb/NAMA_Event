@@ -2202,37 +2202,26 @@ export const manuallyVerifyEmails = onCall(
   async (request) => {
     console.log("=== Start Manual Email Verification ===");
 
-    let emails: string[];
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "Please sign in first.");
+    }
 
-    if (!request.auth || !request.auth.uid) {
-      console.log("Running in HARDCODED mode");
+    const adminDoc = await db.collection("users").doc(request.auth.uid).get();
 
-      emails = [
-        "adminuser@gmail.com",
-        "testuser1@gmail.com",
-        "speaker1@gmail.com",
-        "testuser3@gmail.com",
-      ];
-    } else {
-      const adminUid = request.auth.uid;
+    if (!adminDoc.exists || adminDoc.data()?.role !== "admin") {
+      throw new HttpsError(
+        "permission-denied",
+        "Only admins can manually verify emails."
+      );
+    }
 
-      const adminDoc = await db.collection("users").doc(adminUid).get();
+    const emails: unknown = request.data?.emails;
 
-      if (!adminDoc.exists || adminDoc.data()?.role !== "admin") {
-        throw new HttpsError(
-          "permission-denied",
-          "Only admins can manually verify emails."
-        );
-      }
-
-      emails = request.data.emails;
-
-      if (!emails || !Array.isArray(emails) || emails.length === 0) {
-        throw new HttpsError(
-          "invalid-argument",
-          "An array of email addresses is required."
-        );
-      }
+    if (!Array.isArray(emails) || emails.length === 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        "An array of email addresses is required."
+      );
     }
 
     const results = [];
