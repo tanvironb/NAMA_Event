@@ -1,10 +1,7 @@
-// lib/features/profile/screen/user_details_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/models/app_user.dart';
@@ -12,7 +9,6 @@ import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/meetings/screen/request_meeting_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
 import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
-import 'package:events_app_trueattempt/features/profile/screen/widgets/speaker_sessions_bookmark_button.dart';
 
 class UserDetailsScreen extends ConsumerWidget {
   final String userId;
@@ -28,10 +24,8 @@ class UserDetailsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final userProfileAsync =
         ref.watch(userProfileByIdProvider(userId));
-
     final currentUserAsync =
         ref.watch(userAppProfileStreamProvider);
-
     final currentUserId =
         ref.watch(firebaseAuthProvider).currentUser?.uid;
 
@@ -49,7 +43,6 @@ class UserDetailsScreen extends ConsumerWidget {
             final viewerIsAdmin =
                 currentUser?.role.toLowerCase().trim() ==
                     'admin';
-
             final canViewProfile =
                 appUser.canBeViewedBy(
               currentUserId ?? '',
@@ -65,13 +58,11 @@ class UserDetailsScreen extends ConsumerWidget {
               currentUserId ?? '',
               viewerIsAdmin,
             );
-
             final hasContactInfo =
                 appUser.email.isNotEmpty ||
                     (canViewFullData &&
                         (appUser.personalEmail.isNotEmpty ||
                             appUser.phone.isNotEmpty));
-
             final hasSocialMedia =
                 canViewFullData &&
                     (appUser.linkedin.isNotEmpty ||
@@ -99,13 +90,9 @@ class UserDetailsScreen extends ConsumerWidget {
                         currentUserId,
                         ref,
                       ),
-
                       const SizedBox(height: 25),
-
                       _profileImage(appUser),
-
                       const SizedBox(height: 16),
-
                       Text(
                         appUser.name,
                         textAlign: TextAlign.center,
@@ -115,7 +102,6 @@ class UserDetailsScreen extends ConsumerWidget {
                           color: _mainColor,
                         ),
                       ),
-
                       if (appUser.title.isNotEmpty) ...[
                         const SizedBox(height: 5),
                         Text(
@@ -127,9 +113,7 @@ class UserDetailsScreen extends ConsumerWidget {
                           ),
                         ),
                       ],
-
                       const SizedBox(height: 10),
-
                       Wrap(
                         alignment: WrapAlignment.center,
                         spacing: 8,
@@ -149,9 +133,7 @@ class UserDetailsScreen extends ConsumerWidget {
                             ),
                         ],
                       ),
-
                       const SizedBox(height: 18),
-
                       if (currentUserId != null &&
                           currentUserId != userId)
                         _actionButtons(
@@ -160,9 +142,7 @@ class UserDetailsScreen extends ConsumerWidget {
                           currentUserId,
                           ref,
                         ),
-
                       const SizedBox(height: 20),
-
                       if (canViewFullData &&
                           appUser.bio.isNotEmpty)
                         _card(
@@ -177,7 +157,6 @@ class UserDetailsScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
-
                       if (hasContactInfo) ...[
                         const SizedBox(height: 16),
                         _contactCard(
@@ -186,7 +165,6 @@ class UserDetailsScreen extends ConsumerWidget {
                           canViewFullData,
                         ),
                       ],
-
                       if (hasSocialMedia) ...[
                         const SizedBox(height: 16),
                         _socialMediaCard(
@@ -243,7 +221,6 @@ class UserDetailsScreen extends ConsumerWidget {
             ),
           ),
         ),
-
         const Text(
           'Profile',
           style: TextStyle(
@@ -252,7 +229,6 @@ class UserDetailsScreen extends ConsumerWidget {
             color: _mainColor,
           ),
         ),
-
         if (currentUserId == userId)
           Align(
             alignment: Alignment.centerRight,
@@ -275,15 +251,9 @@ class UserDetailsScreen extends ConsumerWidget {
                       ),
                     ),
                   );
-
-                  /*
-                   * Refresh the profile details immediately
-                   * after returning from Edit Profile.
-                   */
                   ref.invalidate(
                     userProfileByIdProvider(userId),
                   );
-
                   ref.invalidate(
                     userAppProfileStreamProvider,
                   );
@@ -394,9 +364,7 @@ class UserDetailsScreen extends ConsumerWidget {
             ),
           ),
         ),
-
         const SizedBox(height: 8),
-
         SizedBox(
           width: 240,
           height: 40,
@@ -435,9 +403,7 @@ class UserDetailsScreen extends ConsumerWidget {
             ),
           ),
         ),
-
         const SizedBox(height: 8),
-
         SizedBox(
           width: 240,
           height: 40,
@@ -472,21 +438,6 @@ class UserDetailsScreen extends ConsumerWidget {
             ),
           ),
         ),
-
-        if (appUser.role.toLowerCase() ==
-            'speaker') ...[
-          const SizedBox(height: 8),
-          SizedBox(
-            width: 240,
-            height: 40,
-            child: Center(
-              child:
-                  SpeakerSessionsBookmarkButton(
-                speakerId: appUser.uid,
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -509,7 +460,6 @@ class UserDetailsScreen extends ConsumerWidget {
     }
 
     final uri = Uri.parse('tel:$phone');
-
     await _launchUriWithFallback(
       context,
       uri,
@@ -527,7 +477,6 @@ class UserDetailsScreen extends ConsumerWidget {
       final activeEvent = await ref.read(
         activeEventFutureProvider.future,
       );
-
       final conversationId = await ref
           .read(messagingRepositoryProvider)
           .createOrGetConversation(
@@ -693,31 +642,26 @@ class UserDetailsScreen extends ConsumerWidget {
       icon: Icons.business_center_outlined,
       url: appUser.linkedin,
     );
-
     addItem(
       label: 'Twitter',
       icon: Icons.alternate_email,
       url: appUser.twitter,
     );
-
     addItem(
       label: 'Website',
       icon: Icons.language,
       url: appUser.website,
     );
-
     addItem(
       label: 'GitHub',
       icon: Icons.code,
       url: appUser.github,
     );
-
     addItem(
       label: 'Medium',
       icon: Icons.article_outlined,
       url: appUser.medium,
     );
-
     addItem(
       label: 'Instagram',
       icon: Icons.camera_alt_outlined,
@@ -984,7 +928,6 @@ class UserDetailsScreen extends ConsumerWidget {
       scheme: 'mailto',
       path: email,
     );
-
     await _launchUriWithFallback(
       context,
       uri,
@@ -1004,7 +947,6 @@ class UserDetailsScreen extends ConsumerWidget {
       final fixedUrl = url.startsWith('http')
           ? url
           : 'https://$url';
-
       uri = Uri.parse(fixedUrl);
     }
 
@@ -1030,7 +972,6 @@ class UserDetailsScreen extends ConsumerWidget {
             text: uri.toString(),
           ),
         );
-
         ScaffoldMessenger.of(context)
             .showSnackBar(
           const SnackBar(
@@ -1048,7 +989,6 @@ class UserDetailsScreen extends ConsumerWidget {
           text: uri.toString(),
         ),
       );
-
       ScaffoldMessenger.of(context)
           .showSnackBar(
         const SnackBar(

@@ -11,6 +11,8 @@ import {Resend} from "resend";
 import * as functionsV1 from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import {sendNamaPush} from "./nama_push";
+
 
 admin.initializeApp();
 
@@ -1455,7 +1457,7 @@ export const onNewDirectMessage = onDocumentCreated(
     };
 
     try {
-      const response = await admin.messaging().send(message);
+      const response = await sendNamaPush(message);
       console.log(`SUCCESS: Notification sent to ${recipientId}`);
       return response;
     } catch (error) {
@@ -1562,7 +1564,7 @@ export const onNotificationCreate = onDocumentCreated(
     };
 
     try {
-      const response = await admin.messaging().send(message);
+      const response = await sendNamaPush(message);
       console.log(`SUCCESS: FCM sent to ${userId}`);
       return response;
     } catch (error) {
@@ -1670,7 +1672,7 @@ export const onSessionEnd = onDocumentWritten(
             },
           };
 
-          return await admin.messaging().send(message);
+          return await sendNamaPush(message);
         } catch (error) {
           console.error(`Error sending feedback notification to ${attendeeId}:`, error);
           return null;
@@ -1837,7 +1839,7 @@ export const onMeetingWrite = onDocumentWritten(
     };
 
     try {
-      return await admin.messaging().send(message);
+      return await sendNamaPush(message);
     } catch (error) {
       console.error("ERROR sending meeting FCM:", error);
       return null;
@@ -3367,91 +3369,268 @@ export const staffJoinBreakoutSession = onCall(
   {region: FUNCTION_REGION},
   async (request) => {
     if (!request.auth) {
-      throw new HttpsError("unauthenticated", "Authentication is required.");
+      throw new HttpsError(
+        "unauthenticated",
+        "Authentication is required."
+      );
     }
+
     const staffUid = request.auth.uid;
     const sessionId = request.data?.sessionId;
     const userId = request.data?.userId;
-    if (typeof sessionId !== "string" || !sessionId.trim() || sessionId.includes("/") ||
-        typeof userId !== "string" || !userId.trim() || userId.includes("/")) {
-      throw new HttpsError("invalid-argument", "A sessionId and userId are required.");
+
+    if (
+      typeof sessionId !== "string" ||
+      !sessionId.trim() ||
+      sessionId.includes("/") ||
+      typeof userId !== "string" ||
+      !userId.trim() ||
+      userId.includes("/")
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "A sessionId and userId are required."
+      );
     }
+
     const sessionRef = db.collection("sessions").doc(sessionId);
     const staffRef = db.collection("users").doc(staffUid);
     const userRef = db.collection("users").doc(userId);
     const checkinRef = sessionRef.collection("checkins").doc(userId);
+
     return db.runTransaction(async (transaction) => {
       const staffDoc = await transaction.get(staffRef);
       const userDoc = await transaction.get(userRef);
       const sessionDoc = await transaction.get(sessionRef);
       const checkinDoc = await transaction.get(checkinRef);
+
       const staffData = staffDoc.data();
       const userData = userDoc.data();
       const sessionData = sessionDoc.data();
-      const staffRole = String(staffData?.role || "").trim().toLowerCase();
-      if (!staffData || !["staff", "secretariat", "admin"].includes(staffRole) ||
-          (staffData.status || "approved") !== "approved") {
-        throw new HttpsError("permission-denied", "Only approved staff can admit participants.");
+
+      const staffRole = String(staffData?.role || "")
+        .trim()
+        .toLowerCase();
+
+      if (
+        !staffData ||
+        !["staff", "secretariat", "admin"].includes(staffRole) ||
+        (staffData.status || "approved") !== "approved"
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Only approved staff can admit participants."
+        );
       }
+
       if (!sessionData) {
-        throw new HttpsError("not-found", "Session not found.");
+        throw new HttpsError(
+          "not-found",
+          "Session not found."
+        );
       }
+
       if (!isBreakoutSession(sessionData.category)) {
-        throw new HttpsError("failed-precondition", "Please select a breakout session.");
+        throw new HttpsError(
+          "failed-precondition",
+          "Please select a breakout session."
+        );
       }
+
       const eventId = String(sessionData.eventId || "");
-      if (!eventId || !Array.isArray(userData?.eventIds) || !userData.eventIds.includes(eventId) ||
-          (staffRole !== "admin" &&
-          (!Array.isArray(staffData.eventIds) || !staffData.eventIds.includes(eventId)))) {
-        throw new HttpsError("permission-denied", "Staff and participant must belong to this event.");
+
+      if (
+        !eventId ||
+        !Array.isArray(userData?.eventIds) ||
+        !userData.eventIds.includes(eventId) ||
+        (
+          staffRole !== "admin" &&
+          (
+            !Array.isArray(staffData.eventIds) ||
+            !staffData.eventIds.includes(eventId)
+          )
+        )
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Staff and participant must belong to this event."
+        );
       }
-      const userRole = String(userData?.role || "").trim().toLowerCase();
-      if (!userData || !["attendee", "speaker", "moderator"].includes(userRole) ||
-          (userData.status || "approved") !== "approved") {
-        throw new HttpsError("permission-denied", "This participant cannot join a breakout session.");
+
+      const userRole = String(userData?.role || "")
+        .trim()
+        .toLowerCase();
+
+      if (
+        !userData ||
+        !["attendee", "speaker", "moderator"].includes(userRole) ||
+        (userData.status || "approved") !== "approved"
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "This participant cannot join a breakout session."
+        );
       }
-      const sessionInfo = {id: sessionId, title: sessionData.title || "Session", eventId};
+
+      const sessionInfo = {
+        id: sessionId,
+        title: sessionData.title || "Session",
+        eventId,
+      };
+
+      const bookmarkedIds = new Set<string>();
+
+      if (Array.isArray(sessionData.bookmarkedBy)) {
+        for (const value of sessionData.bookmarkedBy) {
+          if (typeof value === "string" && value.trim()) {
+            bookmarkedIds.add(value.trim());
+          }
+        }
+      }
+
+      const isBookmarked = bookmarkedIds.has(userId);
+      const admissionType = isBookmarked ? "bookmarked" : "walk_in";
+
+      // Preserve the existing duplicate check-in behavior.
       if (checkinDoc.exists) {
         transaction.update(sessionRef, {
-          checkedInAttendees: admin.firestore.FieldValue.arrayUnion(userId),
+          checkedInAttendees:
+            admin.firestore.FieldValue.arrayUnion(userId),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
-        return {success: true, alreadyCheckedIn: true, session: sessionInfo};
+
+        return {
+          success: true,
+          alreadyCheckedIn: true,
+          isBookmarked,
+          admissionType:
+            checkinDoc.data()?.admissionType || admissionType,
+          session: sessionInfo,
+        };
       }
-      if (!(sessionData.startTime instanceof admin.firestore.Timestamp) ||
-          !(sessionData.endTime instanceof admin.firestore.Timestamp)) {
-        throw new HttpsError("failed-precondition", "Session times are not configured.");
+
+      if (
+        !(sessionData.startTime instanceof admin.firestore.Timestamp) ||
+        !(sessionData.endTime instanceof admin.firestore.Timestamp)
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Session times are not configured."
+        );
       }
+
       const now = Date.now();
-      if (now < sessionData.startTime.toMillis() || now > sessionData.endTime.toMillis()) {
-        throw new HttpsError("failed-precondition", "This session is not currently active.");
+
+      if (
+        now < sessionData.startTime.toMillis() ||
+        now > sessionData.endTime.toMillis()
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This session is not currently active."
+        );
       }
+
+      // Read attendance for every admission, including unlimited sessions.
+      // Bookmark priority must use both check-in records and legacy IDs.
+      const records = await transaction.get(
+        sessionRef.collection("checkins")
+      );
+
+      const checkedInIds = new Set<string>();
+
       const legacyIds = Array.isArray(sessionData.checkedInAttendees) ?
-        sessionData.checkedInAttendees : [];
-      let alreadyCounted = legacyIds.includes(userId);
+        sessionData.checkedInAttendees :
+        [];
+
+      for (const value of legacyIds) {
+        if (typeof value === "string" && value.trim()) {
+          checkedInIds.add(value.trim());
+        }
+      }
+
+      for (const document of records.docs) {
+        const record = document.data();
+
+        const id =
+          record.userId ||
+          record.attendeeId ||
+          record.uid ||
+          document.id;
+
+        if (typeof id === "string" && id.trim()) {
+          checkedInIds.add(id.trim());
+        }
+      }
+
+      const alreadyCounted = checkedInIds.has(userId);
+
+      // Preserve the existing attendance limit checks.
       if (sessionData.attendanceLimitEnabled === true) {
         const maxAttendees = Number(sessionData.maxAttendees);
-        if (!Number.isSafeInteger(maxAttendees) || maxAttendees < 1) {
-          throw new HttpsError("failed-precondition", "Session attendance limit is invalid.");
+
+        if (
+          !Number.isSafeInteger(maxAttendees) ||
+          maxAttendees < 1
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Session attendance limit is invalid."
+          );
         }
-        const records = await transaction.get(sessionRef.collection("checkins"));
-        const ids = new Set<string>();
-        for (const value of legacyIds) {
-          if (typeof value === "string" && value.trim()) ids.add(value.trim());
-        }
-        for (const document of records.docs) {
-          const record = document.data();
-          const id = record.userId || record.attendeeId || record.uid || document.id;
-          if (typeof id === "string" && id.trim()) ids.add(id.trim());
-        }
-        alreadyCounted = ids.has(userId);
-        if (!alreadyCounted && ids.size >= maxAttendees) {
-          throw new HttpsError("resource-exhausted", "Session is Full.", {reason: "session-full", maxAttendees});
+
+        if (!alreadyCounted && checkedInIds.size >= maxAttendees) {
+          throw new HttpsError(
+            "resource-exhausted",
+            "Session is Full.",
+            {
+              reason: "session-full",
+              maxAttendees,
+            }
+          );
         }
       }
+
+      const waitingBookmarkedIds = Array.from(bookmarkedIds)
+        .filter((id) => !checkedInIds.has(id));
+
+      // An existing attendee can have a missing canonical check-in
+      // document. Repair that record without treating them as a new walk-in.
+      if (
+        !alreadyCounted &&
+        !isBookmarked &&
+        waitingBookmarkedIds.length > 0
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This participant has not bookmarked this session. " +
+          "Please admit bookmarked participants first. " +
+          `${waitingBookmarkedIds.length} bookmarked ` +
+          "participant(s) have not checked in yet.",
+          {
+            reason: "bookmarked-participants-pending",
+            isBookmarked: false,
+            pendingBookmarkedCount: waitingBookmarkedIds.length,
+          }
+        );
+      }
+
+      const rawBookmarkTimes = sessionData.bookmarkTimes;
+
+      const savedAt =
+        rawBookmarkTimes &&
+        typeof rawBookmarkTimes === "object" &&
+        !Array.isArray(rawBookmarkTimes) ?
+          rawBookmarkTimes[userId] :
+          null;
+
       transaction.set(checkinRef, {
         userId,
-        userName: userData.name || userData.fullName || userData.displayName || "Participant",
+        userName:
+          userData.name ||
+          userData.fullName ||
+          userData.displayName ||
+          "Participant",
         userEmail: userData.email || "",
         userRole,
         sessionId,
@@ -3459,20 +3638,56 @@ export const staffJoinBreakoutSession = onCall(
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         checkedInAt: admin.firestore.FieldValue.serverTimestamp(),
         checkedInBy: staffUid,
-        checkedInByName: staffData.name || staffData.fullName || "Staff",
+        checkedInByName:
+          staffData.name ||
+          staffData.fullName ||
+          "Staff",
         qrType: "staff_breakout_checkin",
+
+        // Record the admission source for monitoring.
+        admissionType,
+        wasBookmarkedAtCheckIn: isBookmarked,
+        ...(savedAt instanceof admin.firestore.Timestamp ?
+          {bookmarkedAt: savedAt} :
+          {}),
       });
+
       transaction.update(sessionRef, {
-        checkedInAttendees: admin.firestore.FieldValue.arrayUnion(userId),
+        checkedInAttendees:
+          admin.firestore.FieldValue.arrayUnion(userId),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
       if (!alreadyCounted) {
-        transaction.update(userRef, {points: admin.firestore.FieldValue.increment(10)});
+        transaction.update(userRef, {
+          points: admin.firestore.FieldValue.increment(10),
+        });
       }
-      return {success: true, alreadyCheckedIn: alreadyCounted, session: sessionInfo};
+
+      const pendingBookmarkedCount = waitingBookmarkedIds.filter(
+        (id) => id !== userId
+      ).length;
+
+      return {
+        success: true,
+        alreadyCheckedIn: alreadyCounted,
+        isBookmarked,
+        admissionType,
+        pendingBookmarkedCount,
+        session: sessionInfo,
+      };
     });
   }
 );
+export {
+  createEventInvitations,
+  staffScanInvitationQr,
+  staffConfirmInvitation,
+  staffCreateWalkInAdmission,
+  adminDeleteEventAdmission,
+} from "./event_admissions";
+
+export {sendEventAdmissionEmails} from "./event_admission_emails";
 
 export {
   generateEventJoinCredentials,

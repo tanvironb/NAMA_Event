@@ -1,17 +1,17 @@
-import 'package:events_app_trueattempt/core/enums/notification_type.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:events_app_trueattempt/config/app_colors.dart';
-import 'package:events_app_trueattempt/core/models/notification_model.dart';
-import 'package:events_app_trueattempt/core/models/session_model.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
-import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
-import 'package:events_app_trueattempt/features/notifications/screen/notification_detail_screen.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-class NotificationListTile extends ConsumerWidget {
+import 'package:events_app_trueattempt/config/app_colors.dart';
+import 'package:events_app_trueattempt/core/enums/notification_type.dart';
+import 'package:events_app_trueattempt/core/models/notification_model.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/core/services/notification_handler.dart'
+    as central;
+import 'package:events_app_trueattempt/features/notifications/screen/notification_detail_screen.dart';
+
+class NotificationListTile extends ConsumerStatefulWidget {
   final AppNotification notification;
 
   const NotificationListTile({
@@ -19,16 +19,40 @@ class NotificationListTile extends ConsumerWidget {
     required this.notification,
   });
 
-  String _formatEventTimestamp(DateTime eventTime, bool includeDate) {
-    if (includeDate) {
-      return DateFormat('MMM d, yyyy • h:mm a').format(eventTime);
-    }
+  @override
+  ConsumerState<NotificationListTile> createState() =>
+      _NotificationListTileState();
+}
 
-    return DateFormat('h:mm a').format(eventTime);
+class _NotificationListTileState
+    extends ConsumerState<NotificationListTile> {
+  bool _responding = false;
+  String? _localStatus;
+
+  AppNotification get notification => widget.notification;
+
+  String get _meetingId =>
+      (notification.data['meetingId'] ?? '').toString().trim();
+
+  String get _status =>
+      (_localStatus ?? notification.data['status'] ?? 'pending')
+          .toString()
+          .trim()
+          .toLowerCase();
+
+  bool get _canRespond {
+    final uid = ref.read(firebaseAuthProvider).currentUser?.uid;
+    final recipientId =
+        (notification.data['recipientId'] ?? '').toString();
+
+    return uid != null &&
+        _meetingId.isNotEmpty &&
+        recipientId == uid &&
+        _status == 'pending';
   }
 
-  Color _getPriorityColor(String priority) {
-    switch (priority) {
+  Color get _priorityColor {
+    switch (notification.priority) {
       case 'high':
         return AppColors.errorRed;
       case 'medium':
@@ -40,240 +64,85 @@ class NotificationListTile extends ConsumerWidget {
     }
   }
 
-  bool _isMeetingRequestNotification() {
-    final typeName = notification.type.toString().split('.').last;
-    final dataType = (notification.data['type'] ?? '').toString();
+  void _openDetails() {
+    // Use the same handler as phone-banner taps.
+    //
+    // Supply the personal notification document ID so the handler
+    // opens this exact notification using the shared details screen.
+    final payload = <String, dynamic>{
+      ...notification.data,
+      'notificationId': notification.id,
+      'type': _meetingId.isNotEmpty
+          ? 'meeting_request'
+          : 'admin_notification',
+    };
 
-    return typeName == 'meetingRequest' ||
-        dataType == 'meetingRequest' ||
-        dataType == 'meeting';
-  }
-
-  bool _canRespondToMeeting(WidgetRef ref) {
-    if (!_isMeetingRequestNotification()) return false;
-
-    final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid;
-    if (currentUserId == null) return false;
-
-    final recipientId = (notification.data['recipientId'] ?? '').toString();
-    final status = (notification.data['status'] ?? 'pending').toString();
-
-    return recipientId == currentUserId && status == 'pending';
-  }
-
-  Future<void> _respondToMeetingRequest({
-    required BuildContext context,
-    required WidgetRef ref,
-    required String responseStatus,
-  }) async {
-    final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid;
-
-    if (currentUserId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to identify current user.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
+    if (_meetingId.isNotEmpty) {
+      payload['meetingId'] = _meetingId;
     }
 
-    final meetingId = (notification.data['meetingId'] ?? '').toString();
+    central.NotificationHandler.handleNotificationTap(
+      RemoteMessage(data: payload),
+    );
+  }
 
-    if (meetingId.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Meeting request data is missing.'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
+  Future<void> _respond(String status) async {
+    if (_responding) return;
+
+    setState(() {
+      _responding = true;
+    });
 
     try {
-      await ref.read(notificationRepositoryProvider).respondToMeetingRequest(
-            currentUserId: currentUserId,
-            notificationId: notification.id,
-            meetingId: meetingId,
-            responseStatus: responseStatus,
-          );
+      await NotificationDetailScreen.respondToMeeting(
+        meetingId: _meetingId,
+        status: status,
+        notificationId: notification.id,
+      );
 
-      if (!context.mounted) return;
+      if (!mounted) return;
+
+      setState(() {
+        _localStatus = status;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            responseStatus == 'accepted'
-                ? 'Meeting request accepted.'
+            status == 'accepted'
+                ? 'Meeting request approved.'
                 : 'Meeting request rejected.',
           ),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor:
-              responseStatus == 'accepted' ? Colors.green : Colors.red,
         ),
       );
-    } catch (e) {
-      if (!context.mounted) return;
+    } catch (error) {
+      if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to respond to meeting request: $e'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.red,
+          content: Text('Unable to respond: $error'),
         ),
       );
-    }
-  }
-
-  Future<void> _handleNotificationTap(
-    BuildContext context,
-    WidgetRef ref,
-  ) async {
-    final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
-
-    if (userId != null && !notification.isRead) {
-      await ref
-          .read(notificationRepositoryProvider)
-          .markAsRead(userId, notification.id);
-    }
-
-    if (_isMeetingRequestNotification()) {
-      if (!context.mounted) return;
-
-      final status = (notification.data['status'] ?? 'pending').toString();
-
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => MyMeetingsScreen(
-            initialTab: status == 'accepted'
-                ? 1
-                : status == 'rejected'
-                    ? 2
-                    : 0,
-          ),
-        ),
-      );
-      return;
-    }
-
-    final sessionId = (notification.data['sessionId'] ?? '').toString();
-
-    if (sessionId.isNotEmpty) {
-      try {
-        final sessionDoc = await FirebaseFirestore.instance
-            .collection('sessions')
-            .doc(sessionId)
-            .get();
-
-        if (sessionDoc.exists && context.mounted) {
-          final session = Session.fromFirestore(sessionDoc);
-
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => SessionChatScreen(session: session),
-            ),
-          );
-          return;
-        }
-      } catch (_) {
-        // If session cannot be loaded, open normal notification details.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _responding = false;
+        });
       }
     }
-
-    if (!context.mounted) return;
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => NotificationDetailScreen(
-          notification: notification,
-        ),
-      ),
-    );
-  }
-
-  Widget _meetingActionButtons(BuildContext context, WidgetRef ref) {
-    if (!_canRespondToMeeting(ref)) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(
-        children: [
-          SizedBox(
-            height: 30,
-            child: ElevatedButton.icon(
-              onPressed: () => _respondToMeetingRequest(
-                context: context,
-                ref: ref,
-                responseStatus: 'accepted',
-              ),
-              icon: const Icon(Icons.check_rounded, size: 15),
-              label: const Text(
-                'Accept',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(9),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            height: 30,
-            child: OutlinedButton.icon(
-              onPressed: () => _respondToMeetingRequest(
-                context: context,
-                ref: ref,
-                responseStatus: 'rejected',
-              ),
-              icon: const Icon(Icons.close_rounded, size: 15),
-              label: const Text(
-                'Reject',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red,
-                side: const BorderSide(color: Colors.red),
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(9),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final iconData = notification.type.icon;
+  Widget build(BuildContext context) {
+    final read = notification.isRead;
+    final priorityColor = _priorityColor;
 
-    final iconBg =
-        notification.isRead ? Colors.grey.shade300 : notification.type.color;
-
-    final iconColor = notification.isRead ? Colors.grey.shade600 : Colors.white;
-
-    final timeAgo = DateFormat.yMMMd().add_jm().format(
+    final timestamp = DateFormat.yMMMd().add_jm().format(
           notification.timestamp.toDate(),
         );
 
-    final priorityColor = _getPriorityColor(notification.priority);
-
     return Container(
-      color: notification.isRead
+      color: read
           ? Theme.of(context).colorScheme.surface.withOpacity(0.25)
           : null,
       child: ListTile(
@@ -283,11 +152,12 @@ class NotificationListTile extends ConsumerWidget {
         ),
         leading: CircleAvatar(
           radius: 18,
-          backgroundColor: iconBg,
+          backgroundColor:
+              read ? Colors.grey.shade300 : notification.type.color,
           child: Icon(
-            iconData,
+            notification.type.icon,
             size: 16,
-            color: iconColor,
+            color: read ? Colors.grey.shade600 : Colors.white,
           ),
         ),
         title: Text(
@@ -296,18 +166,17 @@ class NotificationListTile extends ConsumerWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 13,
-            fontWeight:
-                notification.isRead ? FontWeight.normal : FontWeight.w600,
-            color: notification.isRead
-                ? Theme.of(context).colorScheme.onSurface.withOpacity(0.6)
-                : Theme.of(context).colorScheme.onSurface,
+            fontWeight: read ? FontWeight.normal : FontWeight.w600,
+            color: Theme.of(context)
+                .colorScheme
+                .onSurface
+                .withOpacity(read ? 0.6 : 1),
           ),
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (notification.subtitle != null &&
-                notification.subtitle!.trim().isNotEmpty) ...[
+            if ((notification.subtitle ?? '').trim().isNotEmpty) ...[
               const SizedBox(height: 2),
               Text(
                 notification.subtitle!,
@@ -327,18 +196,74 @@ class NotificationListTile extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
-                color: notification.isRead
-                    ? Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withOpacity(0.5)
-                    : Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withOpacity(0.8),
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withOpacity(read ? 0.5 : 0.8),
               ),
             ),
-            _meetingActionButtons(context, ref),
+            if (_canRespond) ...[
+              const SizedBox(height: 8),
+              if (_responding)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                  ),
+                )
+              else
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _respond('accepted'),
+                      icon: const Icon(
+                        Icons.check_rounded,
+                        size: 15,
+                      ),
+                      label: const Text(
+                        'Approve',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        minimumSize: const Size(0, 30),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => _respond('declined'),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        size: 15,
+                      ),
+                      label: const Text(
+                        'Reject',
+                        style: TextStyle(fontSize: 11),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                        minimumSize: const Size(0, 30),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
             const SizedBox(height: 5),
             if (notification.hasQrData) ...[
               Row(
@@ -376,10 +301,11 @@ class NotificationListTile extends ConsumerWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      _formatEventTimestamp(
-                        notification.eventTimestamp!,
-                        notification.includeDate,
-                      ),
+                      DateFormat(
+                        notification.includeDate
+                            ? 'MMM d, yyyy • h:mm a'
+                            : 'h:mm a',
+                      ).format(notification.eventTimestamp!),
                       style: TextStyle(
                         fontSize: 10,
                         color: Colors.grey.shade600,
@@ -399,18 +325,19 @@ class NotificationListTile extends ConsumerWidget {
                     vertical: 2,
                   ),
                   decoration: BoxDecoration(
-                    color: notification.isRead
+                    color: read
                         ? Colors.grey.shade300
                         : priorityColor.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: notification.isRead
+                      color: read
                           ? Colors.grey.shade400
                           : priorityColor.withOpacity(0.5),
                       width: 0.8,
                     ),
                   ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
                         notification.priority == 'high'
@@ -419,7 +346,7 @@ class NotificationListTile extends ConsumerWidget {
                                 ? Icons.circle
                                 : Icons.keyboard_arrow_down,
                         size: 10,
-                        color: notification.isRead
+                        color: read
                             ? Colors.grey.shade600
                             : priorityColor,
                       ),
@@ -429,7 +356,7 @@ class NotificationListTile extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
-                          color: notification.isRead
+                          color: read
                               ? Colors.grey.shade600
                               : priorityColor,
                         ),
@@ -440,7 +367,7 @@ class NotificationListTile extends ConsumerWidget {
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
-                    timeAgo,
+                    timestamp,
                     style: TextStyle(
                       fontSize: 10,
                       color: Colors.grey.shade600,
@@ -451,7 +378,7 @@ class NotificationListTile extends ConsumerWidget {
             ),
           ],
         ),
-        onTap: () => _handleNotificationTap(context, ref),
+        onTap: _openDetails,
       ),
     );
   }

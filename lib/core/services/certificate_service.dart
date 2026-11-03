@@ -248,10 +248,7 @@ class CertificateService {
     required String eventId,
     required String certificateType,
   }) async {
-    final normalizedType = _normalizeRole(
-      certificateType,
-    );
-
+    final normalizedType = _normalizeRole(certificateType);
     late final String prefix;
 
     switch (normalizedType) {
@@ -275,9 +272,7 @@ class CertificateService {
     }
 
     final year = DateTime.now().year;
-
     final snapshot = await _certificatesRef(eventId).get();
-
     final nextNumber = snapshot.docs.length + 1;
     final serial = nextNumber.toString().padLeft(4, '0');
 
@@ -358,8 +353,7 @@ class CertificateService {
       certificateId: certificateId,
       status: 'generated',
       generatedAt: DateTime.now(),
-      templateUrl:
-          template['templateUrl']?.toString(),
+      templateUrl: template['templateUrl']?.toString(),
       templateStoragePath:
           template['storagePath']?.toString(),
     );
@@ -370,9 +364,7 @@ class CertificateService {
     // unexpectedly alter certificates that were already generated.
     certificateData.addAll({
       'templateRole': normalizedRole,
-      'templateSettings': Map<String, dynamic>.from(
-        template,
-      ),
+      'templateSettings': Map<String, dynamic>.from(template),
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
@@ -444,6 +436,22 @@ class CertificateService {
     );
   }
 
+  Future<void> _retryCertificateWrite(
+    Future<CertificateModel> Function() generate,
+  ) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        await generate();
+        return;
+      } catch (_) {
+        if (attempt == 1) rethrow;
+        await Future.delayed(
+          const Duration(milliseconds: 300),
+        );
+      }
+    }
+  }
+
   Future<int> generateCertificatesForPresentAttendees({
     required String eventId,
     required List<Map<String, dynamic>> presentAttendees,
@@ -453,11 +461,10 @@ class CertificateService {
       role: 'attendee',
     );
 
-    if (!templateExists) {
-      return 0;
-    }
+    if (!templateExists) return 0;
 
     var generatedCount = 0;
+    final failedUserIds = <String>[];
 
     for (final attendee in presentAttendees) {
       final userId = (
@@ -466,48 +473,62 @@ class CertificateService {
         ''
       ).toString().trim();
 
-      if (userId.isEmpty) {
+      if (userId.isEmpty) continue;
+
+      final sessionsJoined = attendee['sessionsJoined'];
+
+      if (sessionsJoined is! List || sessionsJoined.isEmpty) {
         continue;
       }
 
-      final existingDocument =
-          await _certificatesRef(eventId).doc(userId).get();
+      try {
+        final existingDocument =
+            await _certificatesRef(eventId).doc(userId).get();
 
-      if (existingDocument.exists) {
-        continue;
+        if (existingDocument.exists) continue;
+
+        final userName = (
+          attendee['userName'] ??
+          attendee['name'] ??
+          attendee['fullName'] ??
+          attendee['displayName'] ??
+          'Unknown Attendee'
+        ).toString();
+
+        final userEmail = (
+          attendee['userEmail'] ??
+          attendee['email'] ??
+          ''
+        ).toString();
+
+        await _retryCertificateWrite(
+          () => generateAttendeeCertificate(
+            eventId: eventId,
+            userId: userId,
+            userName: userName,
+            userEmail: userEmail,
+          ),
+        );
+
+        generatedCount++;
+      } catch (_) {
+        failedUserIds.add(userId);
       }
+    }
 
-      final userName = (
-        attendee['userName'] ??
-        attendee['name'] ??
-        attendee['fullName'] ??
-        attendee['displayName'] ??
-        'Unknown Attendee'
-      ).toString();
-
-      final userEmail = (
-        attendee['userEmail'] ??
-        attendee['email'] ??
-        ''
-      ).toString();
-
-      await generateAttendeeCertificate(
-        eventId: eventId,
-        userId: userId,
-        userName: userName,
-        userEmail: userEmail,
+    if (failedUserIds.isNotEmpty) {
+      throw Exception(
+        'Could not generate certificates for '
+        '${failedUserIds.length} attendee(s). '
+        'Run certificate generation again to retry them.',
       );
-
-      generatedCount++;
     }
 
     return generatedCount;
   }
 
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      _getEventSessionDocuments(
-    String eventId,
-  ) async {
+      _getEventSessionDocuments(String eventId) async {
     final topLevelSnapshot = await _firestore
         .collection('sessions')
         .where('eventId', isEqualTo: eventId)
@@ -526,8 +547,7 @@ class CertificateService {
       mergedDocuments[document.reference.path] = document;
     }
 
-    for (final document
-        in eventSubcollectionSnapshot.docs) {
+    for (final document in eventSubcollectionSnapshot.docs) {
       mergedDocuments[document.reference.path] = document;
     }
 
@@ -596,9 +616,9 @@ class CertificateService {
         .where('eventIds', arrayContains: eventId)
         .get();
 
-    for (final userDocument
-        in registeredUsersSnapshot.docs) {
+    for (final userDocument in registeredUsersSnapshot.docs) {
       final userData = userDocument.data();
+
       final userRole = _normalizeRole(
         (userData['role'] ?? '').toString(),
       );
@@ -639,57 +659,62 @@ class CertificateService {
 
     // A role without an uploaded template is skipped. This allows the admin
     // to configure and publish certificate roles independently.
-    if (!templateExists) {
-      return 0;
-    }
+    if (!templateExists) return 0;
 
     var generatedCount = 0;
+    final failedUserIds = <String>[];
 
     for (final userId in userIds) {
       final cleanUserId = userId.trim();
 
-      if (cleanUserId.isEmpty) {
-        continue;
+      if (cleanUserId.isEmpty) continue;
+
+      try {
+        final existingDocument =
+            await _certificatesRef(eventId).doc(cleanUserId).get();
+
+        if (existingDocument.exists) continue;
+
+        final userDocument =
+            await _usersRef.doc(cleanUserId).get();
+
+        if (!userDocument.exists) continue;
+
+        final userData =
+            userDocument.data() ?? <String, dynamic>{};
+
+        final userName = (
+          userData['name'] ??
+          userData['fullName'] ??
+          userData['displayName'] ??
+          'Unknown ${_roleLabel(normalizedRole)}'
+        ).toString();
+
+        final userEmail =
+            (userData['email'] ?? '').toString();
+
+        await _retryCertificateWrite(
+          () => generateRoleCertificate(
+            eventId: eventId,
+            userId: cleanUserId,
+            userName: userName,
+            userEmail: userEmail,
+            role: normalizedRole,
+          ),
+        );
+
+        generatedCount++;
+      } catch (_) {
+        failedUserIds.add(cleanUserId);
       }
+    }
 
-      final existingDocument =
-          await _certificatesRef(eventId)
-              .doc(cleanUserId)
-              .get();
-
-      if (existingDocument.exists) {
-        continue;
-      }
-
-      final userDocument =
-          await _usersRef.doc(cleanUserId).get();
-
-      if (!userDocument.exists) {
-        continue;
-      }
-
-      final userData =
-          userDocument.data() ?? <String, dynamic>{};
-
-      final userName = (
-        userData['name'] ??
-        userData['fullName'] ??
-        userData['displayName'] ??
-        'Unknown ${_roleLabel(normalizedRole)}'
-      ).toString();
-
-      final userEmail =
-          (userData['email'] ?? '').toString();
-
-      await generateRoleCertificate(
-        eventId: eventId,
-        userId: cleanUserId,
-        userName: userName,
-        userEmail: userEmail,
-        role: normalizedRole,
+    if (failedUserIds.isNotEmpty) {
+      throw Exception(
+        'Could not generate certificates for '
+        '${failedUserIds.length} ${_roleLabel(normalizedRole)} user(s). '
+        'Run certificate generation again to retry them.',
       );
-
-      generatedCount++;
     }
 
     return generatedCount;
@@ -745,48 +770,71 @@ class CertificateService {
       );
     }
 
-    final attendeeCount =
-        await generateCertificatesForPresentAttendees(
-      eventId: eventId,
-      presentAttendees: presentAttendees,
-    );
+    var attendeeCount = 0;
+    var speakerCount = 0;
+    var moderatorCount = 0;
+    var staffCount = 0;
+    final generationErrors = <String>[];
 
-    // Read role assignments once instead of querying all sessions separately
-    // for speaker, moderator, and staff generation.
+    // Continue through each role group even if individual writes fail.
+    try {
+      attendeeCount = await generateCertificatesForPresentAttendees(
+        eventId: eventId,
+        presentAttendees: presentAttendees,
+      );
+    } catch (error) {
+      generationErrors.add(error.toString());
+    }
+
     final roleIds = await _getAssignedRoleIds(eventId);
 
-    final speakerCount =
-        await _generateCertificatesForUserIds(
-      eventId: eventId,
-      userIds: roleIds['speaker'] ?? <String>{},
-      role: 'speaker',
-    );
+    try {
+      speakerCount = await _generateCertificatesForUserIds(
+        eventId: eventId,
+        userIds: roleIds['speaker'] ?? <String>{},
+        role: 'speaker',
+      );
+    } catch (error) {
+      generationErrors.add(error.toString());
+    }
 
-    final moderatorCount =
-        await _generateCertificatesForUserIds(
-      eventId: eventId,
-      userIds: roleIds['moderator'] ?? <String>{},
-      role: 'moderator',
-    );
+    try {
+      moderatorCount = await _generateCertificatesForUserIds(
+        eventId: eventId,
+        userIds: roleIds['moderator'] ?? <String>{},
+        role: 'moderator',
+      );
+    } catch (error) {
+      generationErrors.add(error.toString());
+    }
 
-    final staffCount =
-        await _generateCertificatesForUserIds(
-      eventId: eventId,
-      userIds: roleIds['staff'] ?? <String>{},
-      role: 'staff',
-    );
+    try {
+      staffCount = await _generateCertificatesForUserIds(
+        eventId: eventId,
+        userIds: roleIds['staff'] ?? <String>{},
+        role: 'staff',
+      );
+    } catch (error) {
+      generationErrors.add(error.toString());
+    }
 
-    final total = attendeeCount +
-        speakerCount +
-        moderatorCount +
-        staffCount;
+    if (generationErrors.isNotEmpty) {
+      throw Exception(
+        'Certificate generation attempted all eligible groups, '
+        'but some certificates failed. '
+        'Run it again to retry the missing ones.',
+      );
+    }
 
     return {
       'attendees': attendeeCount,
       'speakers': speakerCount,
       'moderators': moderatorCount,
       'staff': staffCount,
-      'total': total,
+      'total': attendeeCount +
+          speakerCount +
+          moderatorCount +
+          staffCount,
     };
   }
 

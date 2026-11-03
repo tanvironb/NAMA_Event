@@ -16,10 +16,12 @@ async function ensureCredentials(eventId: string): Promise<void> {
   for (let attempt = 0; attempt < 8; attempt++) {
     const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     const bytes = crypto.randomBytes(10);
-    const candidate = "EVT-" + Array.from(
-      bytes,
-      (value) => alphabet[value % alphabet.length]
-    ).join("");
+    const candidate =
+      "EVT-" +
+      Array.from(
+        bytes,
+        (value) => alphabet[value % alphabet.length],
+      ).join("");
 
     const success = await db.runTransaction(async (transaction) => {
       const eventDoc = await transaction.get(eventRef);
@@ -70,7 +72,7 @@ async function ensureCredentials(eventId: string): Promise<void> {
 
   throw new HttpsError(
     "aborted",
-    "Could not create event code. Please retry."
+    "Could not create event code. Please retry.",
   );
 }
 
@@ -82,25 +84,30 @@ export const generateEventJoinCredentials = onDocumentCreated(
   async (event) => {
     if (!event.data) return;
     await ensureCredentials(event.params.eventId);
-  }
+  },
 );
 
 export const ensureEventJoinCredentials = onCall(
-  {
-    region: REGION,
-  },
+  {region: REGION},
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Please sign in.");
     }
 
     const db = admin.firestore();
-    const profile = await db.collection("users").doc(request.auth.uid).get();
+    const profile = await db
+      .collection("users")
+      .doc(request.auth.uid)
+      .get();
 
-    if (profile.data()?.role !== "admin") {
+    const role = String(profile.data()?.role || "")
+      .trim()
+      .toLowerCase();
+
+    if (role !== "admin") {
       throw new HttpsError(
         "permission-denied",
-        "Only admin can generate event codes."
+        "Only admin can generate event codes.",
       );
     }
 
@@ -113,22 +120,18 @@ export const ensureEventJoinCredentials = onCall(
     ) {
       throw new HttpsError(
         "invalid-argument",
-        "A valid eventId is required."
+        "A valid eventId is required.",
       );
     }
 
-    await ensureCredentials(eventId);
+    await ensureCredentials(eventId.trim());
 
-    return {
-      success: true,
-    };
-  }
+    return {success: true};
+  },
 );
 
 export const joinActiveEvent = onCall(
-  {
-    region: REGION,
-  },
+  {region: REGION},
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Please sign in.");
@@ -137,7 +140,7 @@ export const joinActiveEvent = onCall(
     if (request.auth.token.email_verified !== true) {
       throw new HttpsError(
         "failed-precondition",
-        "Please verify your email first."
+        "Please verify your email first.",
       );
     }
 
@@ -146,7 +149,7 @@ export const joinActiveEvent = onCall(
     if (typeof credential !== "string" || !credential.trim()) {
       throw new HttpsError(
         "invalid-argument",
-        "Scan the event QR or enter its code."
+        "Scan the event QR or enter its code.",
       );
     }
 
@@ -170,7 +173,7 @@ export const joinActiveEvent = onCall(
       } catch (_) {
         throw new HttpsError(
           "invalid-argument",
-          "Please scan a valid event QR."
+          "Please scan a valid event QR.",
         );
       }
     }
@@ -181,6 +184,10 @@ export const joinActiveEvent = onCall(
 
     const db = admin.firestore();
     const uid = request.auth.uid;
+    const authEmail =
+      typeof request.auth.token.email === "string" ?
+        request.auth.token.email :
+        "";
     const userRef = db.collection("users").doc(uid);
     const codeRef = db.collection("eventJoinCodes").doc(code);
 
@@ -199,13 +206,22 @@ export const joinActiveEvent = onCall(
       }
 
       if (qrEventId && qrEventId !== eventId) {
-        throw new HttpsError("invalid-argument", "Invalid event QR.");
+        throw new HttpsError(
+          "invalid-argument",
+          "Invalid event QR.",
+        );
       }
 
       const eventRef = db.collection("events").doc(eventId);
-      const credentialsRef = db.collection("eventJoinCredentials").doc(eventId);
-      const registrationRef = eventRef.collection("registrations").doc(uid);
-      const attendanceRef = eventRef.collection("attendance").doc(uid);
+      const credentialsRef = db
+        .collection("eventJoinCredentials")
+        .doc(eventId);
+      const registrationRef = eventRef
+        .collection("registrations")
+        .doc(uid);
+      const attendanceRef = eventRef
+        .collection("attendance")
+        .doc(uid);
 
       const eventDoc = await transaction.get(eventRef);
       const credentialsDoc = await transaction.get(credentialsRef);
@@ -218,7 +234,7 @@ export const joinActiveEvent = onCall(
       if (!eventData || credentialsDoc.data()?.code !== code) {
         throw new HttpsError(
           "not-found",
-          "Event code is unavailable."
+          "Event code is unavailable.",
         );
       }
 
@@ -228,14 +244,14 @@ export const joinActiveEvent = onCall(
       ) {
         throw new HttpsError(
           "failed-precondition",
-          "This event is not active."
+          "This event is not active.",
         );
       }
 
       if (!userData || userData.status !== "approved") {
         throw new HttpsError(
           "permission-denied",
-          "Your account must be approved before joining."
+          "Your account must be approved before joining.",
         );
       }
 
@@ -243,74 +259,114 @@ export const joinActiveEvent = onCall(
         .toLowerCase()
         .trim();
 
-      if (role === "admin" || role === "superadmin") {
+      if (
+        role === "admin" ||
+        role === "superadmin" ||
+        role === "super_admin"
+      ) {
         throw new HttpsError(
           "permission-denied",
-          "Admin accounts use the admin interface."
+          "Admin accounts use the admin interface.",
         );
       }
 
       const userName = String(
         userData.name ||
-        userData.fullName ||
-        userData.displayName ||
-        "User"
+          userData.fullName ||
+          userData.displayName ||
+          "User",
       );
 
       const userEmail = String(
-        userData.email ||
-        request.auth?.token.email ||
-        ""
-      );
+        userData.email || authEmail || "",
+      ).trim().toLowerCase();
 
       const eventName = String(
         eventData.name ||
-        eventData.title ||
-        eventData.eventName ||
-        "Event"
+          eventData.title ||
+          eventData.eventName ||
+          "Event",
       );
 
-      const timestamp = admin.firestore.FieldValue.serverTimestamp();
+      // Staff admission documents use SHA-256 of the lowercase email
+      // as their document ID.
+      const admissionId = userEmail ?
+        crypto.createHash("sha256").update(userEmail).digest("hex") :
+        "";
+      const admissionRef = admissionId ?
+        eventRef.collection("admissions").doc(admissionId) :
+        null;
+      const admissionDoc = admissionRef ?
+        await transaction.get(admissionRef) :
+        null;
 
-      transaction.set(userRef, {
-        eventIds: admin.firestore.FieldValue.arrayUnion(eventId),
-        activeEventId: eventId,
-        currentEventId: eventId,
-        lastEventLoginAt: timestamp,
-        updatedAt: timestamp,
-      }, {merge: true});
+      const timestamp =
+        admin.firestore.FieldValue.serverTimestamp();
 
-      transaction.set(registrationRef, {
-        eventId,
-        eventName,
-        userId: uid,
-        userName,
-        userEmail,
-        userRole: role,
-        status: "registered",
-        admissionVerified: true,
-        admissionMethod: qrEventId ? "event_qr" : "event_code",
-        admissionVerifiedAt:
-          registrationDoc.data()?.admissionVerifiedAt || timestamp,
-        registeredAt:
-          registrationDoc.data()?.registeredAt || timestamp,
-        updatedAt: timestamp,
-      }, {merge: true});
+      transaction.set(
+        userRef,
+        {
+          eventIds: admin.firestore.FieldValue.arrayUnion(eventId),
+          activeEventId: eventId,
+          currentEventId: eventId,
+          lastEventLoginAt: timestamp,
+          updatedAt: timestamp,
+        },
+        {merge: true},
+      );
 
-      transaction.set(attendanceRef, {
-        eventId,
-        eventName,
-        userId: uid,
-        userName,
-        userEmail,
-        userRole: role,
-        status: "present",
-        source: qrEventId ? "event_qr" : "event_code",
-        checkedInAt: attendanceDoc.data()?.checkedInAt || timestamp,
-        createdAt: attendanceDoc.data()?.createdAt || timestamp,
-        lastSeenAt: timestamp,
-        updatedAt: timestamp,
-      }, {merge: true});
+      transaction.set(
+        registrationRef,
+        {
+          eventId,
+          eventName,
+          userId: uid,
+          userName,
+          userEmail,
+          userRole: role,
+          status: "registered",
+          registeredAt:
+            registrationDoc.data()?.registeredAt || timestamp,
+          updatedAt: timestamp,
+        },
+        {merge: true},
+      );
+
+      transaction.set(
+        attendanceRef,
+        {
+          eventId,
+          eventName,
+          userId: uid,
+          userName,
+          userEmail,
+          userRole: role,
+          status: "present",
+          source: qrEventId ? "event_qr" : "event_code",
+          checkedInAt:
+            attendanceDoc.data()?.checkedInAt || timestamp,
+          createdAt:
+            attendanceDoc.data()?.createdAt || timestamp,
+          lastSeenAt: timestamp,
+          updatedAt: timestamp,
+        },
+        {merge: true},
+      );
+
+      // Preserve the admission source and update a staff-admitted walk-in.
+      if (
+        admissionRef !== null &&
+        admissionDoc?.exists &&
+        admissionDoc.data()?.source === "walk_in" &&
+        admissionDoc.data()?.status === "verified_by_staff"
+      ) {
+        transaction.update(admissionRef, {
+          status: "joined",
+          joinedUserId: uid,
+          joinedAt: timestamp,
+          updatedAt: timestamp,
+        });
+      }
 
       return {
         success: true,
@@ -318,5 +374,5 @@ export const joinActiveEvent = onCall(
         eventName,
       };
     });
-  }
+  },
 );

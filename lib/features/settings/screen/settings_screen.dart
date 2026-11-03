@@ -1,10 +1,7 @@
-// lib/features/settings/screen/settings_screen.dart
-
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_gate.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
-import 'package:events_app_trueattempt/features/certificates/screen/my_certificates_screen.dart';
 import 'package:events_app_trueattempt/features/connections/screen/connections_screen.dart';
 import 'package:events_app_trueattempt/features/privacy/screens/privacy_screen.dart';
 import 'package:events_app_trueattempt/features/settings/screen/about_event_screen.dart';
@@ -21,16 +18,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isLoggingOut = false;
-
-  bool _canSeeCertificates(String? role) {
-    final cleanRole = (role ?? '').trim().toLowerCase();
-
-    return cleanRole == 'attendee' ||
-        cleanRole == 'speaker' ||
-        cleanRole == 'moderator' ||
-        cleanRole == 'staff' ||
-        cleanRole == 'volunteer';
-  }
 
   bool _canSeeConnections(String? role) {
     final cleanRole = (role ?? '').trim().toLowerCase();
@@ -56,7 +43,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (_isLoggingOut) return;
 
     final confirmed = await _showLogoutDialog();
-
     if (confirmed != true || !mounted) return;
 
     setState(() {
@@ -117,12 +103,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               fontSize: 14,
             ),
           ),
-          actionsPadding: const EdgeInsets.fromLTRB(
-            16,
-            0,
-            16,
-            14,
-          ),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           actions: [
             TextButton(
               onPressed: () {
@@ -165,8 +146,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final userAsync = ref.watch(userAppProfileStreamProvider);
     final role = userAsync.asData?.value?.role;
-
-    final showCertificates = _canSeeCertificates(role);
     final showConnections = _canSeeConnections(role);
 
     return Scaffold(
@@ -182,21 +161,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: ListView(
                   physics: const BouncingScrollPhysics(),
                   children: [
-                    if (showCertificates)
-                      _SettingsTile(
-                        icon: Icons.workspace_premium_outlined,
-                        title: 'My Certificates',
-                        onTap: _isLoggingOut
-                            ? null
-                            : () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) =>
-                                        const MyCertificatesScreen(),
-                                  ),
-                                );
-                              },
-                      ),
                     if (showConnections)
                       _SettingsTile(
                         icon: Icons.people_outline_rounded,
@@ -206,8 +170,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             : () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute<void>(
-                                    builder: (_) =>
-                                        const ConnectionsScreen(),
+                                    builder: (_) => const ConnectionsScreen(),
                                   ),
                                 );
                               },
@@ -220,8 +183,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           : () {
                               Navigator.of(context).push(
                                 MaterialPageRoute<void>(
-                                  builder: (_) =>
-                                      const AboutEventScreen(),
+                                  builder: (_) => const AboutEventScreen(),
                                 ),
                               );
                             },
@@ -240,9 +202,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             },
                     ),
                     const SizedBox(height: 28),
-                    const _SectionLabel(
-                      title: 'Account',
-                    ),
+                    const _SectionLabel(title: 'Account'),
                     const SizedBox(height: 8),
                     _SettingsTile(
                       icon: Icons.delete_forever_outlined,
@@ -416,9 +376,7 @@ class _SettingsTile extends StatelessWidget {
             const SizedBox(width: 18),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -431,8 +389,7 @@ class _SettingsTile extends StatelessWidget {
                         fontWeight: FontWeight.w400,
                       ),
                     ),
-                    if (subtitle != null &&
-                        subtitle!.trim().isNotEmpty) ...[
+                    if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
                       const SizedBox(height: 3),
                       Text(
                         subtitle!,

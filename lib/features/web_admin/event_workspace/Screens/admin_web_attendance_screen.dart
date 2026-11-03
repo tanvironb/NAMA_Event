@@ -106,13 +106,14 @@ class _AdminWebAttendanceScreenState
           .where(
             (participant) =>
                 participant.isAttendee &&
-                participant.hasEventCheckIn,
+                participant.sessionsJoined.isNotEmpty,
           )
           .map(
             (participant) => {
               'userId': participant.userId,
               'userName': participant.name,
               'userEmail': participant.email,
+              'sessionsJoined': participant.sessionsJoined,
             },
           )
           .toList();
@@ -2602,6 +2603,33 @@ class _AttendanceReportRepository {
       participantsMap[item.userId] = item;
     }
 
+    // Include attendees who checked into a session but are missing from the
+    // users.eventIds query used above.
+    for (final attendeeId in sessionJoinedByUserId.keys) {
+      if (participantsMap.containsKey(attendeeId)) continue;
+
+      final userDocument = await _firestore
+          .collection('users')
+          .doc(attendeeId)
+          .get();
+
+      if (!userDocument.exists) continue;
+
+      final item = _participantFromUserDoc(
+        userDoc: userDocument,
+        eventCheckInsByUserId: eventCheckInsByUserId,
+        sessionJoinedByUserId: sessionJoinedByUserId,
+        assignedSessionsByUserId: assignedSessionsByUserId,
+        assignedRoleByUserId: assignedRoleByUserId,
+        generatedCertificatesByUserId:
+            generatedCertificatesByUserId,
+      );
+
+      if (item.isAttendee) {
+        participantsMap[item.userId] = item;
+      }
+    }
+
     final participants =
         participantsMap.values.toList()
           ..sort((a, b) {
@@ -2887,7 +2915,7 @@ class _ParticipantAttendanceItem {
       normalizedRole == 'staff';
 
   bool get isCertificateEligible {
-    return (isAttendee && hasEventCheckIn) ||
+    return (isAttendee && sessionsJoined.isNotEmpty) ||
         isSpeaker ||
         isModerator ||
         isStaff;

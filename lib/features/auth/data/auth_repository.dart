@@ -1,10 +1,9 @@
-// lib/features/auth/data/auth_repository.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
 import 'package:events_app_trueattempt/features/auth/data/account_deletion_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -19,6 +18,41 @@ class AuthRepository {
   AuthRepository(this._firebaseAuth, this._firestoreService);
 
   Stream<User?> get authStateChanges => _firebaseAuth.authStateChanges();
+
+  /// Records a sanitized, non-fatal authentication error in Crashlytics.
+  ///
+  /// The original error message is intentionally not included because it may
+  /// contain user-provided information.
+  Future<void> recordAuthFailure({
+    required String operation,
+    required Object error,
+    required StackTrace stackTrace,
+  }) async {
+    final errorCode = error is FirebaseAuthException
+        ? error.code
+        : error is FirebaseException
+            ? error.code
+            : error.runtimeType.toString();
+
+    try {
+      final crashlytics = FirebaseCrashlytics.instance;
+
+      await crashlytics.setCustomKey('auth_operation', operation);
+      await crashlytics.setCustomKey('auth_error_code', errorCode);
+
+      await crashlytics.recordError(
+        Exception('Authentication operation failed: $errorCode'),
+        stackTrace,
+        reason: 'Authentication operation: $operation',
+        fatal: false,
+      );
+    } catch (loggingError) {
+      debugPrint(
+        'AuthRepository: Crashlytics logging failed '
+        '(${loggingError.runtimeType}).',
+      );
+    }
+  }
 
   Future<UserCredential> signInWithEmailAndPassword(
     String email,
@@ -40,8 +74,7 @@ class AuthRepository {
       );
     }
 
-    // Refresh Firebase Auth so emailVerified is not read
-    // from stale cache.
+    // Refresh Firebase Auth so emailVerified is not read from stale cache.
     await signedInUser.reload();
 
     final refreshedUser = _firebaseAuth.currentUser;
@@ -64,7 +97,8 @@ class AuthRepository {
       );
     }
 
-    final userDoc = await _firestoreService.getUserDocument(refreshedUser.uid);
+    final userDoc =
+        await _firestoreService.getUserDocument(refreshedUser.uid);
 
     if (!userDoc.exists) {
       await _firebaseAuth.signOut();
@@ -97,17 +131,17 @@ class AuthRepository {
     String? name,
   }) async {
     try {
-      final userCredential = await _firebaseAuth.createUserWithEmailAndPassword(
+      final userCredential =
+          await _firebaseAuth.createUserWithEmailAndPassword(
         email: email.trim(),
         password: password,
       );
 
       final userData = <String, dynamic>{
         'email': email.trim(),
-        'name':
-            name?.trim().isNotEmpty == true
-                ? name!.trim()
-                : email.trim().split('@')[0],
+        'name': name?.trim().isNotEmpty == true
+            ? name!.trim()
+            : email.trim().split('@')[0],
         'role': 'attendee',
         'status': 'approved',
         // Event membership is added only by the event QR/code join flow.
@@ -229,7 +263,16 @@ class AuthRepository {
     final user = _firebaseAuth.currentUser;
 
     if (user != null && !user.emailVerified) {
-      await user.sendEmailVerification();
+      try {
+        await user.sendEmailVerification();
+      } catch (e, stackTrace) {
+        await recordAuthFailure(
+          operation: 'send_email_verification',
+          error: e,
+          stackTrace: stackTrace,
+        );
+        rethrow;
+      }
     }
   }
 

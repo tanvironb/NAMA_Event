@@ -64,6 +64,7 @@ dependencies:
 
   # Charts and analytics
   fl_chart: ^0.69.0
+  firebase_crashlytics: ^4.3.10
 
 dev_dependencies:
   flutter_test:

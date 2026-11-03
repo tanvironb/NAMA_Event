@@ -1,5 +1,3 @@
-// lib/features/home/screen/widgets/staff_home_dashboard.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:card_swiper/card_swiper.dart';
@@ -8,12 +6,13 @@ import 'package:intl/intl.dart';
 
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/core/constants/app_constants.dart';
-import 'package:events_app_trueattempt/features/home/screen/widgets/staff_quick_actions.dart';
-import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/common_widgets/home_certificate_shortcut.dart';
 import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
 import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
+import 'package:events_app_trueattempt/features/home/screen/widgets/staff_quick_actions.dart';
+import 'package:events_app_trueattempt/features/profile/screen/user_details_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
 import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 
@@ -103,7 +102,7 @@ class StaffHomeDashboard extends ConsumerWidget {
         final DateTime startDate = event.startDate;
         final DateTime endDate = event.endDate;
 
-        final bool sameDay = startDate.year == endDate.year &&
+        final sameDay = startDate.year == endDate.year &&
             startDate.month == endDate.month &&
             startDate.day == endDate.day;
 
@@ -111,13 +110,13 @@ class StaffHomeDashboard extends ConsumerWidget {
           return DateFormat('EEEE, MMM d, yyyy').format(startDate);
         }
 
-        final bool sameYear = startDate.year == endDate.year;
-
-        if (sameYear) {
-          return '${DateFormat('MMM d').format(startDate)} - ${DateFormat('MMM d, yyyy').format(endDate)}';
+        if (startDate.year == endDate.year) {
+          return '${DateFormat('MMM d').format(startDate)} - '
+              '${DateFormat('MMM d, yyyy').format(endDate)}';
         }
 
-        return '${DateFormat('MMM d, yyyy').format(startDate)} - ${DateFormat('MMM d, yyyy').format(endDate)}';
+        return '${DateFormat('MMM d, yyyy').format(startDate)} - '
+            '${DateFormat('MMM d, yyyy').format(endDate)}';
       },
       orElse: () => '',
     );
@@ -166,59 +165,64 @@ class StaffHomeDashboard extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 26),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: RichText(
-              text: TextSpan(
-                children: [
-                  const TextSpan(
-                    text: 'Hi, ',
-                    style: TextStyle(
-                      color: AppColors.namaNavyBlue,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.1,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    RichText(
+                      text: TextSpan(
+                        children: [
+                          const TextSpan(
+                            text: 'Hi, ',
+                            style: TextStyle(
+                              color: AppColors.namaNavyBlue,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '$userName!',
+                            style: const TextStyle(
+                              color: AppColors.namaGoldenYellow,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  TextSpan(
-                    text: '$userName!',
-                    style: const TextStyle(
-                      color: AppColors.namaGoldenYellow,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.1,
+                    const SizedBox(height: 8),
+                    Text(
+                      eventName,
+                      style: const TextStyle(
+                        color: _textMuted,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              eventName,
-              style: const TextStyle(
-                color: _textMuted,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          if (eventDate.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                eventDate,
-                style: const TextStyle(
-                  color: Color(0xFF9CA3AF),
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w400,
+                    if (eventDate.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        eventDate,
+                        style: const TextStyle(
+                          color: Color(0xFF9CA3AF),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 14),
+              const HomeCertificateShortcut(),
+            ],
+          ),
         ],
       ),
     );
@@ -288,7 +292,9 @@ class StaffHomeDashboard extends ConsumerWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => UserDetailsScreen(userId: speaker.uid),
+                      builder: (_) => UserDetailsScreen(
+                        userId: speaker.uid,
+                      ),
                     ),
                   );
                 },
@@ -417,14 +423,15 @@ class StaffHomeDashboard extends ConsumerWidget {
 
             for (final venueMap in venueMaps) {
               final venueTitle = venueMap.title.toString().trim();
-              final venueDescription = venueMap.description.toString().trim();
+              final venueDescription =
+                  venueMap.description.toString().trim();
 
               for (final rawImageUrl in venueMap.imageUrls) {
                 final imageUrl = rawImageUrl.toString().trim();
 
                 if (imageUrl.isEmpty) continue;
-
                 if (seenImageUrls.contains(imageUrl)) continue;
+
                 seenImageUrls.add(imageUrl);
 
                 allVenueImages.add({
@@ -473,7 +480,6 @@ class StaffHomeDashboard extends ConsumerWidget {
                   : null,
               itemBuilder: (context, index) {
                 final mapData = allVenueImages[index];
-
                 final imageUrl = mapData['url'].toString();
                 final title = mapData['title'].toString();
                 final description = mapData['description'].toString();
@@ -544,7 +550,8 @@ class StaffHomeDashboard extends ConsumerWidget {
                             right: 88,
                             bottom: 20,
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   title,
@@ -756,7 +763,9 @@ class StaffHomeDashboard extends ConsumerWidget {
                           child: SizedBox(
                             height: 18,
                             width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
                           ),
                         );
                       },

@@ -1,5 +1,3 @@
-// lib/features/messaging/screen/new_conversation_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
@@ -16,7 +14,8 @@ class NewConversationScreen extends ConsumerStatefulWidget {
       _NewConversationScreenState();
 }
 
-class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
+class _NewConversationScreenState
+    extends ConsumerState<NewConversationScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -206,7 +205,18 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final searchResultsAsync = ref.watch(userSearchProvider(_searchQuery));
+    final activeEventAsync = ref.watch(activeEventFutureProvider);
+    final eventId = activeEventAsync.asData?.value.id;
+
+    // Do not run a global search while the event is loading or unavailable.
+    final AsyncValue<List<AppUser>> searchResultsAsync = eventId == null
+        ? const AsyncValue<List<AppUser>>.data([])
+        : ref.watch(
+            userSearchProvider((
+              eventId: eventId,
+              query: _searchQuery,
+            )),
+          );
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -215,7 +225,6 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
           children: [
             _buildHeader(context),
             _buildSearchBar(),
-
             Expanded(
               child: searchResultsAsync.when(
                 data: (users) {
@@ -261,7 +270,10 @@ class _NewConversationScreenState extends ConsumerState<NewConversationScreen> {
     );
   }
 
-  void _startConversation(BuildContext context, AppUser otherUser) async {
+  void _startConversation(
+    BuildContext context,
+    AppUser otherUser,
+  ) async {
     final currentUserId = ref.read(firebaseAuthProvider).currentUser?.uid;
     if (currentUserId == null) return;
 

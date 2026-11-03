@@ -1,13 +1,13 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:events_app_trueattempt/features/privacy/screens/change_password_screen.dart';
-import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/core/models/app_user.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
+import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
 import 'package:events_app_trueattempt/features/auth/screen/blocked_screen.dart';
 import 'package:events_app_trueattempt/features/auth/screen/email_verification_screen.dart';
@@ -15,6 +15,7 @@ import 'package:events_app_trueattempt/features/auth/screen/login_screen.dart';
 import 'package:events_app_trueattempt/features/auth/screen/pending_approval_screen.dart';
 import 'package:events_app_trueattempt/features/event_join/screen/event_join_welcome_screen.dart';
 import 'package:events_app_trueattempt/features/main_hub/screen/main_hub_screen.dart';
+import 'package:events_app_trueattempt/features/profile/screen/edit_profile_screen.dart';
 
 class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});
@@ -30,20 +31,25 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   Future<User?>? _userFuture;
   Stream<DocumentSnapshot<Map<String, dynamic>>>? _profileStream;
   String? _lastAccessStatus;
-  Future<bool>? _admissionFuture;
+  Future<bool>? _eventMembershipFuture;
+
+  // Allows immediate routing to Home after the completion flag is saved.
+  bool _profileSetupCompletedThisLogin = false;
 
   void _clearCachedState() {
     _userId = null;
     _userFuture = null;
     _profileStream = null;
     _lastAccessStatus = null;
-    _admissionFuture = null;
+    _eventMembershipFuture = null;
   }
 
   void _prepareUser(User user) {
     if (_userId == user.uid && _userFuture != null) return;
 
+    _profileSetupCompletedThisLogin = false;
     _clearCachedState();
+
     _userId = user.uid;
     _userFuture = _reloadAndGetUser(user);
   }
@@ -58,19 +64,24 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   ) async* {
     // Keep verification synchronization, then listen for staff/admin changes.
     await _loadUserProfileAndSyncVerification(user);
+
     yield* _db.collection('users').doc(user.uid).snapshots();
   }
 
   void _reactToAccessStatus(String status) {
     if (_lastAccessStatus == status) return;
+
     _lastAccessStatus = status;
-    _admissionFuture = null;
+    _eventMembershipFuture = null;
+
     if (status == 'approved') return;
+
     NotificationHandler.setNavigationReady(false);
-    // A detail/chat route may be above AuthGate. Close those routes as well,
-    // otherwise the restricted user could keep interacting with that page.
+
+    // Close detail/chat routes above AuthGate if access has been restricted.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || _lastAccessStatus != status) return;
+
       NotificationHandler.navigatorKey.currentState?.popUntil(
         (route) => route.isFirst,
       );
@@ -79,6 +90,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
 
   Future<void> _signOut() async {
     await ref.read(authViewModelProvider.notifier).signOut();
+
     if (mounted) {
       setState(_clearCachedState);
     }
@@ -90,10 +102,13 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     } catch (error) {
       debugPrint('AuthGate reload user error: $error');
     }
+
     return FirebaseAuth.instance.currentUser;
   }
 
-  Future<DocumentSnapshot<Map<String, dynamic>>> _loadUserProfile(String uid) {
+  Future<DocumentSnapshot<Map<String, dynamic>>> _loadUserProfile(
+    String uid,
+  ) {
     return _db
         .collection('users')
         .doc(uid)
@@ -109,7 +124,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
   }
 
   Future<DocumentSnapshot<Map<String, dynamic>>>
-  _loadUserProfileAndSyncVerification(User user) async {
+      _loadUserProfileAndSyncVerification(User user) async {
     final profile = await _loadUserProfile(user.uid);
 
     // Do not create a missing profile during verification syncing.
@@ -121,13 +136,19 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         'emailVerifiedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+
       return _loadUserProfile(user.uid);
     }
 
     return profile;
   }
 
-  Future<bool> _hasVerifiedAdmission(
+  /// Returns true if the user has a registration for any active event
+  /// associated with their profile.
+  ///
+  /// Invitation and walk-in tracking is handled separately by staff. It must
+  /// not prevent a user who has joined the event from entering the app.
+  Future<bool> _hasJoinedActiveEvent(
     String uid,
     Map<String, dynamic> userData,
   ) async {
@@ -166,7 +187,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       final registration =
           await eventRef.collection('registrations').doc(uid).get();
 
-      if (registration.data()?['admissionVerified'] == true) {
+      // Membership is determined by the event registration existing.
+      // Staff admission tracking fields such as admissionVerified are
+      // deliberately not required here.
+      if (registration.exists) {
         return true;
       }
     }
@@ -174,7 +198,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     return false;
   }
 
-  Future<String> _joinEvent(String credential, {required bool fromQr}) async {
+  Future<String> _joinEvent(
+    String credential, {
+    required bool fromQr,
+  }) async {
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
@@ -193,6 +220,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       });
 
       final response = result.data;
+
       if (response is! Map) {
         throw Exception('Unable to confirm event admission. Please retry.');
       }
@@ -203,11 +231,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         throw Exception('Unable to confirm event admission. Please retry.');
       }
 
-      // The welcome screen first closes its scanner route, then invokes
-      // onEventJoined. Keep this gate unchanged until that callback.
       return eventId;
     } on FirebaseFunctionsException catch (error) {
       final message = error.message?.trim();
+
       throw Exception(
         message != null && message.isNotEmpty
             ? message
@@ -216,10 +243,13 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     }
   }
 
-  Future<void> _onEventJoined(BuildContext context, String eventId) async {
+  Future<void> _onEventJoined(
+    BuildContext context,
+    String eventId,
+  ) async {
     if (!mounted) return;
 
-    // Re-read the profile and server-written registration before routing.
+    // Reload the profile and registration written by the callable.
     setState(_clearCachedState);
   }
 
@@ -240,7 +270,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 60, color: Theme.of(context).colorScheme.error),
+              Icon(
+                icon,
+                size: 60,
+                color: Theme.of(context).colorScheme.error,
+              ),
               const SizedBox(height: 16),
               Text(
                 title,
@@ -255,10 +289,16 @@ class _AuthGateState extends ConsumerState<AuthGate> {
               ),
               const SizedBox(height: 20),
               if (allowRetry) ...[
-                ElevatedButton(onPressed: _retry, child: const Text('Retry')),
+                ElevatedButton(
+                  onPressed: _retry,
+                  child: const Text('Retry'),
+                ),
                 const SizedBox(height: 10),
               ],
-              TextButton(onPressed: _signOut, child: const Text('Sign Out')),
+              TextButton(
+                onPressed: _signOut,
+                child: const Text('Sign Out'),
+              ),
             ],
           ),
         ),
@@ -266,7 +306,11 @@ class _AuthGateState extends ConsumerState<AuthGate> {
     );
   }
 
-  Widget _approvedScreen(User user, Map<String, dynamic> userData) {
+  Widget _approvedScreen(
+    User user,
+    Map<String, dynamic> userData,
+    DocumentSnapshot<Map<String, dynamic>> profile,
+  ) {
     final role =
         (userData['role'] ?? 'attendee').toString().trim().toLowerCase();
 
@@ -274,13 +318,13 @@ class _AuthGateState extends ConsumerState<AuthGate> {
       return const MainHubScreen();
     }
 
-    _admissionFuture ??= _hasVerifiedAdmission(
+    _eventMembershipFuture ??= _hasJoinedActiveEvent(
       user.uid,
       userData,
     ).timeout(const Duration(seconds: 20));
 
     return FutureBuilder<bool>(
-      future: _admissionFuture,
+      future: _eventMembershipFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return _loading();
@@ -296,6 +340,51 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         }
 
         if (snapshot.data == true) {
+          final profileSetupCompleted =
+              userData['profileSetupCompleted'] == true;
+
+          if (!profileSetupCompleted &&
+              !_profileSetupCompletedThisLogin) {
+            return EditProfileScreen(
+              user: AppUser.fromFirestore(profile),
+              requiredForOnboarding: true,
+              onOnboardingComplete: () async {
+                try {
+                  await profile.reference.set(
+                    {
+                      'profileSetupCompleted': true,
+                      'profileSetupCompletedAt':
+                          FieldValue.serverTimestamp(),
+                      'updatedAt': FieldValue.serverTimestamp(),
+                    },
+                    SetOptions(merge: true),
+                  );
+
+                  if (!mounted) return;
+
+                  setState(() {
+                    _profileSetupCompletedThisLogin = true;
+                  });
+                } catch (error, stackTrace) {
+                  debugPrint(
+                    'AuthGate: Failed to save profile setup status: $error',
+                  );
+                  debugPrintStack(stackTrace: stackTrace);
+
+                  if (!mounted) return;
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Could not save profile setup. Please try again.',
+                      ),
+                    ),
+                  );
+                }
+              },
+            );
+          }
+
           return const MainHubScreen();
         }
 
@@ -339,7 +428,7 @@ class _AuthGateState extends ConsumerState<AuthGate> {
               // Allow a later rebuild after verification to reload the user.
               _userFuture = null;
               _profileStream = null;
-              _admissionFuture = null;
+              _eventMembershipFuture = null;
               return const EmailVerificationScreen();
             }
 
@@ -362,8 +451,10 @@ class _AuthGateState extends ConsumerState<AuthGate> {
                 }
 
                 final profile = profileSnapshot.data;
+
                 if (profile == null || !profile.exists) {
                   _reactToAccessStatus('missing');
+
                   return _messageScreen(
                     title: 'Profile Not Found',
                     message:
@@ -373,29 +464,27 @@ class _AuthGateState extends ConsumerState<AuthGate> {
                 }
 
                 final data = profile.data() ?? {};
-                final status =
-                    (data['status'] ?? 'pending')
-                        .toString()
-                        .trim()
-                        .toLowerCase();
+                final status = (data['status'] ?? 'pending')
+                    .toString()
+                    .trim()
+                    .toLowerCase();
+
                 _reactToAccessStatus(status);
 
                 switch (status) {
                   case 'approved':
-                    // Admin-created accounts must replace the emailed
-                    // temporary password before using the app.
-                    if (data['mustChangePassword'] == true) {
-                      return const ChangePasswordScreen(forced: true);
-                    }
-                    return _approvedScreen(refreshedUser, data);
+                    return _approvedScreen(refreshedUser, data, profile);
+
                   case 'blocked':
                     return const BlockedScreen();
+
                   case 'rejected':
                     return _messageScreen(
                       title: 'Access Denied',
                       message: 'Your account has been rejected.',
                       icon: Icons.block,
                     );
+
                   case 'pending':
                   default:
                     return const PendingApprovalScreen();
@@ -406,13 +495,12 @@ class _AuthGateState extends ConsumerState<AuthGate> {
         );
       },
       loading: _loading,
-      error:
-          (error, stack) => _messageScreen(
-            title: 'Authentication Error',
-            message: '$error',
-            icon: Icons.error_outline,
-            allowRetry: true,
-          ),
+      error: (error, stack) => _messageScreen(
+        title: 'Authentication Error',
+        message: '$error',
+        icon: Icons.error_outline,
+        allowRetry: true,
+      ),
     );
   }
 }

@@ -1,8 +1,10 @@
-// lib/features/web_admin/event_workspace/Screens/admin_web_users_screen.dart
+
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'package:flutter/material.dart';
+
+import 'admin_web_event_admissions_section.dart';
 
 import '../../admin_web_theme.dart';
 
@@ -95,62 +97,119 @@ class _AdminWebUsersScreenState extends State<AdminWebUsersScreen> {
   }
 
   Future<void> _confirmDeleteUserFromEvent({
+
     required String userId,
+
     required Map<String, dynamic> userData,
+
   }) async {
+
     final name = (userData['name'] ?? 'this user').toString();
+
     final email = (userData['email'] ?? '').toString();
+
     final confirmed = await showDialog<bool>(
+
       context: context,
+
       builder: (dialogContext) {
+
         return AlertDialog(
+
           title: const Text('Delete user'),
+
           content: Text(
+
             'Permanently delete $name${email.isNotEmpty ? ' ($email)' : ''} from Firebase? This deletes their sign-in account and profile, removes their event data, and anonymizes historical attendance and feedback.',
+
           ),
+
           actions: [
+
             TextButton(
+
               onPressed: () => Navigator.of(dialogContext).pop(false),
+
               child: const Text('Cancel'),
+
             ),
+
             FilledButton.icon(
+
               onPressed: () => Navigator.of(dialogContext).pop(true),
+
               icon: const Icon(Icons.delete_outline_rounded, size: 17),
+
               label: const Text('Delete'),
+
               style: FilledButton.styleFrom(
+
                 backgroundColor: Colors.redAccent,
+
                 foregroundColor: Colors.white,
+
               ),
+
             ),
+
           ],
+
         );
+
       },
+
     );
+
     if (confirmed != true) return;
+
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
+
       const SnackBar(content: Text('Deleting user...')),
+
     );
+
     try {
+
       await AdminUserDeleteService.permanentlyDeleteUser(
+
         userId: userId,
+
       );
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
+
         SnackBar(
+
           content: Text('$name was deleted from Firebase.'),
+
           backgroundColor: AdminWebTheme.success,
+
         ),
+
       );
+
     } catch (e) {
+
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
+
         SnackBar(
+
           content: Text('Failed to delete user: $e'),
+
           backgroundColor: Colors.redAccent,
+
         ),
+
       );
+
     }
+
   }
 
   @override
@@ -168,6 +227,10 @@ class _AdminWebUsersScreenState extends State<AdminWebUsersScreen> {
         children: [
 
           _PageHeader(eventName: widget.eventName),
+
+          const SizedBox(height: 20),
+
+          AdminWebEventAdmissionsSection(eventId: widget.eventId),
 
           const SizedBox(height: 20),
 
@@ -314,19 +377,33 @@ class _AdminWebUsersScreenState extends State<AdminWebUsersScreen> {
               }
 
               return _UsersTable(
+
                 users: filtered,
+
                 onEdit: (userId, userData) {
+
                   _openEditUserDialog(
+
                     userId: userId,
+
                     userData: userData,
+
                   );
+
                 },
+
                 onDelete: (userId, userData) {
+
                   _confirmDeleteUserFromEvent(
+
                     userId: userId,
+
                     userData: userData,
+
                   );
+
                 },
+
               );
 
             },
@@ -562,292 +639,579 @@ class _SearchBar extends StatelessWidget {
 }
 
 class _UsersTable extends StatelessWidget {
+
   final List<QueryDocumentSnapshot<Map<String, dynamic>>> users;
+
   final void Function(String userId, Map<String, dynamic> userData) onEdit;
+
   final void Function(String userId, Map<String, dynamic> userData) onDelete;
+
   const _UsersTable({
+
     required this.users,
+
     required this.onEdit,
+
     required this.onDelete,
+
   });
+
   @override
+
   Widget build(BuildContext context) {
+
     return Container(
+
       clipBehavior: Clip.antiAlias,
+
       decoration: BoxDecoration(
+
         color: Colors.white,
+
         borderRadius: BorderRadius.circular(13),
+
         border: Border.all(color: AdminWebTheme.border),
+
       ),
+
       child: LayoutBuilder(
+
         builder: (context, constraints) {
+
           if (constraints.maxWidth < 850) {
+
             return Column(
+
               children: users.map((user) {
+
                 return _MobileUserCard(
+
                   data: user.data(),
+
                   onEdit: () => onEdit(user.id, user.data()),
+
                   onDelete: () => onDelete(user.id, user.data()),
+
                 );
+
               }).toList(),
+
             );
+
           }
+
           return SingleChildScrollView(
+
             scrollDirection: Axis.horizontal,
+
             child: ConstrainedBox(
+
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
+
               child: DataTable(
+
                 headingRowColor: WidgetStateProperty.all(const Color(0xFFFAFBFD)),
+
                 headingRowHeight: 46,
+
                 dataRowMinHeight: 48,
+
                 dataRowMaxHeight: 54,
+
                 columnSpacing: 26,
+
                 horizontalMargin: 20,
+
                 headingTextStyle: const TextStyle(
+
                   color: AdminWebTheme.textSecondary,
+
                   fontSize: 10,
+
                   fontWeight: FontWeight.w700,
+
                   letterSpacing: 0.3,
+
                 ),
+
                 dataTextStyle: const TextStyle(
+
                   color: AdminWebTheme.textPrimary,
+
                   fontSize: 10.5,
+
                   fontWeight: FontWeight.w500,
+
                 ),
+
                 columns: const [
+
                   DataColumn(label: Text('USER')),
+
                   DataColumn(label: Text('COMPANY')),
+
                   DataColumn(label: Text('PHONE')),
+
                   DataColumn(label: Text('COUNTRY')),
+
                   DataColumn(label: Text('ROLE')),
+
                   DataColumn(label: Text('STATUS')),
+
                   DataColumn(label: Text('ACTIONS')),
+
                 ],
+
                 rows: users.map((user) {
+
                   final data = user.data();
+
                   final name = (data['name'] ?? 'Unnamed User').toString();
+
                   final email = (data['email'] ?? '').toString();
+
                   final company = (data['company'] ?? '—').toString();
+
                   final phone = (data['phone'] ?? '—').toString();
+
                   final country = (data['country'] ?? '—').toString();
+
                   final role = (data['role'] ?? 'attendee').toString();
+
                   final status = (data['status'] ?? 'approved').toString();
+
                   return DataRow(
+
                     cells: [
+
                       DataCell(
+
                         SizedBox(
+
                           width: 230,
+
                           child: Row(
+
                             children: [
+
                               _UserAvatar(
+
                                 imageUrl: (data['profileImageUrl'] ?? '').toString(),
+
                                 name: name,
+
                               ),
+
                               const SizedBox(width: 11),
+
                               Expanded(
+
                                 child: Column(
+
                                   mainAxisAlignment: MainAxisAlignment.center,
+
                                   crossAxisAlignment: CrossAxisAlignment.start,
+
                                   children: [
+
                                     Text(
+
                                       name,
+
                                       maxLines: 1,
+
                                       overflow: TextOverflow.ellipsis,
+
                                       style: const TextStyle(
+
                                         color: AdminWebTheme.textPrimary,
+
                                         fontSize: 11,
+
                                         fontWeight: FontWeight.w700,
+
                                       ),
+
                                     ),
+
                                     const SizedBox(height: 3),
+
                                     Text(
+
                                       email,
+
                                       maxLines: 1,
+
                                       overflow: TextOverflow.ellipsis,
+
                                       style: const TextStyle(
+
                                         color: AdminWebTheme.textSecondary,
+
                                         fontSize: 8.5,
+
                                       ),
+
                                     ),
+
                                   ],
+
                                 ),
+
                               ),
+
                             ],
+
                           ),
+
                         ),
+
                       ),
+
                       DataCell(
+
                         SizedBox(
+
                           width: 150,
+
                           child: Text(
+
                             company.isEmpty ? '—' : company,
+
                             maxLines: 2,
+
                             overflow: TextOverflow.ellipsis,
+
                           ),
+
                         ),
+
                       ),
+
                       DataCell(Text(phone.isEmpty ? '—' : phone)),
+
                       DataCell(Text(country.isEmpty ? '—' : country)),
+
                       DataCell(_RoleBadge(role: role)),
+
                       DataCell(
+
                         _StatusBadge(
+
                           active: status.toLowerCase() == 'approved',
+
                           activeText: 'Approved',
+
                           inactiveText: _capitalize(status),
+
                         ),
+
                       ),
+
                       DataCell(
+
                         _TableActions(
+
                           onEdit: () => onEdit(user.id, data),
+
                           onDelete: () => onDelete(user.id, data),
+
                         ),
+
                       ),
+
                     ],
+
                   );
+
                 }).toList(),
+
               ),
+
             ),
+
           );
+
         },
+
       ),
+
     );
+
   }
+
   static String _capitalize(String value) {
+
     if (value.isEmpty) return 'Unknown';
+
     return value[0].toUpperCase() + value.substring(1).toLowerCase();
+
   }
+
 }
+
 class _TableActions extends StatelessWidget {
+
   final VoidCallback onEdit;
+
   final VoidCallback onDelete;
+
   const _TableActions({
+
     required this.onEdit,
+
     required this.onDelete,
+
   });
+
   @override
+
   Widget build(BuildContext context) {
+
     return Row(
+
       mainAxisSize: MainAxisSize.min,
+
       children: [
+
         OutlinedButton.icon(
+
           onPressed: onEdit,
+
           icon: const Icon(Icons.edit_outlined, size: 17),
+
           label: const Text('Edit'),
+
           style: OutlinedButton.styleFrom(
+
             foregroundColor: AdminWebTheme.primary,
+
             side: const BorderSide(color: AdminWebTheme.border),
+
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+
             minimumSize: const Size(72, 34),
+
             textStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+
           ),
+
         ),
+
         const SizedBox(width: 6),
+
         IconButton(
+
           tooltip: 'Delete user',
+
           onPressed: onDelete,
+
           icon: const Icon(Icons.delete_outline_rounded, size: 18),
+
           color: AdminWebTheme.danger,
+
           visualDensity: VisualDensity.compact,
+
         ),
+
       ],
+
     );
+
   }
+
 }
+
 class _MobileUserCard extends StatelessWidget {
+
   final Map<String, dynamic> data;
+
   final VoidCallback onEdit;
+
   final VoidCallback onDelete;
+
   const _MobileUserCard({
+
     required this.data,
+
     required this.onEdit,
+
     required this.onDelete,
+
   });
+
   @override
+
   Widget build(BuildContext context) {
+
     final name = (data['name'] ?? 'Unnamed User').toString();
+
     final email = (data['email'] ?? '').toString();
+
     final company = (data['company'] ?? '').toString();
+
     final role = (data['role'] ?? 'attendee').toString();
+
     final status = (data['status'] ?? 'pending').toString();
+
     return Container(
+
       padding: const EdgeInsets.all(16),
+
       decoration: const BoxDecoration(
+
         border: Border(bottom: BorderSide(color: AdminWebTheme.border)),
+
       ),
+
       child: Column(
+
         children: [
+
           Row(
+
             children: [
+
               _UserAvatar(
+
                 imageUrl: (data['profileImageUrl'] ?? '').toString(),
+
                 name: name,
+
               ),
+
               const SizedBox(width: 12),
+
               Expanded(
+
                 child: Column(
+
                   crossAxisAlignment: CrossAxisAlignment.start,
+
                   children: [
+
                     Text(
+
                       name,
+
                       style: const TextStyle(
+
                         color: AdminWebTheme.textPrimary,
+
                         fontSize: 13,
+
                         fontWeight: FontWeight.w800,
+
                       ),
+
                     ),
+
                     const SizedBox(height: 3),
+
                     Text(
+
                       email,
+
                       style: const TextStyle(
+
                         color: AdminWebTheme.textSecondary,
+
                         fontSize: 10.5,
+
                       ),
+
                     ),
+
                   ],
+
                 ),
+
               ),
+
               IconButton(
+
                 tooltip: 'Edit user',
+
                 onPressed: onEdit,
+
                 icon: const Icon(Icons.edit_outlined, color: AdminWebTheme.primary),
+
               ),
+
               IconButton(
+
                 tooltip: 'Delete user',
+
                 onPressed: onDelete,
+
                 icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+
               ),
+
             ],
+
           ),
+
           const SizedBox(height: 12),
+
           Row(
+
             children: [
+
               Expanded(
+
                 child: _SmallInfo(
+
                   label: 'Company',
+
                   value: company.isEmpty ? '—' : company,
+
                 ),
+
               ),
+
               const SizedBox(width: 10),
+
               Expanded(
+
                 child: _SmallInfo(
+
                   label: 'Role',
+
                   value: role,
+
                 ),
+
               ),
+
               const SizedBox(width: 10),
+
               Expanded(
+
                 child: _SmallInfo(
+
                   label: 'Status',
+
                   value: status,
+
                 ),
+
               ),
+
             ],
+
           ),
+
         ],
+
       ),
+
     );
+
   }
+
 }
+
 class _EditUserDialog extends StatefulWidget {
 
   final String eventId;
@@ -1125,40 +1489,71 @@ class _EditUserDialogState extends State<_EditUserDialog> {
   }
 
   Future<void> _changeAccountStatus(String? value) async {
+
     if (value == null || value == _status || _saving || _statusSaving) return;
 
     final previous = _status;
+
     setState(() {
+
       _status = value;
+
       _statusSaving = true;
+
     });
 
     try {
+
       await FirebaseFirestore.instance
+
           .collection('users')
+
           .doc(widget.userId)
+
           .update({
+
             'status': value,
+
             'updatedAt': FieldValue.serverTimestamp(),
+
           });
+
       if (mounted) {
+
         ScaffoldMessenger.of(context).showSnackBar(
+
           const SnackBar(content: Text('Account status updated.')),
+
         );
+
       }
+
     } catch (error) {
+
       if (mounted) {
+
         setState(() => _status = previous);
+
         ScaffoldMessenger.of(context).showSnackBar(
+
           SnackBar(
+
             content: Text('Failed to update status: $error'),
+
             backgroundColor: Colors.redAccent,
+
           ),
+
         );
+
       }
+
     } finally {
+
       if (mounted) setState(() => _statusSaving = false);
+
     }
+
   }
 
   Future<bool> _confirmRoleChange() async {
@@ -1770,7 +2165,9 @@ class _EditUserDialogState extends State<_EditUserDialog> {
                         },
 
                         onChanged: _statusSaving || _saving
+
                             ? null
+
                             : _changeAccountStatus,
 
                       ),

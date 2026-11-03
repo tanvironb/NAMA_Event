@@ -1,4 +1,3 @@
-
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import 'meeting_locations_editor.dart';
+
 class AdminWebCreateEventScreen extends StatefulWidget {
   final String? eventId;
   final Map<String, dynamic>? existingEventData;
@@ -20,7 +21,8 @@ class AdminWebCreateEventScreen extends StatefulWidget {
     this.existingEventData,
   });
 
-  bool get isEditMode => eventId != null && existingEventData != null;
+  bool get isEditMode =>
+      eventId != null && existingEventData != null;
 
   @override
   State<AdminWebCreateEventScreen> createState() =>
@@ -31,21 +33,42 @@ class _AdminWebCreateEventScreenState
     extends State<AdminWebCreateEventScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _eventNameController = TextEditingController();
+  final TextEditingController _eventNameController =
+      TextEditingController();
+
   final TextEditingController _shortDescriptionController =
       TextEditingController();
-  final TextEditingController _aboutController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _addressController = TextEditingController();
-  final TextEditingController _cityController = TextEditingController();
-  final TextEditingController _countryController = TextEditingController();
-  final TextEditingController _onlineLinkController = TextEditingController();
+
+  final TextEditingController _aboutController =
+      TextEditingController();
+
+  final TextEditingController _locationController =
+      TextEditingController();
+
+  final TextEditingController _meetingLocationsController =
+      TextEditingController();
+
+  final TextEditingController _addressController =
+      TextEditingController();
+
+  final TextEditingController _cityController =
+      TextEditingController();
+
+  final TextEditingController _countryController =
+      TextEditingController();
+
+  final TextEditingController _onlineLinkController =
+      TextEditingController();
+
   final TextEditingController _registrationLimitController =
       TextEditingController();
+
   final TextEditingController _organizerNameController =
       TextEditingController();
+
   final TextEditingController _organizerEmailController =
       TextEditingController();
+
   final TextEditingController _organizerPhoneController =
       TextEditingController();
 
@@ -107,39 +130,69 @@ class _AdminWebCreateEventScreenState
 
     final data = widget.existingEventData!;
 
-    _eventNameController.text = (data['name'] ?? '').toString();
+    _meetingLocationsController.text =
+        MeetingLocationsEditor.readLocations(
+      data['meetingLocations'],
+    ).join('\n');
+
+    _eventNameController.text =
+        (data['name'] ?? '').toString();
+
     _shortDescriptionController.text =
         (data['description'] ?? '').toString();
+
     _aboutController.text =
         (data['aboutEvent'] ?? data['about'] ?? '').toString();
-    _locationController.text = (data['location'] ?? '').toString();
-    _addressController.text = (data['address'] ?? '').toString();
+
+    _locationController.text =
+        (data['location'] ?? '').toString();
+
+    _addressController.text =
+        (data['address'] ?? '').toString();
+
     _cityController.text = (data['city'] ?? '').toString();
-    _countryController.text = (data['country'] ?? '').toString();
+
+    _countryController.text =
+        (data['country'] ?? '').toString();
+
     _onlineLinkController.text =
         (data['onlineLink'] ?? data['website'] ?? '').toString();
+
     _organizerNameController.text =
         (data['organizerName'] ?? '').toString();
+
     _organizerEmailController.text =
-        (data['organizerContact'] ?? data['organizerEmail'] ?? '').toString();
+        (data['organizerContact'] ??
+                data['organizerEmail'] ??
+                '')
+            .toString();
+
     _organizerPhoneController.text =
         (data['organizerPhone'] ?? '').toString();
 
     final registrationLimit = data['registrationLimit'];
+
     if (registrationLimit != null) {
-      _registrationLimitController.text = registrationLimit.toString();
+      _registrationLimitController.text =
+          registrationLimit.toString();
     }
 
-    _selectedCategory = (data['category'] ?? '').toString().trim().isEmpty
-        ? null
-        : (data['category'] ?? '').toString();
+    _selectedCategory =
+        (data['category'] ?? '').toString().trim().isEmpty
+            ? null
+            : (data['category'] ?? '').toString();
 
-    _eventFormat = (data['eventFormat'] ?? 'In-person').toString();
+    _eventFormat =
+        (data['eventFormat'] ?? 'In-person').toString();
+
     _visibility = (data['visibility'] ?? 'Public').toString();
-    _timeZone = (data['timeZone'] ?? 'Asia/Kuala_Lumpur').toString();
+
+    _timeZone =
+        (data['timeZone'] ?? 'Asia/Kuala_Lumpur').toString();
 
     _registrationEnabled = data['allowRegistrations'] != false;
-    _approvalRequired = data['registrationApprovalRequired'] == true;
+    _approvalRequired =
+        data['registrationApprovalRequired'] == true;
     _allowCheckIns = data['allowCheckIns'] != false;
     _allowUploads = data['allowUploads'] != false;
 
@@ -150,16 +203,20 @@ class _AdminWebCreateEventScreenState
         .toString();
 
     final rawPartners = data['partners'];
+
     if (rawPartners is List) {
       for (final rawPartner in rawPartners) {
         if (rawPartner is Map) {
-          final partnerData = Map<String, dynamic>.from(rawPartner);
+          final partnerData =
+              Map<String, dynamic>.from(rawPartner);
+
           final name = (partnerData['name'] ??
                   partnerData['partnerName'] ??
                   partnerData['title'] ??
                   '')
               .toString()
               .trim();
+
           final logoUrl = (partnerData['logoUrl'] ??
                   partnerData['imageUrl'] ??
                   partnerData['logo'] ??
@@ -180,32 +237,56 @@ class _AdminWebCreateEventScreenState
         } else if (rawPartner != null &&
             rawPartner.toString().trim().isNotEmpty) {
           _partners.add(
-            _PartnerDraft(name: rawPartner.toString().trim()),
+            _PartnerDraft(
+              name: rawPartner.toString().trim(),
+            ),
           );
         }
       }
     }
 
     final startTimestamp = data['startDate'];
+
     if (startTimestamp is Timestamp) {
       final date = startTimestamp.toDate();
-      _startDate = DateTime(date.year, date.month, date.day);
-      _startTime = TimeOfDay(hour: date.hour, minute: date.minute);
+
+      _startDate = DateTime(
+        date.year,
+        date.month,
+        date.day,
+      );
+
+      _startTime = TimeOfDay(
+        hour: date.hour,
+        minute: date.minute,
+      );
     }
 
     final endTimestamp = data['endDate'];
+
     if (endTimestamp is Timestamp) {
       final date = endTimestamp.toDate();
-      _endDate = DateTime(date.year, date.month, date.day);
-      _endTime = TimeOfDay(hour: date.hour, minute: date.minute);
+
+      _endDate = DateTime(
+        date.year,
+        date.month,
+        date.day,
+      );
+
+      _endTime = TimeOfDay(
+        hour: date.hour,
+        minute: date.minute,
+      );
     }
 
     final registrationOpen = data['registrationOpenDate'];
+
     if (registrationOpen is Timestamp) {
       _registrationOpenDate = registrationOpen.toDate();
     }
 
     final registrationClose = data['registrationCloseDate'];
+
     if (registrationClose is Timestamp) {
       _registrationCloseDate = registrationClose.toDate();
     }
@@ -217,6 +298,7 @@ class _AdminWebCreateEventScreenState
     _shortDescriptionController.dispose();
     _aboutController.dispose();
     _locationController.dispose();
+    _meetingLocationsController.dispose();
     _addressController.dispose();
     _cityController.dispose();
     _countryController.dispose();
@@ -246,7 +328,10 @@ class _AdminWebCreateEventScreenState
         : slug;
   }
 
-  DateTime _combineDateAndTime(DateTime date, TimeOfDay time) {
+  DateTime _combineDateAndTime(
+    DateTime date,
+    TimeOfDay time,
+  ) {
     return DateTime(
       date.year,
       date.month,
@@ -298,7 +383,6 @@ class _AdminWebCreateEventScreenState
       _showMessage('Could not select the cover image: $error');
     }
   }
-
 
   void _addPartner() {
     setState(() {
@@ -381,7 +465,8 @@ class _AdminWebCreateEventScreenState
         storagePath =
             'events/$eventId/partners/${fileName}_${timestamp}.jpg';
 
-        final reference = FirebaseStorage.instance.ref(storagePath);
+        final reference =
+            FirebaseStorage.instance.ref(storagePath);
 
         await reference.putData(
           partner.selectedLogoBytes!,
@@ -431,53 +516,79 @@ class _AdminWebCreateEventScreenState
     return reference.getDownloadURL();
   }
 
-  Future<String?> _saveEvent({required bool asDraft}) async {
+  Future<String?> _saveEvent({
+    required bool asDraft,
+  }) async {
     FocusScope.of(context).unfocus();
 
-    if (!(_formKey.currentState?.validate() ?? false)) return null;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return null;
+    }
 
     if (_startDate == null || _startTime == null) {
-      _showMessage('Please select the event start date and time.');
+      _showMessage(
+        'Please select the event start date and time.',
+      );
       return null;
     }
 
     if (_endDate == null || _endTime == null) {
-      _showMessage('Please select the event end date and time.');
+      _showMessage(
+        'Please select the event end date and time.',
+      );
       return null;
     }
 
-    final startDate = _combineDateAndTime(_startDate!, _startTime!);
-    final endDate = _combineDateAndTime(_endDate!, _endTime!);
+    final startDate = _combineDateAndTime(
+      _startDate!,
+      _startTime!,
+    );
+
+    final endDate = _combineDateAndTime(
+      _endDate!,
+      _endTime!,
+    );
 
     if (!endDate.isAfter(startDate)) {
-      _showMessage('The end date and time must be after the start.');
+      _showMessage(
+        'The end date and time must be after the start.',
+      );
       return null;
     }
 
     if (_registrationOpenDate != null &&
         _registrationCloseDate != null &&
-        _registrationCloseDate!.isBefore(_registrationOpenDate!)) {
+        _registrationCloseDate!.isBefore(
+          _registrationOpenDate!,
+        )) {
       _showMessage(
         'The registration closing date must be after the opening date.',
       );
       return null;
     }
 
-    setState(() => _isSaving = true);
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
       final eventName = _eventNameController.text.trim();
-      final eventId =
-          widget.isEditMode ? widget.eventId! : _makeSlug(eventName);
 
-      final reference =
-          FirebaseFirestore.instance.collection('events').doc(eventId);
+      final eventId = widget.isEditMode
+          ? widget.eventId!
+          : _makeSlug(eventName);
+
+      final reference = FirebaseFirestore.instance
+          .collection('events')
+          .doc(eventId);
 
       if (!widget.isEditMode) {
         final existing = await reference.get();
+
         if (existing.exists) {
           _showMessage(
-            'An event with this name already exists. Please use another name.',
+            'An event with this name already exists. '
+            'Please use another name.',
           );
           return null;
         }
@@ -494,6 +605,12 @@ class _AdminWebCreateEventScreenState
         'endDate': Timestamp.fromDate(endDate),
         'timeZone': _timeZone,
         'location': _locationController.text.trim(),
+
+        // Suggested locations used by the meeting-request dropdown.
+        'meetingLocations': MeetingLocationsEditor.readLocations(
+          _meetingLocationsController.text,
+        ),
+
         'address': _addressController.text.trim(),
         'city': _cityController.text.trim(),
         'country': _countryController.text.trim(),
@@ -502,8 +619,9 @@ class _AdminWebCreateEventScreenState
         'category': _selectedCategory ?? '',
         'eventFormat': _eventFormat,
         'visibility': _visibility,
-        'registrationLimit':
-            int.tryParse(_registrationLimitController.text.trim()),
+        'registrationLimit': int.tryParse(
+          _registrationLimitController.text.trim(),
+        ),
         'registrationOpenDate': _registrationOpenDate == null
             ? null
             : Timestamp.fromDate(_registrationOpenDate!),
@@ -523,7 +641,8 @@ class _AdminWebCreateEventScreenState
         'partners': partners,
         'partnerCount': partners.length,
         'isActive': widget.existingEventData?['isActive'] ?? false,
-        'isArchived': widget.existingEventData?['isArchived'] ?? false,
+        'isArchived':
+            widget.existingEventData?['isArchived'] ?? false,
         'status': asDraft
             ? 'draft'
             : widget.existingEventData?['status'] == 'archived'
@@ -533,7 +652,10 @@ class _AdminWebCreateEventScreenState
       };
 
       if (widget.isEditMode) {
-        await reference.set(eventData, SetOptions(merge: true));
+        await reference.set(
+          eventData,
+          SetOptions(merge: true),
+        );
       } else {
         await reference.set({
           ...eventData,
@@ -547,13 +669,16 @@ class _AdminWebCreateEventScreenState
       return null;
     } finally {
       if (mounted) {
-        setState(() => _isSaving = false);
+        setState(() {
+          _isSaving = false;
+        });
       }
     }
   }
 
   Future<void> _saveDraft() async {
     final eventId = await _saveEvent(asDraft: true);
+
     if (eventId == null || !mounted) return;
 
     _showMessage(
@@ -567,6 +692,7 @@ class _AdminWebCreateEventScreenState
 
   Future<void> _saveAndContinue() async {
     final eventId = await _saveEvent(asDraft: false);
+
     if (eventId == null || !mounted) return;
 
     final eventName = _eventNameController.text.trim();
@@ -605,30 +731,45 @@ class _AdminWebCreateEventScreenState
               SizedBox(width: 10),
               Text(
                 'Event Created',
-                style: TextStyle(fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ],
           ),
           content: const SizedBox(
             width: 480,
             child: Text(
-              'The event has been saved. Speakers and moderators can now be assigned from their dedicated pages. Choose the next setup step.',
+              'The event has been saved. Speakers and moderators '
+              'can now be assigned from their dedicated pages. '
+              'Choose the next setup step.',
               style: TextStyle(
                 color: AdminWebTheme.textSecondary,
                 height: 1.45,
               ),
             ),
           ),
-          actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          actionsPadding: const EdgeInsets.fromLTRB(
+            20,
+            0,
+            20,
+            20,
+          ),
           actions: [
             OutlinedButton(
-              onPressed: () => Navigator.of(dialogContext)
-                  .pop(_NextEventAction.backToEvents),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(
+                  _NextEventAction.backToEvents,
+                );
+              },
               child: const Text('Back to Events'),
             ),
             ElevatedButton.icon(
-              onPressed: () => Navigator.of(dialogContext)
-                  .pop(_NextEventAction.createSession),
+              onPressed: () {
+                Navigator.of(dialogContext).pop(
+                  _NextEventAction.createSession,
+                );
+              },
               icon: const Icon(Icons.add_rounded),
               label: const Text('Create First Session'),
             ),
@@ -683,10 +824,17 @@ class _AdminWebCreateEventScreenState
             ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                padding: const EdgeInsets.fromLTRB(
+                  24,
+                  24,
+                  24,
+                  40,
+                ),
                 child: Center(
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 1220),
+                    constraints: const BoxConstraints(
+                      maxWidth: 1220,
+                    ),
                     child: Form(
                       key: _formKey,
                       child: Column(
@@ -742,13 +890,14 @@ class _AdminWebCreateEventScreenState
                                     items: _categories,
                                     itemLabel: (item) => item,
                                     onChanged: (value) {
-                                      setState(
-                                        () => _selectedCategory = value,
-                                      );
+                                      setState(() {
+                                        _selectedCategory = value;
+                                      });
                                     },
                                   ),
                                   right: _CoverImagePicker(
-                                    selectedBytes: _selectedCoverBytes,
+                                    selectedBytes:
+                                        _selectedCoverBytes,
                                     existingUrl: _existingCoverUrl,
                                     onPick: _pickCoverImage,
                                   ),
@@ -768,26 +917,40 @@ class _AdminWebCreateEventScreenState
                                   _ResponsiveTwoColumns(
                                     left: _PickerField(
                                       label: 'Start Date',
-                                      value: _formatDate(_startDate),
+                                      value:
+                                          _formatDate(_startDate),
                                       icon:
                                           Icons.calendar_today_outlined,
                                       onTap: () async {
-                                        final value = await _pickDate(
+                                        final value =
+                                            await _pickDate(
                                           _startDate,
                                         );
+
                                         if (value == null) return;
-                                        setState(() => _startDate = value);
+
+                                        setState(() {
+                                          _startDate = value;
+                                        });
                                       },
                                     ),
                                     right: _PickerField(
                                       label: 'Start Time',
-                                      value: _formatTime(_startTime),
-                                      icon: Icons.access_time_rounded,
+                                      value:
+                                          _formatTime(_startTime),
+                                      icon:
+                                          Icons.access_time_rounded,
                                       onTap: () async {
                                         final value =
-                                            await _pickTime(_startTime);
+                                            await _pickTime(
+                                          _startTime,
+                                        );
+
                                         if (value == null) return;
-                                        setState(() => _startTime = value);
+
+                                        setState(() {
+                                          _startTime = value;
+                                        });
                                       },
                                     ),
                                   ),
@@ -799,39 +962,54 @@ class _AdminWebCreateEventScreenState
                                       icon:
                                           Icons.event_available_outlined,
                                       onTap: () async {
-                                        final value = await _pickDate(
+                                        final value =
+                                            await _pickDate(
                                           _endDate,
-                                          firstDate: _startDate,
                                         );
+
                                         if (value == null) return;
-                                        setState(() => _endDate = value);
+
+                                        setState(() {
+                                          _endDate = value;
+                                        });
                                       },
                                     ),
                                     right: _PickerField(
                                       label: 'End Time',
                                       value: _formatTime(_endTime),
-                                      icon: Icons.access_time_rounded,
+                                      icon:
+                                          Icons.access_time_rounded,
                                       onTap: () async {
                                         final value =
-                                            await _pickTime(_endTime);
+                                            await _pickTime(
+                                          _endTime,
+                                        );
+
                                         if (value == null) return;
-                                        setState(() => _endTime = value);
+
+                                        setState(() {
+                                          _endTime = value;
+                                        });
                                       },
                                     ),
                                   ),
                                   const SizedBox(height: 16),
                                   _WebDropdownField<String>(
                                     label: 'Time Zone',
-                                    value: _timeZones.contains(_timeZone)
-                                        ? _timeZone
-                                        : _timeZones.first,
+                                    value:
+                                        _timeZones.contains(_timeZone)
+                                            ? _timeZone
+                                            : _timeZones.first,
                                     hint: 'Select time zone',
                                     icon: Icons.public_rounded,
                                     items: _timeZones,
                                     itemLabel: (item) => item,
                                     onChanged: (value) {
                                       if (value == null) return;
-                                      setState(() => _timeZone = value);
+
+                                      setState(() {
+                                        _timeZone = value;
+                                      });
                                     },
                                   ),
                                 ],
@@ -853,15 +1031,19 @@ class _AdminWebCreateEventScreenState
                                       'Hybrid',
                                     ],
                                     onSelected: (value) {
-                                      setState(() => _eventFormat = value);
+                                      setState(() {
+                                        _eventFormat = value;
+                                      });
                                     },
                                   ),
                                   const SizedBox(height: 16),
                                   _WebTextField(
                                     label: 'Venue / Location',
                                     controller: _locationController,
-                                    hint: 'Enter venue or platform name',
-                                    icon: Icons.location_on_outlined,
+                                    hint:
+                                        'Enter venue or platform name',
+                                    icon:
+                                        Icons.location_on_outlined,
                                     validator: _requiredValidator(
                                       'Location is required.',
                                     ),
@@ -879,20 +1061,25 @@ class _AdminWebCreateEventScreenState
                                       label: 'City',
                                       controller: _cityController,
                                       hint: 'City',
-                                      icon: Icons.location_city_outlined,
+                                      icon:
+                                          Icons.location_city_outlined,
                                     ),
                                     right: _WebTextField(
                                       label: 'Country',
-                                      controller: _countryController,
+                                      controller:
+                                          _countryController,
                                       hint: 'Country',
                                       icon: Icons.flag_outlined,
                                     ),
                                   ),
-                                  if (_eventFormat != 'In-person') ...[
+                                  if (_eventFormat !=
+                                      'In-person') ...[
                                     const SizedBox(height: 16),
                                     _WebTextField(
-                                      label: 'Online / Livestream Link',
-                                      controller: _onlineLinkController,
+                                      label:
+                                          'Online / Livestream Link',
+                                      controller:
+                                          _onlineLinkController,
                                       hint: 'https://',
                                       icon: Icons.link_rounded,
                                     ),
@@ -901,6 +1088,21 @@ class _AdminWebCreateEventScreenState
                               ),
                             ),
                           ),
+
+                          // Suggested meeting locations.
+                          const SizedBox(height: 18),
+                          _WebSectionCard(
+                            title: 'Meeting Locations',
+                            subtitle:
+                                'Add suggested locations for meeting requests.',
+                            icon: Icons.place_outlined,
+                            child: MeetingLocationsEditor(
+                              controller:
+                                  _meetingLocationsController,
+                              enabled: !_isSaving,
+                            ),
+                          ),
+
                           const SizedBox(height: 18),
                           _ResponsiveTwoColumns(
                             left: _WebSectionCard(
@@ -916,9 +1118,10 @@ class _AdminWebCreateEventScreenState
                                         'Allow users to register for this event.',
                                     value: _registrationEnabled,
                                     onChanged: (value) {
-                                      setState(
-                                        () => _registrationEnabled = value,
-                                      );
+                                      setState(() {
+                                        _registrationEnabled =
+                                            value;
+                                      });
                                     },
                                   ),
                                   const SizedBox(height: 12),
@@ -927,23 +1130,26 @@ class _AdminWebCreateEventScreenState
                                     subtitle:
                                         'Admin approval is required before registration is accepted.',
                                     value: _approvalRequired,
-                                    onChanged: _registrationEnabled
-                                        ? (value) {
-                                            setState(
-                                              () =>
-                                                  _approvalRequired = value,
-                                            );
-                                          }
-                                        : null,
+                                    onChanged:
+                                        _registrationEnabled
+                                            ? (value) {
+                                                setState(() {
+                                                  _approvalRequired =
+                                                      value;
+                                                });
+                                              }
+                                            : null,
                                   ),
                                   const SizedBox(height: 16),
                                   _WebTextField(
                                     label: 'Registration Limit',
                                     controller:
                                         _registrationLimitController,
-                                    hint: 'Leave blank for unlimited',
+                                    hint:
+                                        'Leave blank for unlimited',
                                     icon: Icons.groups_outlined,
-                                    keyboardType: TextInputType.number,
+                                    keyboardType:
+                                        TextInputType.number,
                                     inputFormatters: [
                                       FilteringTextInputFormatter
                                           .digitsOnly,
@@ -959,16 +1165,20 @@ class _AdminWebCreateEventScreenState
                                       ),
                                       icon:
                                           Icons.event_available_outlined,
-                                      enabled: _registrationEnabled,
+                                      enabled:
+                                          _registrationEnabled,
                                       onTap: () async {
-                                        final value = await _pickDate(
+                                        final value =
+                                            await _pickDate(
                                           _registrationOpenDate,
                                         );
+
                                         if (value == null) return;
-                                        setState(
-                                          () =>
-                                              _registrationOpenDate = value,
-                                        );
+
+                                        setState(() {
+                                          _registrationOpenDate =
+                                              value;
+                                        });
                                       },
                                     ),
                                     right: _PickerField(
@@ -978,18 +1188,22 @@ class _AdminWebCreateEventScreenState
                                       ),
                                       icon:
                                           Icons.event_busy_outlined,
-                                      enabled: _registrationEnabled,
+                                      enabled:
+                                          _registrationEnabled,
                                       onTap: () async {
-                                        final value = await _pickDate(
+                                        final value =
+                                            await _pickDate(
                                           _registrationCloseDate,
                                           firstDate:
                                               _registrationOpenDate,
                                         );
+
                                         if (value == null) return;
-                                        setState(
-                                          () =>
-                                              _registrationCloseDate = value,
-                                        );
+
+                                        setState(() {
+                                          _registrationCloseDate =
+                                              value;
+                                        });
                                       },
                                     ),
                                   ),
@@ -1000,14 +1214,16 @@ class _AdminWebCreateEventScreenState
                               title: 'Organizer & Access',
                               subtitle:
                                   'Add contact information and operational settings.',
-                              icon: Icons.admin_panel_settings_rounded,
+                              icon:
+                                  Icons.admin_panel_settings_rounded,
                               child: Column(
                                 children: [
                                   _WebTextField(
                                     label: 'Organizer Name',
                                     controller:
                                         _organizerNameController,
-                                    hint: 'Organizer or department',
+                                    hint:
+                                        'Organizer or department',
                                     icon: Icons.business_outlined,
                                   ),
                                   const SizedBox(height: 16),
@@ -1019,7 +1235,8 @@ class _AdminWebCreateEventScreenState
                                     icon: Icons.email_outlined,
                                     keyboardType:
                                         TextInputType.emailAddress,
-                                    validator: _optionalEmailValidator,
+                                    validator:
+                                        _optionalEmailValidator,
                                   ),
                                   const SizedBox(height: 16),
                                   _WebTextField(
@@ -1028,15 +1245,21 @@ class _AdminWebCreateEventScreenState
                                         _organizerPhoneController,
                                     hint: 'Phone number',
                                     icon: Icons.phone_outlined,
-                                    keyboardType: TextInputType.phone,
+                                    keyboardType:
+                                        TextInputType.phone,
                                   ),
                                   const SizedBox(height: 16),
                                   _WebChoiceChips(
                                     label: 'Visibility',
                                     selected: _visibility,
-                                    options: const ['Public', 'Private'],
+                                    options: const [
+                                      'Public',
+                                      'Private',
+                                    ],
                                     onSelected: (value) {
-                                      setState(() => _visibility = value);
+                                      setState(() {
+                                        _visibility = value;
+                                      });
                                     },
                                   ),
                                   const SizedBox(height: 16),
@@ -1046,9 +1269,9 @@ class _AdminWebCreateEventScreenState
                                         'Enable event and session attendance check-ins.',
                                     value: _allowCheckIns,
                                     onChanged: (value) {
-                                      setState(
-                                        () => _allowCheckIns = value,
-                                      );
+                                      setState(() {
+                                        _allowCheckIns = value;
+                                      });
                                     },
                                   ),
                                   const SizedBox(height: 12),
@@ -1058,9 +1281,9 @@ class _AdminWebCreateEventScreenState
                                         'Allow event photo and related uploads.',
                                     value: _allowUploads,
                                     onChanged: (value) {
-                                      setState(
-                                        () => _allowUploads = value,
-                                      );
+                                      setState(() {
+                                        _allowUploads = value;
+                                      });
                                     },
                                   ),
                                 ],
@@ -1086,7 +1309,9 @@ class _AdminWebCreateEventScreenState
                           _BottomActions(
                             isEditMode: widget.isEditMode,
                             isSaving: _isSaving,
-                            onCancel: () => Navigator.of(context).pop(),
+                            onCancel: () {
+                              Navigator.of(context).pop();
+                            },
                             onSaveDraft: _saveDraft,
                             onSave: _saveAndContinue,
                           ),
@@ -1103,18 +1328,27 @@ class _AdminWebCreateEventScreenState
     );
   }
 
-  FormFieldValidator<String> _requiredValidator(String message) {
+  FormFieldValidator<String> _requiredValidator(
+    String message,
+  ) {
     return (value) {
-      if (value == null || value.trim().isEmpty) return message;
+      if (value == null || value.trim().isEmpty) {
+        return message;
+      }
+
       return null;
     };
   }
 
   String? _optionalEmailValidator(String? value) {
     final email = value?.trim() ?? '';
+
     if (email.isEmpty) return null;
 
-    final expression = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
+    final expression = RegExp(
+      r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+    );
+
     return expression.hasMatch(email)
         ? null
         : 'Enter a valid email address.';
@@ -1122,23 +1356,29 @@ class _AdminWebCreateEventScreenState
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'Select date';
+
     return DateFormat('MMM d, yyyy').format(date);
   }
 
   String _formatTime(TimeOfDay? time) {
     if (time == null) return 'Select time';
 
-    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final hour = time.hourOfPeriod == 0
+        ? 12
+        : time.hourOfPeriod;
+
     final minute = time.minute.toString().padLeft(2, '0');
-    final suffix = time.period == DayPeriod.am ? 'AM' : 'PM';
+
+    final suffix =
+        time.period == DayPeriod.am ? 'AM' : 'PM';
 
     return '$hour:$minute $suffix';
   }
 }
 
-
 class _PartnerDraft {
   final TextEditingController nameController;
+
   Uint8List? selectedLogoBytes;
   String existingLogoUrl;
   String existingStoragePath;
@@ -1182,7 +1422,9 @@ class _PartnersEditor extends StatelessWidget {
             decoration: BoxDecoration(
               color: const Color(0xFFFAFBFD),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AdminWebTheme.border),
+              border: Border.all(
+                color: AdminWebTheme.border,
+              ),
             ),
             child: const Column(
               children: [
@@ -1202,7 +1444,8 @@ class _PartnersEditor extends StatelessWidget {
                 ),
                 SizedBox(height: 5),
                 Text(
-                  'Add partner organizations and their logos. They will be saved with this event.',
+                  'Add partner organizations and their logos. '
+                  'They will be saved with this event.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AdminWebTheme.textSecondary,
@@ -1218,7 +1461,8 @@ class _PartnersEditor extends StatelessWidget {
             partners.length,
             (index) => Padding(
               padding: EdgeInsets.only(
-                bottom: index == partners.length - 1 ? 0 : 14,
+                bottom:
+                    index == partners.length - 1 ? 0 : 14,
               ),
               child: _PartnerEditorCard(
                 index: index,
@@ -1263,7 +1507,9 @@ class _PartnerEditorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFFFAFBFD),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AdminWebTheme.border),
+        border: Border.all(
+          color: AdminWebTheme.border,
+        ),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -1374,7 +1620,9 @@ class _PartnerLogoPicker extends StatelessWidget {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AdminWebTheme.border),
+            border: Border.all(
+              color: AdminWebTheme.border,
+            ),
           ),
           child: Stack(
             children: [
@@ -1456,11 +1704,15 @@ class _PageHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       height: 82,
-      padding: const EdgeInsets.symmetric(horizontal: 28),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 28,
+      ),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(
-          bottom: BorderSide(color: AdminWebTheme.border),
+          bottom: BorderSide(
+            color: AdminWebTheme.border,
+          ),
         ),
       ),
       child: Row(
@@ -1468,7 +1720,9 @@ class _PageHeader extends StatelessWidget {
           IconButton(
             tooltip: 'Back',
             onPressed: isSaving ? null : onBack,
-            icon: const Icon(Icons.arrow_back_rounded),
+            icon: const Icon(
+              Icons.arrow_back_rounded,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1549,7 +1803,9 @@ class _WebSectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AdminWebTheme.border),
+        border: Border.all(
+          color: AdminWebTheme.border,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1560,7 +1816,9 @@ class _WebSectionCard extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: AdminWebTheme.primary.withOpacity(0.08),
+                  color: AdminWebTheme.primary.withOpacity(
+                    0.08,
+                  ),
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: Icon(
@@ -1675,7 +1933,8 @@ class _WebTextField extends StatelessWidget {
         validator: validator,
         decoration: InputDecoration(
           hintText: hint,
-          prefixIcon: maxLines == 1 ? Icon(icon, size: 19) : null,
+          prefixIcon:
+              maxLines == 1 ? Icon(icon, size: 19) : null,
           alignLabelWithHint: maxLines > 1,
         ),
       ),
@@ -1713,14 +1972,12 @@ class _WebDropdownField<T> extends StatelessWidget {
           prefixIcon: Icon(icon, size: 19),
         ),
         hint: Text(hint),
-        items: items
-            .map(
-              (item) => DropdownMenuItem<T>(
-                value: item,
-                child: Text(itemLabel(item)),
-              ),
-            )
-            .toList(),
+        items: items.map((item) {
+          return DropdownMenuItem<T>(
+            value: item,
+            child: Text(itemLabel(item)),
+          );
+        }).toList(),
         onChanged: onChanged,
       ),
     );
@@ -1751,11 +2008,17 @@ class _PickerField extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: Container(
           height: 51,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+          ),
           decoration: BoxDecoration(
-            color: enabled ? Colors.white : const Color(0xFFF3F4F6),
+            color: enabled
+                ? Colors.white
+                : const Color(0xFFF3F4F6),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AdminWebTheme.border),
+            border: Border.all(
+              color: AdminWebTheme.border,
+            ),
           ),
           child: Row(
             children: [
@@ -1848,7 +2111,8 @@ class _CoverImagePicker extends StatelessWidget {
         fit: BoxFit.cover,
         width: double.infinity,
         height: double.infinity,
-        errorBuilder: (_, __, ___) => const _CoverPlaceholder(),
+        errorBuilder: (_, __, ___) =>
+            const _CoverPlaceholder(),
       );
     } else {
       preview = const _CoverPlaceholder();
@@ -1866,7 +2130,9 @@ class _CoverImagePicker extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFFF8FAFD),
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AdminWebTheme.border),
+            border: Border.all(
+              color: AdminWebTheme.border,
+            ),
           ),
           child: Stack(
             fit: StackFit.expand,
@@ -1877,7 +2143,10 @@ class _CoverImagePicker extends StatelessWidget {
                 bottom: 10,
                 child: ElevatedButton.icon(
                   onPressed: onPick,
-                  icon: const Icon(Icons.upload_rounded, size: 17),
+                  icon: const Icon(
+                    Icons.upload_rounded,
+                    size: 17,
+                  ),
                   label: const Text('Choose Image'),
                 ),
               ),
@@ -1942,7 +2211,8 @@ class _WebChoiceChips extends StatelessWidget {
             label: Text(option),
             selected: isSelected,
             onSelected: (_) => onSelected(option),
-            selectedColor: AdminWebTheme.primary.withOpacity(0.12),
+            selectedColor:
+                AdminWebTheme.primary.withOpacity(0.12),
             side: BorderSide(
               color: isSelected
                   ? AdminWebTheme.primary
@@ -1952,8 +2222,9 @@ class _WebChoiceChips extends StatelessWidget {
               color: isSelected
                   ? AdminWebTheme.primary
                   : AdminWebTheme.textSecondary,
-              fontWeight:
-                  isSelected ? FontWeight.w700 : FontWeight.w500,
+              fontWeight: isSelected
+                  ? FontWeight.w700
+                  : FontWeight.w500,
             ),
           );
         }).toList(),
@@ -1978,11 +2249,18 @@ class _WebSwitchTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      padding: const EdgeInsets.fromLTRB(
+        14,
+        10,
+        8,
+        10,
+      ),
       decoration: BoxDecoration(
         color: const Color(0xFFFAFBFD),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AdminWebTheme.border),
+        border: Border.all(
+          color: AdminWebTheme.border,
+        ),
       ),
       child: Row(
         children: [
@@ -2042,7 +2320,10 @@ class _NextStepsNotice extends StatelessWidget {
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              'After creating the event, create its first session or return to the Events page. Speakers and moderators are managed separately and remain restricted to the events assigned to them.',
+              'After creating the event, create its first session '
+              'or return to the Events page. Speakers and moderators '
+              'are managed separately and remain restricted to the '
+              'events assigned to them.',
               style: TextStyle(
                 color: AdminWebTheme.textSecondary,
                 fontSize: 11,

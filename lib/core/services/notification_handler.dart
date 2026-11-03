@@ -1,295 +1,408 @@
-import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
-import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
-import 'package:events_app_trueattempt/features/meetings/screen/my_meetings_screen.dart';
-import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
-import 'package:events_app_trueattempt/core/models/session_model.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+
 import 'package:events_app_trueattempt/config/app_colors.dart';
 import 'package:events_app_trueattempt/core/models/notification_model.dart';
-import 'package:events_app_trueattempt/features/notifications/screen/widgets/notification_detail_view.dart';
+import 'package:events_app_trueattempt/core/models/session_model.dart';
+import 'package:events_app_trueattempt/features/chat/screen/session_chat_screen.dart';
+import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
+import 'package:events_app_trueattempt/features/messaging/screen/direct_message_screen.dart';
+import 'package:events_app_trueattempt/features/notifications/screen/notification_detail_screen.dart';
 
-/// Centralized notification handler for all app notifications
-/// Handles deep linking and navigation based on notification type
 class NotificationHandler {
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
+
   static bool _navigationReady = false;
   static RemoteMessage? _pendingMessage;
 
+  static String? get _currentUserId =>
+      FirebaseAuth.instance.currentUser?.uid;
+
   static void setNavigationReady(bool ready) {
     _navigationReady = ready;
-    if (!ready) return;
-    final message = _pendingMessage;
-    if (message == null) return;
+
+    if (!ready || _pendingMessage == null) return;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_navigationReady || navigatorKey.currentContext == null) return;
+      if (!_navigationReady ||
+          navigatorKey.currentContext == null ||
+          _currentUserId == null) {
+        return;
+      }
+
+      final message = _pendingMessage;
       _pendingMessage = null;
-      handleNotificationTap(message);
+
+      if (message != null) {
+        handleNotificationTap(message);
+      }
     });
+
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
-  /// Get current user ID safely
-  static String? get _currentUserId => FirebaseAuth.instance.currentUser?.uid;
+  static Map<String, dynamic> _normalize(
+    Map<String, dynamic> source,
+  ) {
+    final result = <String, dynamic>{};
+    final nested = source['data'];
 
-  /// Handle notification tap and navigate to appropriate screen
+    if (nested is Map) {
+      result.addAll(Map<String, dynamic>.from(nested));
+    } else if (nested is String && nested.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(nested);
+
+        if (decoded is Map) {
+          result.addAll(Map<String, dynamic>.from(decoded));
+        }
+      } catch (_) {
+        // Continue with the top-level payload.
+      }
+    }
+
+    result.addAll(source);
+    return result;
+  }
+
+  static String _text(dynamic value) =>
+      value?.toString().trim() ?? '';
+
+  static String _normalizedType(dynamic value) {
+    return _text(value)
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\s_-]+'), '');
+  }
+
   static void handleNotificationTap(RemoteMessage message) {
-    if (!_navigationReady || navigatorKey.currentContext == null || _currentUserId == null) {
+    if (!_navigationReady ||
+        navigatorKey.currentContext == null ||
+        _currentUserId == null) {
       _pendingMessage = message;
       return;
     }
-    debugPrint('NotificationHandler: Handling notification tap');
-    debugPrint('Notification data: ${message.data}');
 
-    final type = message.data['type'];
-    final senderId = message.data['senderId'];
-    final currentUserId = _currentUserId;
+    unawaited(_routeNotification(message));
+  }
+
+  static Future<void> _routeNotification(
+    RemoteMessage message,
+  ) async {
     final context = navigatorKey.currentContext;
+    final userId = _currentUserId;
 
-    if (context == null) {
-      debugPrint('NotificationHandler: Navigator context is null');
+    if (context == null || userId == null) return;
+
+    final data = _normalize(message.data);
+    final recipientId = _text(
+      data['recipientUid'] ?? data['recipientId'],
+    );
+
+    // recipientId is also used as meeting metadata on response
+    // notifications, so enforce only the explicit push recipient field.
+    final explicitRecipient = _text(data['recipientUid']);
+
+    if (explicitRecipient.isNotEmpty &&
+        explicitRecipient != userId) {
       return;
     }
 
-    // CRITICAL: Skip handling if current user is the sender (shouldn't happen, but double-check)
-    if (currentUserId != null && senderId != null && currentUserId == senderId) {
-      debugPrint('NotificationHandler: Skipping tap handling - user is the sender');
+    final senderId = _text(data['senderId']);
+
+    if (senderId.isNotEmpty && senderId == userId) {
       return;
     }
 
-    switch (type) {
-      case 'session_feedback':
-        _handleSessionFeedback(context, message.data);
-        break;
-      
-      case 'session_chat':
-        _handleSessionChat(context, message.data);
-        break;
-      
-      case 'dm':
-      case 'direct_message':
-        _handleDirectMessage(context, message.data);
-        break;
-      
-      case 'meeting_request':
-      case 'meeting_update':
-        _handleMeeting(context, message.data);
-        break;
-      
-      case 'admin_notification':
-        // Handle admin-sent notifications (alert, announcement, information, maintenance)
-        _handleAdminNotification(context, message.data);
-        break;
-      
-      default:
-        debugPrint('NotificationHandler: Unknown notification type: $type');
-        _showGenericNotificationDialog(context, message);
-    }
-  }
-
-  /// Handle admin-sent notifications by showing detail view
-  static void _handleAdminNotification(BuildContext context, Map<String, dynamic> data) async {
-    final notificationId = data['notificationId'];
-    
-    if (notificationId == null) {
-      debugPrint('NotificationHandler: Missing notificationId for admin notification');
-      return;
-    }
+    final type = _normalizedType(data['type']);
 
     try {
-      final userId = _currentUserId;
-      if (userId == null) {
-        debugPrint('NotificationHandler: No current user for admin notification');
+      // Preserve message navigation.
+      if (type == 'dm' || type == 'directmessage') {
+        _openDirectMessage(context, data);
         return;
       }
 
-      // Fetch notification from Firestore
-      final notificationDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('notifications')
-          .doc(notificationId)
-          .get();
-
-      if (!notificationDoc.exists) {
-        debugPrint('NotificationHandler: Notification not found');
+      if (type == 'sessionchat' || type == 'sessionfeedback') {
+        await _openSession(context, data, userId);
         return;
       }
 
-      final notification = AppNotification.fromFirestore(notificationDoc);
+      final meetingId = _text(data['meetingId']);
 
-      if (context.mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => NotificationDetailView(notification: notification),
-          ),
-        );
-      }
-    } catch (e) {
-      debugPrint('NotificationHandler: Error loading admin notification: $e');
-      if (context.mounted) {
-        showInAppBanner(
+      if (meetingId.isNotEmpty || type.startsWith('meeting')) {
+        await _openMeetingNotification(
           context,
-          title: 'Error',
-          body: 'Failed to load notification',
-          showAction: false,
-          backgroundColor: AppColors.errorRed,
+          data,
+          userId,
         );
+        return;
       }
-    }
-  }
 
-  /// Handle session feedback notification
-  static void _handleSessionFeedback(BuildContext context, Map<String, dynamic> data) {
-    final sessionId = data['sessionId'];
-    final eventId = data['eventId'];
+      final notificationId = _text(data['notificationId']);
 
-    if (sessionId == null) {
-      debugPrint('NotificationHandler: Missing sessionId for feedback notification');
-      return;
-    }
+      if (notificationId.isNotEmpty) {
+        final document = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userId)
+            .collection('notifications')
+            .doc(notificationId)
+            .get();
 
-    debugPrint('NotificationHandler: Navigating to session for feedback: $sessionId');
-    
-    // Navigate to session chat - it will show the feedback dialog
-    _navigateToSession(context, sessionId, eventId ?? '');
-  }
-
-  /// Handle session chat notification
-  static void _handleSessionChat(BuildContext context, Map<String, dynamic> data) {
-    final sessionId = data['sessionId'];
-    final eventId = data['eventId'];
-
-    if (sessionId == null) {
-      debugPrint('NotificationHandler: Missing sessionId for chat notification');
-      return;
-    }
-
-    debugPrint('NotificationHandler: Navigating to session chat: $sessionId');
-    
-    _navigateToSession(context, sessionId, eventId ?? '');
-  }
-
-  /// Navigate to session chat screen by fetching session data
-  static void _navigateToSession(BuildContext context, String sessionId, String eventId) async {
-    try {
-      // Show loading
-      showInAppBanner(
-        context,
-        title: 'Loading session...',
-        body: 'Please wait',
-        showAction: false,
-      );
-
-      // Fetch session from Firestore
-      final sessionDoc = await FirebaseFirestore.instance
-          .collection('sessions')
-          .doc(sessionId)
-          .get();
-
-      if (!sessionDoc.exists) {
-        if (context.mounted) {
-          showInAppBanner(
-            context,
-            title: 'Error',
-            body: 'Session not found',
-            showAction: false,
-            backgroundColor: AppColors.errorRed,
-          );
+        if (!context.mounted || _currentUserId != userId) {
+          return;
         }
+
+        if (!document.exists) {
+          _showError(
+            context,
+            'This notification is no longer available.',
+          );
+          return;
+        }
+
+        await _openDetails(
+          context,
+          AppNotification.fromFirestore(document),
+        );
         return;
       }
 
-      final session = Session.fromFirestore(sessionDoc);
-
-      if (context.mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => SessionChatScreen(session: session),
-          ),
-        );
+      if (!context.mounted || _currentUserId != userId) {
+        return;
       }
-    } catch (e) {
-      debugPrint('NotificationHandler: Error loading session: $e');
-      if (context.mounted) {
-        showInAppBanner(
+
+      // Fallback only for payloads that do not identify a stored
+      // notification or conversation.
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(
+            message.notification?.title ??
+                _text(data['title']).ifEmpty('Notification'),
+          ),
+          content: Text(
+            message.notification?.body ??
+                _text(data['body'] ?? data['message'])
+                    .ifEmpty('You have a new notification.'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Notification navigation failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (context.mounted && _currentUserId == userId) {
+        _showError(
           context,
-          title: 'Error',
-          body: 'Failed to load session',
-          showAction: false,
-          backgroundColor: AppColors.errorRed,
+          'Unable to open this notification. Please try again '
+          'from Notifications.',
         );
       }
     }
   }
 
-  /// Handle direct message notification
-  static void _handleDirectMessage(BuildContext context, Map<String, dynamic> data) {
-    final conversationId = data['conversationId'];
-    final otherUserId = data['otherUserId'];
-    final otherUserName = data['otherUserName'];
+  static Future<void> _openMeetingNotification(
+    BuildContext context,
+    Map<String, dynamic> data,
+    String userId,
+  ) async {
+    final notifications = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('notifications');
 
-    if (conversationId == null || otherUserId == null) {
-      debugPrint('NotificationHandler: Missing conversationId or otherUserId for DM notification');
-      // Navigate to conversations list instead
+    final notificationId = _text(data['notificationId']);
+    final meetingId = _text(data['meetingId']);
+
+    if (notificationId.isNotEmpty) {
+      final document =
+          await notifications.doc(notificationId).get();
+
+      if (!context.mounted || _currentUserId != userId) {
+        return;
+      }
+
+      if (document.exists) {
+        await _openDetails(
+          context,
+          AppNotification.fromFirestore(document),
+        );
+        return;
+      }
+    }
+
+    if (meetingId.isEmpty || meetingId.contains('/')) {
+      _showError(context, 'Meeting information is missing.');
+      return;
+    }
+
+    // Existing meeting pushes may contain a meeting ID without
+    // the personal notification document ID.
+    final snapshot = await notifications
+        .where('data.meetingId', isEqualTo: meetingId)
+        .get();
+
+    if (!context.mounted || _currentUserId != userId) {
+      return;
+    }
+
+    if (snapshot.docs.isEmpty) {
+      _showError(
+        context,
+        'This meeting notification is unavailable. '
+        'Check My Meetings from your profile.',
+      );
+      return;
+    }
+
+    final documents = snapshot.docs.toList();
+
+    documents.sort((a, b) {
+      final aValue = a.data()['timestamp'];
+      final bValue = b.data()['timestamp'];
+
+      final aTime =
+          aValue is Timestamp ? aValue.millisecondsSinceEpoch : 0;
+
+      final bTime =
+          bValue is Timestamp ? bValue.millisecondsSinceEpoch : 0;
+
+      return bTime.compareTo(aTime);
+    });
+
+    // Prefer the notification matching the response in the push.
+    final requestedStatus = _text(data['status']).toLowerCase();
+
+    DocumentSnapshot<Map<String, dynamic>> selected =
+        documents.first;
+
+    if (requestedStatus.isNotEmpty) {
+      for (final document in documents) {
+        final rawData = document.data()['data'];
+        final status = rawData is Map
+            ? _text(rawData['status']).toLowerCase()
+            : '';
+
+        if (status == requestedStatus) {
+          selected = document;
+          break;
+        }
+      }
+    }
+
+    await _openDetails(
+      context,
+      AppNotification.fromFirestore(selected),
+    );
+  }
+
+  static Future<void> _openDetails(
+    BuildContext context,
+    AppNotification notification,
+  ) async {
+    if (!context.mounted) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => NotificationDetailScreen(
+          notification: notification,
+        ),
+      ),
+    );
+  }
+
+  static Future<void> _openSession(
+    BuildContext context,
+    Map<String, dynamic> data,
+    String userId,
+  ) async {
+    final sessionId = _text(data['sessionId']);
+
+    if (sessionId.isEmpty || sessionId.contains('/')) {
+      _showError(context, 'Session information is missing.');
+      return;
+    }
+
+    final document = await FirebaseFirestore.instance
+        .collection('sessions')
+        .doc(sessionId)
+        .get();
+
+    if (!context.mounted || _currentUserId != userId) {
+      return;
+    }
+
+    if (!document.exists) {
+      _showError(context, 'This session is no longer available.');
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SessionChatScreen(
+          session: Session.fromFirestore(document),
+        ),
+      ),
+    );
+  }
+
+  static void _openDirectMessage(
+    BuildContext context,
+    Map<String, dynamic> data,
+  ) {
+    final conversationId = _text(data['conversationId']);
+
+    final otherUserId = _text(
+      data['otherUserId'] ?? data['senderId'],
+    );
+
+    if (conversationId.isEmpty || otherUserId.isEmpty) {
       Navigator.of(context).push(
-        MaterialPageRoute(
+        MaterialPageRoute<void>(
           builder: (_) => const ConversationsScreen(),
         ),
       );
       return;
     }
 
-    debugPrint('NotificationHandler: Navigating to direct message: $conversationId');
-    
     Navigator.of(context).push(
-      MaterialPageRoute(
+      MaterialPageRoute<void>(
         builder: (_) => DirectMessageScreen(
           conversationId: conversationId,
           otherUserId: otherUserId,
-          otherUserName: otherUserName ?? 'User',
-          otherUserProfileImage: data['otherUserProfileImage'] ?? '',
+          otherUserName:
+              _text(data['otherUserName'] ?? data['senderName'])
+                  .ifEmpty('User'),
+          otherUserProfileImage:
+              _text(data['otherUserProfileImage']),
         ),
       ),
     );
   }
 
-  /// Handle meeting notification - Navigate to pending tab in My Meetings
-  static void _handleMeeting(BuildContext context, Map<String, dynamic> data) {
-    final meetingId = data['meetingId'];
-    final type = data['type'];
-    
-    debugPrint('NotificationHandler: Meeting notification received: $meetingId, type: $type');
-    
-    // Navigate to My Meetings screen with pending tab selected
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const MyMeetingsScreen(initialTab: 0), // 0 = Pending tab
-      ),
+  static void _showError(
+    BuildContext context,
+    String message,
+  ) {
+    if (!context.mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
-  /// Show generic notification dialog for unknown types
-  static void _showGenericNotificationDialog(BuildContext context, RemoteMessage message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(message.notification?.title ?? 'Notification'),
-        content: Text(message.notification?.body ?? 'You have a new notification'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Show in-app banner for foreground notifications (reusable)
-  /// This is the gray popup that appears when notifications arrive in foreground
   static void showInAppBanner(
     BuildContext context, {
     required String title,
@@ -303,36 +416,30 @@ class NotificationHandler {
       SnackBar(
         content: InkWell(
           onTap: onTap,
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: AppColors.namaWhite,
-                      ),
-                    ),
-                    if (body.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        body,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.namaWhite,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ],
+              Text(
+                title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: AppColors.namaWhite,
                 ),
               ),
+              if (body.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(
+                  body,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.namaWhite,
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -345,7 +452,8 @@ class NotificationHandler {
             : null,
         duration: duration,
         behavior: SnackBarBehavior.floating,
-        backgroundColor: backgroundColor ?? AppColors.namaDarkGray,
+        backgroundColor:
+            backgroundColor ?? AppColors.namaDarkGray,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
@@ -354,29 +462,25 @@ class NotificationHandler {
     );
   }
 
-  /// Handle foreground message with in-app banner
-  static void handleForegroundMessage(BuildContext context, RemoteMessage message) {
-    final title = message.notification?.title ?? 'Notification';
-    final body = message.notification?.body ?? '';
-    final type = message.data['type'];
-    final senderId = message.data['senderId'];
-    final currentUserId = _currentUserId;
+  static void handleForegroundMessage(
+    BuildContext context,
+    RemoteMessage message,
+  ) {
+    final senderId = _text(message.data['senderId']);
 
-    debugPrint('NotificationHandler: Foreground message received, type: $type');
-    debugPrint('NotificationHandler: Sender: $senderId, Current User: $currentUserId');
-
-    // CRITICAL: Skip notification if current user is the sender
-    if (currentUserId != null && senderId != null && currentUserId == senderId) {
-      debugPrint('NotificationHandler: Skipping notification - user is the sender');
+    if (senderId.isNotEmpty && senderId == _currentUserId) {
       return;
     }
 
-    // Show in-app banner with appropriate action
     showInAppBanner(
       context,
-      title: title,
-      body: body,
+      title: message.notification?.title ?? 'Notification',
+      body: message.notification?.body ?? '',
       onTap: () => handleNotificationTap(message),
     );
   }
+}
+
+extension _NotificationTextFallback on String {
+  String ifEmpty(String fallback) => isEmpty ? fallback : this;
 }

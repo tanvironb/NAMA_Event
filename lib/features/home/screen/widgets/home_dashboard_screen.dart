@@ -1,25 +1,22 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:events_app_trueattempt/common_widgets/home_certificate_shortcut.dart';
+import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
+import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
+import 'package:events_app_trueattempt/core/constants/app_constants.dart';
+import 'package:events_app_trueattempt/core/models/session_model.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/session_detail_screen.dart';
+import 'package:events_app_trueattempt/features/home/screen/widgets/speaker_carousel.dart';
+import 'package:events_app_trueattempt/features/home/screen/widgets/venue_maps_carousel.dart';
+import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
+import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 import 'package:events_app_trueattempt/features/qr_scanner/screen/qr_scanner_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-
-import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/core/constants/app_constants.dart';
-import 'package:events_app_trueattempt/core/models/session_model.dart';
-
-import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
-import 'package:events_app_trueattempt/common_widgets/message_icon_with_badge.dart';
-import 'package:events_app_trueattempt/common_widgets/notification_icon_with_badge.dart';
-
-import 'package:events_app_trueattempt/features/home/screen/widgets/speaker_carousel.dart';
-import 'package:events_app_trueattempt/features/home/screen/widgets/venue_maps_carousel.dart';
-
-import 'package:events_app_trueattempt/features/messaging/screen/conversations_screen.dart';
-import 'package:events_app_trueattempt/features/notifications/screen/notifications_screen.dart';
 
 class HomeDashboardScreen extends ConsumerStatefulWidget {
   final VoidCallback? onSeeAllUpcomingSessions;
@@ -36,10 +33,8 @@ class HomeDashboardScreen extends ConsumerStatefulWidget {
 
 class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
   String selectedFilter = 'All';
-
   final PageController _eventPageController = PageController();
   Timer? _eventSliderTimer;
-
   int _currentEventPage = 0;
   String _lastSignature = '';
 
@@ -72,7 +67,6 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       if (!_eventPageController.hasClients) return;
 
       _currentEventPage = (_currentEventPage + 1) % count;
-
       _eventPageController.animateToPage(
         _currentEventPage,
         duration: const Duration(milliseconds: 500),
@@ -137,7 +131,6 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     }
 
     if (names.isEmpty) return 'Host';
-
     if (names.length == 1) return names.first;
 
     return names.map((e) => e.split(' ').first).join(', ');
@@ -145,19 +138,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
   DateTime? _toDateTime(dynamic value) {
     if (value == null) return null;
-
-    if (value is Timestamp) {
-      return value.toDate();
-    }
-
-    if (value is DateTime) {
-      return value;
-    }
-
-    if (value is String) {
-      return DateTime.tryParse(value);
-    }
-
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.tryParse(value);
     return null;
   }
 
@@ -175,9 +158,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           data['eventEndDate'],
     );
 
-    if (startDate == null && endDate == null) {
-      return '';
-    }
+    if (startDate == null && endDate == null) return '';
 
     if (startDate != null && endDate == null) {
       return DateFormat('MMM d, yyyy').format(startDate);
@@ -195,7 +176,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
       return DateFormat('MMM d, yyyy').format(startDate);
     }
 
-    return '${DateFormat('MMM d, yyyy').format(startDate)} - ${DateFormat('MMM d, yyyy').format(endDate)}';
+    return '${DateFormat('MMM d, yyyy').format(startDate)} - '
+        '${DateFormat('MMM d, yyyy').format(endDate)}';
   }
 
   @override
@@ -213,45 +195,62 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
             const SizedBox(height: 18),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: FutureBuilder<String>(
-                future: user == null
-                    ? Future.value('User')
-                    : _getCurrentUserName(user.uid, user.displayName),
-                builder: (context, snapshot) {
-                  final name = snapshot.data ?? 'User';
-
-                  return RichText(
-                    text: TextSpan(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const TextSpan(
-                          text: 'Hi, ',
-                          style: TextStyle(
-                            fontSize: 22,
-                            color: primaryBlue,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        FutureBuilder<String>(
+                          future: user == null
+                              ? Future.value('User')
+                              : _getCurrentUserName(
+                                  user.uid,
+                                  user.displayName,
+                                ),
+                          builder: (context, snapshot) {
+                            final name = snapshot.data ?? 'User';
+
+                            return RichText(
+                              text: TextSpan(
+                                children: [
+                                  const TextSpan(
+                                    text: 'Hi, ',
+                                    style: TextStyle(
+                                      fontSize: 22,
+                                      color: primaryBlue,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: '$name!',
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      color: namaGoldenYellow,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
-                        TextSpan(
-                          text: '$name!',
-                          style: const TextStyle(
-                            fontSize: 22,
-                            color: namaGoldenYellow,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        const SizedBox(height: 6),
+                        _activeEventInfo(padding: EdgeInsets.zero),
                       ],
                     ),
-                  );
-                },
+                  ),
+                  const SizedBox(width: 14),
+                  const HomeCertificateShortcut(),
+                ],
               ),
             ),
-            const SizedBox(height: 6),
-            _activeEventInfo(),
             const SizedBox(height: 18),
             _joinSessionsCard(context),
             const SizedBox(height: 18),
             sessionsAsync.when(
-              data: (s) => _filters(s),
+              data: (sessions) => _filters(sessions),
               loading: () => _filters([]),
               error: (_, __) => _filters([]),
             ),
@@ -271,13 +270,10 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
             const SizedBox(height: 26),
             _sectionTitle(context, 'Venues'),
             const SizedBox(height: 12),
-
-            // FIXED: Added left/right padding only for attendee Venue section.
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 24),
               child: VenueMapsCarousel(),
             ),
-
             const SizedBox(height: 26),
             _sectionTitle(context, 'Partners'),
             const SizedBox(height: 10),
@@ -289,9 +285,11 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  Widget _activeEventInfo() {
+  Widget _activeEventInfo({
+    EdgeInsetsGeometry padding = const EdgeInsets.symmetric(horizontal: 24),
+  }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      padding: padding,
       child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('events')
@@ -322,14 +320,12 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           }
 
           final data = snapshot.data!.docs.first.data();
-
           final eventName = (data['name'] ??
                   data['title'] ??
                   data['eventName'] ??
                   'Current Event')
               .toString()
               .trim();
-
           final eventDate = _formatEventDate(data);
 
           return Column(
@@ -382,14 +378,18 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
           _icon(const MessageIconWithBadge(), () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const ConversationsScreen()),
+              MaterialPageRoute(
+                builder: (_) => const ConversationsScreen(),
+              ),
             );
           }),
           const SizedBox(width: 12),
           _icon(const NotificationIconWithBadge(), () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+              MaterialPageRoute(
+                builder: (_) => const NotificationsScreen(),
+              ),
             );
           }),
         ],
@@ -513,13 +513,13 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
         itemCount: filters.length,
         separatorBuilder: (_, __) => const SizedBox(width: 14),
         itemBuilder: (context, index) {
-          final f = filters[index];
-          final selected = selectedFilter == f;
+          final filter = filters[index];
+          final selected = selectedFilter == filter;
 
           return GestureDetector(
             onTap: () {
               setState(() {
-                selectedFilter = f;
+                selectedFilter = filter;
                 _lastSignature = '';
                 _currentEventPage = 0;
               });
@@ -533,12 +533,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               height: 24,
               padding: const EdgeInsets.symmetric(horizontal: 15),
               decoration: BoxDecoration(
-                color: selected ? primaryBlue : primaryBlue.withOpacity(0.15),
+                color: selected
+                    ? primaryBlue
+                    : primaryBlue.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
               alignment: Alignment.center,
               child: Text(
-                f,
+                filter,
                 style: TextStyle(
                   color: selected ? Colors.white : primaryBlue,
                   fontSize: 9,
@@ -614,16 +616,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
         child: sessionsAsync.when(
           data: (sessions) {
             final now = DateTime.now();
-
-            final list = sessions.where((s) {
-              final upcoming =
-                  s.startTime.isAfter(now) || s.endTime.isAfter(now);
+            final list = sessions.where((session) {
+              final upcoming = session.startTime.isAfter(now) ||
+                  session.endTime.isAfter(now);
 
               if (!upcoming) return false;
-
               if (selectedFilter == 'All') return true;
 
-              final category = s.category.trim().toLowerCase();
+              final category = session.category.trim().toLowerCase();
               final selected = selectedFilter.trim().toLowerCase();
 
               return category == selected;
@@ -631,7 +631,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
             final signature =
-                '$selectedFilter-${list.map((e) => e.id).join('|')}';
+                '$selectedFilter-${list.map((session) => session.id).join('|')}';
 
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _setupAutoSlide(list.length, signature);
@@ -665,14 +665,14 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
               onPageChanged: (index) {
                 _currentEventPage = index;
               },
-              itemBuilder: (_, i) {
-                final s = list[i];
+              itemBuilder: (_, index) {
+                final session = list[index];
 
                 return FutureBuilder<String>(
-                  future: _getSpeakerName(s),
-                  builder: (_, snap) {
-                    final speaker = snap.data ?? 'Loading speaker...';
-                    return _card(s, speaker);
+                  future: _getSpeakerName(session),
+                  builder: (_, snapshot) {
+                    final speaker = snapshot.data ?? 'Loading speaker...';
+                    return _card(session, speaker);
                   },
                 );
               },
@@ -685,15 +685,15 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
     );
   }
 
-  Widget _card(Session s, String speaker) {
-    final date = s.startTime;
+  Widget _card(Session session, String speaker) {
+    final date = session.startTime;
 
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => SessionDetailScreen(session: s),
+            builder: (_) => SessionDetailScreen(session: session),
           ),
         );
       },
@@ -713,9 +713,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 height: 125,
                 width: double.infinity,
                 color: Colors.white,
-                child: s.imageUrl.isNotEmpty
+                child: session.imageUrl.isNotEmpty
                     ? Image.network(
-                        s.imageUrl,
+                        session.imageUrl,
                         fit: BoxFit.cover,
                         loadingBuilder: (context, child, loadingProgress) {
                           if (loadingProgress == null) return child;
@@ -724,7 +724,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                             child: SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
                             ),
                           );
                         },
@@ -751,7 +753,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            s.title,
+                            session.title,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -813,7 +815,7 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                         ),
                       ),
                       const Spacer(),
-                      _badge(s.location),
+                      _badge(session.location),
                     ],
                   ),
                 ],
@@ -888,7 +890,6 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
 
           final eventData = snapshot.data!.docs.first.data();
           final partnersRaw = eventData['partners'];
-
           final partners = partnersRaw is List
               ? partnersRaw
                   .whereType<Map>()
@@ -918,7 +919,8 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                 runSpacing: runSpacing,
                 children: partners.map((partner) {
                   final name = (partner['name'] ?? '').toString().trim();
-                  final logoUrl = (partner['logoUrl'] ?? '').toString().trim();
+                  final logoUrl =
+                      (partner['logoUrl'] ?? '').toString().trim();
 
                   return SizedBox(
                     width: itemWidth,
@@ -997,7 +999,9 @@ class _HomeDashboardScreenState extends ConsumerState<HomeDashboardScreen> {
                           child: SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
                           ),
                         );
                       },

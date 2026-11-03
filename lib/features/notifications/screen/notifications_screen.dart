@@ -11,6 +11,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:events_app_trueattempt/features/notifications/screen/notification_detail_screen.dart'
+    as shared_details;
+
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
   @override
@@ -97,18 +100,21 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     });
     return filtered;
   }
-  Future<void> _openNotificationDetails(AppNotification notification) async {
-    await _markNotificationAsOpened(notification);
-    if (!mounted) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => NotificationDetailsScreen(
-          notification: notification,
-        ),
+Future<void> _openNotificationDetails(
+  AppNotification notification,
+) async {
+  await _markNotificationAsOpened(notification);
+
+  if (!mounted) return;
+
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => shared_details.NotificationDetailScreen(
+        notification: notification,
       ),
-    );
-  }
+    ),
+  );
+}
   String _formatTime(dynamic value) {
     final dateTime = _toDateTime(value);
     final now = DateTime.now();

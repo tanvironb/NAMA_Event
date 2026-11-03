@@ -1,5 +1,3 @@
-// lib/features/auth/screen/auth_view_model.dart
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:events_app_trueattempt/features/auth/data/auth_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,14 +13,15 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
 
   Future<void> _markUserLoggedIn(User user) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
-        {
-          'lastSeen': FieldValue.serverTimestamp(),
-          'lastLoginAt': FieldValue.serverTimestamp(),
-          'isOnline': true,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-      );
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'lastSeen': FieldValue.serverTimestamp(),
+        'lastLoginAt': FieldValue.serverTimestamp(),
+        'isOnline': true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       debugPrint('AuthViewModel: failed to update login status: $e');
     }
@@ -30,13 +29,14 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
 
   Future<void> _markUserLoggedOut(User user) async {
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update(
-        {
-          'lastSeen': FieldValue.serverTimestamp(),
-          'isOnline': false,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-      );
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'lastSeen': FieldValue.serverTimestamp(),
+        'isOnline': false,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
     } catch (e) {
       debugPrint('AuthViewModel: failed to update logout status: $e');
     }
@@ -63,6 +63,12 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
         state = const AsyncValue.data(null);
       }
     } catch (e, stack) {
+      await _authRepository.recordAuthFailure(
+        operation: 'sign_in',
+        error: e,
+        stackTrace: stack,
+      );
+
       if (mounted) {
         state = AsyncValue.error(e, stack);
       }
@@ -96,6 +102,12 @@ class AuthViewModel extends StateNotifier<AsyncValue<void>> {
         state = const AsyncValue.data(null);
       }
     } catch (e, stack) {
+      await _authRepository.recordAuthFailure(
+        operation: 'sign_up',
+        error: e,
+        stackTrace: stack,
+      );
+
       if (mounted) {
         state = AsyncValue.error(e, stack);
       }

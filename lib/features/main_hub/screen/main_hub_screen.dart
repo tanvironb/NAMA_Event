@@ -1,5 +1,3 @@
-// lib/features/main_hub/screen/main_hub_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:events_app_trueattempt/core/services/notification_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,8 +14,6 @@ import 'package:events_app_trueattempt/features/speaker/screen/speaker_shell.dar
 
 import 'package:events_app_trueattempt/common_widgets/in_app_notification_handler.dart';
 import 'package:events_app_trueattempt/features/auth/screen/auth_view_model.dart';
-import 'package:events_app_trueattempt/features/privacy/widgets/privacy_selection_dialog.dart';
-import 'package:events_app_trueattempt/core/enums/profile_visibility.dart';
 
 class MainHubScreen extends ConsumerStatefulWidget {
   const MainHubScreen({super.key});
@@ -31,11 +27,9 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
   final AppUsageTrackingService _usageTrackingService =
       AppUsageTrackingService();
 
-  bool _privacyDialogShown = false;
   bool _usageTrackingStarted = false;
   bool _welcomeNotificationChecked = false;
 
-  String? _lastDialogCheckedUid;
   String? _trackedEventId;
   String? _lastWelcomeCheckedUid;
 
@@ -135,28 +129,6 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
     }
   }
 
-  Future<void> _checkAndShowPrivacySelectionDialog({
-    required String uid,
-    required Map<String, dynamic> userData,
-  }) async {
-    if (_privacyDialogShown || !mounted) return;
-
-    if (_lastDialogCheckedUid == uid) return;
-
-    _lastDialogCheckedUid = uid;
-
-    final privacySelectedAt = userData['privacySelectedAt'];
-    final needsPrivacySelection = privacySelectedAt == null;
-
-    final currentVisibility =
-        (userData['profileVisibility'] ?? 'minimal').toString();
-
-    if (needsPrivacySelection && mounted) {
-      _privacyDialogShown = true;
-      _showPrivacySelectionDialog(currentVisibility);
-    }
-  }
-
   Future<void> _createWelcomeNotificationIfNeeded({
     required String uid,
     required Map<String, dynamic> userData,
@@ -238,35 +210,6 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
       debugPrint('MainHubScreen: Failed to create welcome notification: $e');
       _welcomeNotificationChecked = false;
     }
-  }
-
-  void _showPrivacySelectionDialog(String currentVisibility) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => PrivacySelectionDialog(
-        initialSelection: ProfileVisibility.fromString(currentVisibility),
-        canDismiss: false,
-        onConfirm: (selectedLevel) async {
-          final currentUser = ref.read(firebaseAuthProvider).currentUser;
-
-          if (currentUser != null) {
-            await FirebaseFirestore.instance
-                .collection('users')
-                .doc(currentUser.uid)
-                .update({
-              'profileVisibility': selectedLevel.value,
-              'privacySelectedAt': FieldValue.serverTimestamp(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-
-            if (mounted) {
-              Navigator.of(context).pop();
-            }
-          }
-        },
-      ),
-    );
   }
 
   Widget _buildAccessDenied(BuildContext context) {
@@ -445,11 +388,6 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
         debugPrint('MainHubScreen current role: $role');
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _checkAndShowPrivacySelectionDialog(
-            uid: firebaseUser.uid,
-            userData: userData,
-          );
-
           _createWelcomeNotificationIfNeeded(
             uid: firebaseUser.uid,
             userData: userData,

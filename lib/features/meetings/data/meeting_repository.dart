@@ -1,6 +1,18 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'package:events_app_trueattempt/core/models/meeting_model.dart';
 import 'package:events_app_trueattempt/core/services/firestore_service.dart';
+
+class MeetingTimePassedException implements Exception {
+  const MeetingTimePassedException();
+
+  String get message =>
+      'Meeting time has passed. Please select a future meeting '
+      'date and time.';
+
+  @override
+  String toString() => message;
+}
 
 class MeetingRepository {
   final FirestoreService _firestoreService;
@@ -17,7 +29,9 @@ class MeetingRepository {
           eventId: eventId,
         )
         .map((snapshot) {
-      return snapshot.docs.map((doc) => Meeting.fromFirestore(doc)).toList();
+      return snapshot.docs
+          .map((doc) => Meeting.fromFirestore(doc))
+          .toList();
     });
   }
 
@@ -30,6 +44,11 @@ class MeetingRepository {
     required Timestamp proposedTime,
     required String location,
   }) async {
+    // Block past or current times before creating any records.
+    if (!proposedTime.toDate().isAfter(DateTime.now())) {
+      throw const MeetingTimePassedException();
+    }
+
     final meetingData = {
       'eventId': eventId,
       'requesterId': requesterId,
@@ -45,7 +64,8 @@ class MeetingRepository {
       'lastActionBy': requesterId,
     };
 
-    final meetingId = await _firestoreService.createMeetingDocumentAndReturnId(
+    final meetingId =
+        await _firestoreService.createMeetingDocumentAndReturnId(
       meetingData,
     );
 
@@ -55,7 +75,9 @@ class MeetingRepository {
         'eventId': eventId,
         'title': 'Meeting Request',
         'subtitle': requesterInfo['name'] ?? 'Someone',
-        'body': '${requesterInfo['name'] ?? 'Someone'} requested a meeting with you.',
+        'body':
+            '${requesterInfo['name'] ?? 'Someone'} requested '
+            'a meeting with you.',
         'timestamp': FieldValue.serverTimestamp(),
         'isRead': false,
         'type': 'meetingRequest',
@@ -97,8 +119,12 @@ class MeetingRepository {
     final meetingData = meetingDoc.data() ?? {};
 
     final eventId = (meetingData['eventId'] ?? '').toString();
-    final requesterId = (meetingData['requesterId'] ?? '').toString();
-    final recipientId = (meetingData['recipientId'] ?? '').toString();
+
+    final requesterId =
+        (meetingData['requesterId'] ?? '').toString();
+
+    final recipientId =
+        (meetingData['recipientId'] ?? '').toString();
 
     final requesterInfo = Map<String, dynamic>.from(
       meetingData['requesterInfo'] ?? {},
@@ -123,7 +149,8 @@ class MeetingRepository {
       status: normalizedStatus,
     );
 
-    if (normalizedStatus == 'accepted' || normalizedStatus == 'declined') {
+    if (normalizedStatus == 'accepted' ||
+        normalizedStatus == 'declined') {
       await _sendMeetingResponseNotification(
         eventId: eventId,
         meetingId: meetingId,
@@ -161,23 +188,28 @@ class MeetingRepository {
       return;
     }
 
-    final responderName = (recipientInfo['name'] ?? 'Someone').toString();
-    final requesterName = (requesterInfo['name'] ?? 'User').toString();
+    final responderName =
+        (recipientInfo['name'] ?? 'Someone').toString();
 
-    final bool isAccepted = status == 'accepted';
+    final requesterName =
+        (requesterInfo['name'] ?? 'User').toString();
+
+    final isAccepted = status == 'accepted';
 
     await _firestoreService.createNotificationDocument(
       userId: requesterId,
       notificationData: {
         'eventId': eventId,
-        'title': isAccepted ? 'Meeting Accepted' : 'Meeting Declined',
+        'title':
+            isAccepted ? 'Meeting Accepted' : 'Meeting Declined',
         'subtitle': responderName,
         'body': isAccepted
             ? '$responderName accepted your meeting request.'
             : '$responderName declined your meeting request.',
         'timestamp': FieldValue.serverTimestamp(),
         'isRead': false,
-        'type': isAccepted ? 'meetingAccepted' : 'meetingDeclined',
+        'type':
+            isAccepted ? 'meetingAccepted' : 'meetingDeclined',
         'targetRole': 'all',
         'priority': isAccepted ? 'normal' : 'medium',
         'data': {
@@ -202,7 +234,7 @@ class MeetingRepository {
         await FirebaseFirestore.instance.collection('users').get();
 
     final batch = FirebaseFirestore.instance.batch();
-    int updateCount = 0;
+    var updateCount = 0;
 
     for (final userDoc in usersSnapshot.docs) {
       final notificationSnapshot = await FirebaseFirestore.instance
@@ -217,7 +249,8 @@ class MeetingRepository {
           'data.status': status,
           'meetingStatus': status,
           'updatedAt': FieldValue.serverTimestamp(),
-          if (status == 'accepted' || status == 'declined') 'isRead': true,
+          if (status == 'accepted' || status == 'declined')
+            'isRead': true,
         });
 
         updateCount++;
@@ -239,6 +272,9 @@ class MeetingRepository {
       return;
     }
 
-    await FirebaseFirestore.instance.collection('meetings').doc(meetingId).delete();
+    await FirebaseFirestore.instance
+        .collection('meetings')
+        .doc(meetingId)
+        .delete();
   }
 }

@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:intl/intl.dart';
+
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
 import 'package:events_app_trueattempt/core/models/session_model.dart';
 import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/agenda/screen/session_detail_screen.dart';
 import 'package:events_app_trueattempt/features/staff/screen/staff_session_management_screen.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:intl/intl.dart';
 
 class AgendaScreen extends ConsumerStatefulWidget {
   const AgendaScreen({super.key});
@@ -23,11 +26,25 @@ class AgendaScreen extends ConsumerStatefulWidget {
 
 class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   Timer? _statusRefreshTimer;
+  StreamSubscription<User?>? _authSubscription;
+
   DateTime _now = DateTime.now();
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
+
+    _currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+    _authSubscription =
+        FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (!mounted || _currentUserId == user?.uid) return;
+
+      setState(() {
+        _currentUserId = user?.uid;
+      });
+    });
 
     _statusRefreshTimer = Timer.periodic(
       const Duration(seconds: 30),
@@ -44,6 +61,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
   @override
   void dispose() {
     _statusRefreshTimer?.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 
@@ -68,9 +86,12 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
           final sortedSessions = List<Session>.from(sessions)
             ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
-          final groupedSessions = groupBy(sortedSessions, (Session session) {
-            return DateFormat('yyyy-MM-dd').format(session.startTime);
-          });
+          final groupedSessions = groupBy(
+            sortedSessions,
+            (Session session) {
+              return DateFormat('yyyy-MM-dd').format(session.startTime);
+            },
+          );
 
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
@@ -85,7 +106,10 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                 toolbarHeight: 58,
                 flexibleSpace: ClipRect(
                   child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    filter: ImageFilter.blur(
+                      sigmaX: 14,
+                      sigmaY: 14,
+                    ),
                     child: Container(
                       color: Colors.white.withOpacity(0.72),
                     ),
@@ -105,7 +129,8 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, dayIndex) {
-                      final dayKey = groupedSessions.keys.elementAt(dayIndex);
+                      final dayKey =
+                          groupedSessions.keys.elementAt(dayIndex);
                       final daySessions = groupedSessions[dayKey]!;
                       final dayDate = DateTime.parse(dayKey);
 
@@ -121,6 +146,7 @@ class _AgendaScreenState extends ConsumerState<AgendaScreen> {
                               dayIndex: dayIndex,
                               isStaff: isStaff,
                               now: _now,
+                              currentUserId: _currentUserId,
                             ),
                           ),
                         ),
@@ -148,6 +174,7 @@ class _DaySection extends StatelessWidget {
   final int dayIndex;
   final bool isStaff;
   final DateTime now;
+  final String? currentUserId;
 
   const _DaySection({
     required this.date,
@@ -155,6 +182,7 @@ class _DaySection extends StatelessWidget {
     required this.dayIndex,
     required this.isStaff,
     required this.now,
+    required this.currentUserId,
   });
 
   void _openSession(BuildContext context, Session session) {
@@ -179,8 +207,14 @@ class _DaySection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          margin: EdgeInsets.only(bottom: 12, top: dayIndex == 0 ? 0 : 14),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          margin: EdgeInsets.only(
+            bottom: 12,
+            top: dayIndex == 0 ? 0 : 14,
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 12,
+          ),
           decoration: BoxDecoration(
             color: const Color(0xFFC3C1DF),
             borderRadius: BorderRadius.circular(16),
@@ -217,7 +251,8 @@ class _DaySection extends StatelessWidget {
                 ),
               ),
               Text(
-                '${sessions.length} Session${sessions.length == 1 ? '' : 's'}',
+                '${sessions.length} '
+                'Session${sessions.length == 1 ? '' : 's'}',
                 style: const TextStyle(
                   fontSize: 10,
                   color: Colors.black87,
@@ -229,11 +264,13 @@ class _DaySection extends StatelessWidget {
         Column(
           children: sessions.map((session) {
             return Padding(
+              key: ValueKey(session.id),
               padding: const EdgeInsets.only(bottom: 10),
               child: _AgendaSessionCard(
                 session: session,
                 isStaff: isStaff,
                 now: now,
+                currentUserId: currentUserId,
                 onTap: () => _openSession(context, session),
               ),
             );
@@ -244,32 +281,130 @@ class _DaySection extends StatelessWidget {
   }
 }
 
-class _AgendaSessionCard extends StatelessWidget {
+class _AgendaSessionCard extends StatefulWidget {
   final Session session;
   final bool isStaff;
   final DateTime now;
+  final String? currentUserId;
   final VoidCallback onTap;
 
   const _AgendaSessionCard({
     required this.session,
     required this.isStaff,
     required this.now,
+    required this.currentUserId,
     required this.onTap,
   });
 
+  @override
+  State<_AgendaSessionCard> createState() => _AgendaSessionCardState();
+}
+
+class _AgendaSessionCardState extends State<_AgendaSessionCard> {
   static const Color _primaryColor = Color(0xFF0B0B83);
   static const Color _textDark = Color(0xFF111827);
   static const Color _textMuted = Color(0xFF6B7280);
 
+  late Stream<DocumentSnapshot<Map<String, dynamic>>> _bookmarkStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _setBookmarkStream();
+  }
+
+  @override
+  void didUpdateWidget(covariant _AgendaSessionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.session.id != widget.session.id ||
+        oldWidget.currentUserId != widget.currentUserId) {
+      _setBookmarkStream();
+    }
+  }
+
+  void _setBookmarkStream() {
+    // Uses the same session document as AgendaRepository.
+    // Keep the stream stable across the agenda's timer rebuilds.
+    _bookmarkStream = FirebaseFirestore.instance
+        .collection('sessions')
+        .doc(widget.session.id)
+        .snapshots();
+  }
+
+  Widget _buildBadges({
+    required bool isActive,
+    required bool hasEnded,
+  }) {
+    Widget badges(bool isSaved) {
+      return Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _StatusBadge(
+            isActive: isActive,
+            hasEnded: hasEnded,
+          ),
+          if (isSaved) const _SavedBadge(),
+          if (widget.isStaff)
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              decoration: BoxDecoration(
+                color: _primaryColor.withOpacity(0.10),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Manage',
+                style: TextStyle(
+                  color: _primaryColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+        ],
+      );
+    }
+
+    final uid = widget.currentUserId;
+
+    if (uid == null || uid.isEmpty) {
+      return badges(false);
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      key: ValueKey('${widget.session.id}:$uid'),
+      stream: _bookmarkStream,
+      builder: (context, snapshot) {
+        final bookmarkedBy = snapshot.data?.data()?['bookmarkedBy'];
+
+        final isSaved = !snapshot.hasError &&
+            bookmarkedBy is List &&
+            bookmarkedBy.contains(uid);
+
+        return badges(isSaved);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isActive =
-        now.isAfter(session.startTime) && now.isBefore(session.endTime);
-    final hasEnded = now.isAfter(session.endTime);
+    final session = widget.session;
+
+    final isActive = widget.now.isAfter(session.startTime) &&
+        widget.now.isBefore(session.endTime);
+
+    final hasEnded = widget.now.isAfter(session.endTime);
 
     return Container(
       decoration: BoxDecoration(
-        color: hasEnded ? const Color(0xFFF1F1F1) : const Color(0xFFF7F7FA),
+        color: hasEnded
+            ? const Color(0xFFF1F1F1)
+            : const Color(0xFFF7F7FA),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isActive ? Colors.green : Colors.transparent,
@@ -284,7 +419,7 @@ class _AgendaSessionCard extends StatelessWidget {
         ],
       ),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(13, 12, 13, 12),
@@ -292,45 +427,35 @@ class _AgendaSessionCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _StatusBadge(
-                    isActive: isActive,
-                    hasEnded: hasEnded,
-                  ),
-                  if (isStaff) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _primaryColor.withOpacity(0.10),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text(
-                        'Manage',
-                        style: TextStyle(
-                          color: _primaryColor,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                  Expanded(
+                    child: _buildBadges(
+                      isActive: isActive,
+                      hasEnded: hasEnded,
                     ),
-                  ],
-                  const Spacer(),
-                  Icon(
-                    Icons.access_time,
-                    size: 14,
-                    color: hasEnded ? Colors.grey : _textMuted,
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    DateFormat('h:mm a').format(session.startTime),
-                    style: TextStyle(
-                      color: hasEnded ? Colors.grey : _textMuted,
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 14,
+                          color: hasEnded ? Colors.grey : _textMuted,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          DateFormat('h:mm a').format(session.startTime),
+                          style: TextStyle(
+                            color: hasEnded ? Colors.grey : _textMuted,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
@@ -344,7 +469,9 @@ class _AgendaSessionCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: hasEnded ? Colors.grey.shade600 : _textDark,
+                        color: hasEnded
+                            ? Colors.grey.shade600
+                            : _textDark,
                         fontSize: 14.2,
                         fontWeight: FontWeight.w800,
                         height: 1.22,
@@ -403,6 +530,48 @@ class _AgendaSessionCard extends StatelessWidget {
   }
 }
 
+class _SavedBadge extends StatelessWidget {
+  const _SavedBadge();
+
+  static const Color _green = Color(0xFF15803D);
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Session saved',
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 8,
+          vertical: 4,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFFDCFCE7),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.check_rounded,
+              size: 12,
+              color: _green,
+            ),
+            SizedBox(width: 4),
+            Text(
+              'Saved',
+              style: TextStyle(
+                color: _green,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StatusBadge extends StatelessWidget {
   final bool isActive;
   final bool hasEnded;
@@ -429,7 +598,10 @@ class _StatusBadge extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 4,
+      ),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(20),
