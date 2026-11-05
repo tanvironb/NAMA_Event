@@ -8,29 +8,23 @@ workflows:
       app_store_connect: NAMA Events iOS
 
     environment:
+      groups:
+        - ios_code_signing
       flutter: 3.41.9
       xcode: latest
       cocoapods: default
-
       vars:
         BUNDLE_ID: "org.namafoundation.eventapp"
 
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: org.namafoundation.eventapp
-
     scripts:
       - name: Initialize keychain
-        script: |
-          keychain initialize
+        script: keychain initialize
 
       - name: Get Flutter packages
-        script: |
-          flutter pub get
+        script: flutter pub get
 
       - name: Install iOS pods
-        script: |
-          find . -name "Podfile" -execdir pod install \;
+        script: find . -name "Podfile" -execdir pod install \;
 
       - name: Fetch signing files and configure Xcode
         script: |
@@ -54,3 +48,4 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+        submit_to_app_store: false
