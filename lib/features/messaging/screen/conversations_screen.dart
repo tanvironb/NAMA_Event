@@ -1,12 +1,10 @@
-// lib/features/messaging/screen/conversations_screen.dart
-
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:events_app_trueattempt/core/providers.dart';
-import 'package:events_app_trueattempt/core/models/conversation_model.dart';
 import 'package:events_app_trueattempt/common_widgets/loading_indicator.dart';
+import 'package:events_app_trueattempt/core/models/conversation_model.dart';
+import 'package:events_app_trueattempt/core/providers.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/new_conversation_screen.dart';
 import 'package:events_app_trueattempt/features/messaging/screen/widgets/conversation_list_tile.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ConversationsScreen extends ConsumerStatefulWidget {
   const ConversationsScreen({super.key});
@@ -28,16 +26,24 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
     super.dispose();
   }
 
-  List<Conversation> _applySearch(List<Conversation> conversations) {
-    if (_searchQuery.isEmpty) return conversations;
+  /// Hide conversations that have no sent message.
+  List<Conversation> _withSentMessages(List<Conversation> conversations) {
+    return conversations
+        .where((conversation) => conversation.lastMessageText.trim().isNotEmpty)
+        .toList();
+  }
 
-    final query = _searchQuery.toLowerCase();
+  List<Conversation> _applySearch(List<Conversation> conversations) {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return conversations;
 
     return conversations.where((conversation) {
       final memberNames = conversation.memberInfo.values
           .map((info) => (info['name'] as String? ?? '').toLowerCase())
           .join(' ');
-      return memberNames.contains(query);
+
+      return memberNames.contains(query) ||
+          conversation.lastMessageText.toLowerCase().contains(query);
     }).toList();
   }
 
@@ -62,7 +68,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
           const Text(
             'Messages',
             style: TextStyle(
-              fontSize: 22, // smaller
+              fontSize: 22,
               fontWeight: FontWeight.w600,
               color: titleColor,
             ),
@@ -76,7 +82,7 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
       child: SizedBox(
-        height: 40, // slimmer
+        height: 40,
         child: TextField(
           controller: _searchController,
           style: const TextStyle(fontSize: 12.5),
@@ -113,14 +119,14 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
               vertical: 6,
             ),
             enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20), // more curved
+              borderRadius: BorderRadius.circular(20),
               borderSide: const BorderSide(
                 color: Color(0xFFD9D9D9),
                 width: 0.8,
               ),
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(20), // more curved
+              borderRadius: BorderRadius.circular(20),
               borderSide: const BorderSide(
                 color: titleColor,
                 width: 1,
@@ -137,57 +143,66 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
     );
   }
 
+  Widget _buildNoMessages() {
+    return const Center(
+      child: Text(
+        'You have no messages yet.\nStart a new conversation!',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 12.5,
+          color: Colors.grey,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoSearchResults() {
+    return const Center(
+      child: Text(
+        'No conversations match your search.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 12.5,
+          color: Colors.grey,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final conversationsAsync = ref.watch(conversationsStreamProvider);
 
     return Scaffold(
       backgroundColor: Colors.white,
-
       body: SafeArea(
         child: Column(
           children: [
             _buildHeader(context),
             _buildSearchBar(),
-
             Expanded(
               child: conversationsAsync.when(
                 data: (conversations) {
-                  if (conversations.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'You have no messages yet.\nStart a new conversation!',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    );
+                  final conversationsWithMessages =
+                      _withSentMessages(conversations);
+
+                  if (conversationsWithMessages.isEmpty) {
+                    return _buildNoMessages();
                   }
 
-                  final filteredConversations = _applySearch(conversations);
+                  final filteredConversations =
+                      _applySearch(conversationsWithMessages);
 
                   if (filteredConversations.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No conversations match your search.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12.5,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    );
+                    return _buildNoSearchResults();
                   }
 
                   return ListView.builder(
                     padding: const EdgeInsets.only(top: 4, bottom: 80),
                     itemCount: filteredConversations.length,
                     itemBuilder: (context, index) {
-                      final conversation = filteredConversations[index];
                       return ConversationListTile(
-                        conversation: conversation,
+                        conversation: filteredConversations[index],
                       );
                     },
                   );
@@ -207,7 +222,6 @@ class _ConversationsScreenState extends ConsumerState<ConversationsScreen> {
           ],
         ),
       ),
-
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFFF4BE32),
         elevation: 4,

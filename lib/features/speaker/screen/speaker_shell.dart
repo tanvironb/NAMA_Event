@@ -23,6 +23,8 @@ import 'package:events_app_trueattempt/features/speaker/screen/my_sessions_scree
 import 'package:events_app_trueattempt/features/speaker/screen/session_feedback_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_analytics_screen.dart';
 import 'package:events_app_trueattempt/features/speaker/screen/speaker_audience_screen.dart';
+import 'package:events_app_trueattempt/features/certificates/screen/my_certificates_screen.dart';
+
 class SpeakerShell extends ConsumerStatefulWidget {
   const SpeakerShell({super.key});
   @override
@@ -267,6 +269,21 @@ Widget build(BuildContext context, WidgetRef ref) {
                   );
                 },
               ),
+              _QuickActionTile(
+  icon: Icons.workspace_premium_rounded,
+  title: 'My Certificates',
+  iconColor: const Color.fromARGB(255, 245, 118, 80),
+  backgroundColor: const Color.fromARGB(255, 255, 199, 177),
+  isEnabled: true,
+  onTap: () {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const MyCertificatesScreen(),
+      ),
+    );
+  },
+),
+
             ],
           ),
           const SizedBox(height: 42),

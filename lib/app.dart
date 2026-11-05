@@ -10,7 +10,21 @@ import 'package:events_app_trueattempt/features/auth/screen/auth_gate.dart';
 import 'package:events_app_trueattempt/features/notifications/services/alert_notification_service.dart';
 
 class MyApp extends ConsumerStatefulWidget {
-  const MyApp({super.key});
+  const MyApp({
+    super.key,
+    this.enableAlertNotifications = true,
+    this.splashDuration,
+    this.homeOverride,
+  });
+
+  /// Allows widget tests to skip Firebase-backed alert initialization.
+  final bool enableAlertNotifications;
+
+  /// Overrides the normal splash duration when provided.
+  final Duration? splashDuration;
+
+  /// Allows widget tests to display a home without initializing Firebase.
+  final Widget? homeOverride;
 
   @override
   ConsumerState<MyApp> createState() => _MyAppState();
@@ -22,25 +36,33 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   bool _showSplash = true;
 
+  Duration get _effectiveSplashDuration {
+    return widget.splashDuration ??
+        (kIsWeb
+            ? const Duration(milliseconds: 900)
+            : const Duration(seconds: 5));
+  }
+
   @override
   void initState() {
     super.initState();
 
-    // Use a shorter splash duration when testing the normal app in Chrome.
-    final splashDuration = kIsWeb
-        ? const Duration(milliseconds: 900)
-        : const Duration(seconds: 5);
+    // Skip splash timers when a test home is being used.
+    if (widget.homeOverride == null) {
+      Future.delayed(_effectiveSplashDuration, () {
+        if (!mounted) return;
 
-    Future.delayed(splashDuration, () {
-      if (!mounted) return;
-
-      setState(() {
-        _showSplash = false;
+        setState(() {
+          _showSplash = false;
+        });
       });
-    });
+    }
 
     // Native notification alerts should only initialize on mobile.
-    if (!kIsWeb) {
+    // Tests can disable them because Firebase is not initialized there.
+    if (!kIsWeb &&
+        widget.enableAlertNotifications &&
+        widget.homeOverride == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         final currentContext =
             NotificationHandler.navigatorKey.currentContext;
@@ -67,7 +89,7 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   @override
   void dispose() {
-    if (!kIsWeb) {
+    if (!kIsWeb && widget.enableAlertNotifications) {
       _alertService.dispose();
     }
 
@@ -79,9 +101,10 @@ class _MyAppState extends ConsumerState<MyApp> {
       _showSplash = true;
     });
 
-    final retryDuration = kIsWeb
-        ? const Duration(milliseconds: 700)
-        : const Duration(seconds: 5);
+    final retryDuration = widget.splashDuration ??
+        (kIsWeb
+            ? const Duration(milliseconds: 700)
+            : const Duration(seconds: 5));
 
     Future.delayed(retryDuration, () {
       if (!mounted) return;
@@ -94,8 +117,9 @@ class _MyAppState extends ConsumerState<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    final appInitialization =
-        ref.watch(appInitializationProvider);
+    final appInitialization = widget.homeOverride == null
+        ? ref.watch(appInitializationProvider)
+        : null;
 
     return MaterialApp(
       navigatorKey: NotificationHandler.navigatorKey,
@@ -105,31 +129,22 @@ class _MyAppState extends ConsumerState<MyApp> {
       themeMode: ThemeMode.light,
       debugShowCheckedModeBanner: false,
 
-      // Always open the normal app authentication flow.
-      // Chrome will now show attendee, speaker, moderator,
-      // staff, or mobile-admin interfaces based on the user role.
-      home: _showSplash
-          ? const SplashScreen()
-          : appInitialization.when(
-              data: (_) {
-                return const AuthGate();
-              },
-              loading: () {
-                return const SplashScreen();
-              },
-              error: (error, stackTrace) {
-                return _InitializationErrorScreen(
-                  error: error,
-                  onRetry: () {
-                    ref.invalidate(
-                      appInitializationProvider,
+      home: widget.homeOverride ??
+          (_showSplash
+              ? const SplashScreen()
+              : appInitialization!.when(
+                  data: (_) => const AuthGate(),
+                  loading: () => const SplashScreen(),
+                  error: (error, stackTrace) {
+                    return _InitializationErrorScreen(
+                      error: error,
+                      onRetry: () {
+                        ref.invalidate(appInitializationProvider);
+                        _restartSplash();
+                      },
                     );
-
-                    _restartSplash();
                   },
-                );
-              },
-            ),
+                )),
 
       routes: {
         '/agenda': (_) => const AuthGate(),
@@ -185,9 +200,7 @@ class _InitializationErrorScreen extends StatelessWidget {
                 const SizedBox(height: 20),
                 ElevatedButton.icon(
                   onPressed: onRetry,
-                  icon: const Icon(
-                    Icons.refresh_rounded,
-                  ),
+                  icon: const Icon(Icons.refresh_rounded),
                   label: const Text('Retry'),
                 ),
               ],
