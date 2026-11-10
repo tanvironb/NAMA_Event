@@ -10,11 +10,17 @@ workflows:
     environment:
       groups:
         - ios_code_signing
+
       flutter: 3.41.9
       xcode: latest
       cocoapods: default
+
       vars:
         BUNDLE_ID: "org.namafoundation.eventapp"
+
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: org.namafoundation.eventapp
 
     scripts:
       - name: Initialize keychain
