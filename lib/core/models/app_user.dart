@@ -52,7 +52,7 @@ class AppUser {
     this.medium = '',
     this.instagram = '',
     this.qrCodePayload = '',
-    this.profileVisibility = 'minimal',
+    this.profileVisibility = 'full',
     this.usersIScanned = const [],
     this.scannedByUsers = const [],
     this.privacySelectedAt,
@@ -69,6 +69,21 @@ class AppUser {
     if (data == null) {
       throw StateError('Missing data for user ${doc.id}');
     }
+    final privacySelectedAt = data['privacySelectedAt'] is Timestamp
+        ? (data['privacySelectedAt'] as Timestamp).toDate()
+        : null;
+    final storedProfileVisibility = data['profileVisibility'] as String?;
+
+    // Before the privacy chooser was reliably available, new accounts were
+    // saved as "minimal" without a user selection. Treat those legacy values
+    // as the new full-data default. An explicit choice is recorded with
+    // privacySelectedAt and remains respected.
+    final profileVisibility = privacySelectedAt == null &&
+            (storedProfileVisibility == null ||
+                storedProfileVisibility == 'minimal')
+        ? 'full'
+        : storedProfileVisibility ?? 'full';
+
     return AppUser(
       uid: doc.id,
       email: data['email'] as String? ?? '',
@@ -89,10 +104,10 @@ class AppUser {
       medium: data['medium'] as String? ?? '',
       instagram: data['instagram'] as String? ?? '',
       qrCodePayload: data['qrCodePayload'] as String? ?? '',
-      profileVisibility: data['profileVisibility'] as String? ?? 'minimal',
+      profileVisibility: profileVisibility,
       usersIScanned: List<String>.from(data['usersIScanned'] as List? ?? []),
       scannedByUsers: List<String>.from(data['scannedByUsers'] as List? ?? []),
-      privacySelectedAt: data['privacySelectedAt'] != null ? (data['privacySelectedAt'] as Timestamp).toDate() : null,
+      privacySelectedAt: privacySelectedAt,
       bookmarkedSessions: List<String>.from(data['bookmarkedSessions'] as List? ?? []),
       points: data['points'] as int? ?? 0,
       notificationsEnabled: data['notificationsEnabled'] as bool? ?? true,

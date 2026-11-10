@@ -27,6 +27,7 @@ class _AdminWebEventAdmissionsSectionState
   String? _message;
   bool _messageIsError = false;
   final Set<String> _deletingAdmissionIds = {};
+  final Set<String> _resendingAdmissionIds = {};
 
   FirebaseFunctions get _functions =>
       FirebaseFunctions.instanceFor(region: 'asia-southeast1');
@@ -102,7 +103,10 @@ class _AdminWebEventAdmissionsSectionState
         throw Exception('Could not read the selected CSV file.');
       }
 
-      final rows = _parseCsv(utf8.decode(bytes, allowMalformed: true));
+      final csvText = utf8
+          .decode(bytes, allowMalformed: true)
+          .replaceFirst('\uFEFF', '');
+      final rows = _parseCsv(csvText);
 
       if (rows.length < 2) {
         throw Exception(
@@ -133,7 +137,9 @@ class _AdminWebEventAdmissionsSectionState
 
       for (final row in rows.skip(1)) {
         final name = nameIndex < row.length ? row[nameIndex].trim() : '';
-        final email = emailIndex < row.length ? row[emailIndex].trim() : '';
+        final email = emailIndex < row.length
+            ? _cleanInvitationEmail(row[emailIndex])
+            : '';
 
         if (name.isEmpty && email.isEmpty) continue;
 
@@ -147,72 +153,121 @@ class _AdminWebEventAdmissionsSectionState
         throw Exception('No participant rows were found.');
       }
 
-      if (participants.length > 200) {
-        throw Exception('Upload up to 200 participants per CSV file.');
-      }
-
       setState(() {
         _uploading = true;
-        _message = 'Creating invitations and sending QR emails…';
+        _message = 'Preparing ${participants.length} participants…';
         _messageIsError = false;
       });
 
-      final createResult = await _functions
-          .httpsCallable('createEventInvitations')
-          .call({
-        'eventId': widget.eventId,
-        'participants': participants,
-      });
-
-      final createData =
-          Map<String, dynamic>.from(createResult.data as Map);
-
-      final created = (createData['created'] as List? ?? const [])
-          .whereType<Map>()
-          .map((value) => Map<String, dynamic>.from(value))
-          .toList();
-
+      const batchSize = 200;
+      final totalBatches = (participants.length + batchSize - 1) ~/ batchSize;
+      var createdCount = 0;
+      var retriedCount = 0;
       var sentCount = 0;
       var failedCount = 0;
+      var alreadySentCount = 0;
+      var skippedCount = 0;
+      var invalidCount = 0;
+      var failedBatchCount = 0;
+      final failedDetails = <String>[];
 
-      if (created.isNotEmpty) {
-        final emailResult = await _functions
-            .httpsCallable('sendEventAdmissionEmails')
-            .call({
-          'eventId': widget.eventId,
-          'invitations': created
-              .map(
-                (entry) => {
-                  'admissionId': entry['admissionId'],
-                  'token': entry['token'],
-                },
-              )
-              .toList(),
-        });
+      for (var batchIndex = 0;
+          batchIndex < totalBatches;
+          batchIndex++) {
+        final start = batchIndex * batchSize;
+        final batch = participants.skip(start).take(batchSize).toList();
 
-        final emailData =
-            Map<String, dynamic>.from(emailResult.data as Map);
+        if (mounted) {
+          setState(() {
+            _message =
+                'Processing batch ${batchIndex + 1} of $totalBatches '
+                '(${batch.length} participants)…';
+          });
+        }
 
-        sentCount = (emailData['sent'] as List? ?? const []).length;
-        failedCount = (emailData['failed'] as List? ?? const []).length;
+        try {
+          final createResult = await _functions
+              .httpsCallable('createEventInvitations')
+              .call({
+            'eventId': widget.eventId,
+            'participants': batch,
+          });
+
+          final createData =
+              Map<String, dynamic>.from(createResult.data as Map);
+          final created = (createData['created'] as List? ?? const [])
+              .whereType<Map>()
+              .map((value) => Map<String, dynamic>.from(value))
+              .toList();
+          final retried = (createData['retried'] as List? ?? const [])
+              .whereType<Map>()
+              .map((value) => Map<String, dynamic>.from(value))
+              .toList();
+          final invitationsToSend = [...created, ...retried];
+          createdCount += created.length;
+          retriedCount += retried.length;
+          skippedCount += (createData['skipped'] as List? ?? const []).length;
+          invalidCount += (createData['invalid'] as List? ?? const []).length;
+
+          if (invitationsToSend.isEmpty) continue;
+
+          final emailResult = await _functions
+              .httpsCallable('sendEventAdmissionEmails')
+              .call({
+            'eventId': widget.eventId,
+            'invitations': invitationsToSend
+                .map((entry) => {
+                      'admissionId': entry['admissionId'],
+                      'token': entry['token'],
+                    })
+                .toList(),
+          });
+
+          final emailData =
+              Map<String, dynamic>.from(emailResult.data as Map);
+          sentCount += (emailData['sent'] as List? ?? const []).length;
+          alreadySentCount +=
+              (emailData['alreadySent'] as List? ?? const []).length;
+          final failed = (emailData['failed'] as List? ?? const [])
+              .whereType<Map>()
+              .map((value) => Map<String, dynamic>.from(value))
+              .toList();
+          failedCount += failed.length;
+          failedDetails.addAll(
+            failed.take(5).map((entry) {
+              final email = (entry['email'] ?? '').toString();
+              final reason = (entry['reason'] ?? 'Email failed').toString();
+              return email.isEmpty ? reason : '$email: $reason';
+            }),
+          );
+        } catch (error) {
+          failedBatchCount++;
+          failedDetails.add('Batch ${batchIndex + 1}: $error');
+        }
       }
 
-      final skipped = (createData['skipped'] as List? ?? const []).length;
-      final invalid = (createData['invalid'] as List? ?? const []).length;
-
       final parts = <String>[
-        '${created.length} invitation(s) created',
+        '$createdCount new invitation(s)',
+        if (retriedCount > 0)
+          '$retriedCount existing invitation(s) retried',
         '$sentCount QR email(s) sent',
-        if (failedCount > 0) '$failedCount email(s) failed',
-        if (skipped > 0) '$skipped duplicate(s) skipped',
-        if (invalid > 0) '$invalid invalid row(s)',
+        if (alreadySentCount > 0)
+          '$alreadySentCount email(s) were already sent',
+        if (failedCount > 0)
+          '$failedCount email(s) failed${failedDetails.isEmpty ? '' : ': ${failedDetails.join(' · ')}'}',
+        if (failedBatchCount > 0)
+          '$failedBatchCount batch(es) could not be processed',
+        if (skippedCount > 0)
+          '$skippedCount existing participant(s) skipped',
+        if (invalidCount > 0) '$invalidCount invalid row(s)',
       ];
 
       if (!mounted) return;
 
       setState(() {
         _message = parts.join(' · ');
-        _messageIsError = failedCount > 0 || invalid > 0;
+        _messageIsError =
+            failedCount > 0 || failedBatchCount > 0 || invalidCount > 0;
       });
     } catch (error) {
       if (!mounted) return;
@@ -308,6 +363,140 @@ class _AdminWebEventAdmissionsSectionState
     }
   }
 
+  Future<void> _resendInvitation({
+    required String admissionId,
+    required String participantName,
+    required String email,
+  }) async {
+    if (_resendingAdmissionIds.contains(admissionId)) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Resend invitation?'),
+        content: Text(
+          'Send a fresh QR invitation to $email? Any previous QR for '
+          '$participantName will stop working.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Resend'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || confirmed != true) return;
+
+    setState(() => _resendingAdmissionIds.add(admissionId));
+
+    try {
+      final createResult = await _functions
+          .httpsCallable('createEventInvitations')
+          .call({
+        'eventId': widget.eventId,
+        'forceResendExisting': true,
+        'participants': [
+          {
+            'name': participantName,
+            'email': _cleanInvitationEmail(email),
+            'existingAdmissionId': admissionId,
+          },
+        ],
+      });
+
+      final createData = Map<String, dynamic>.from(createResult.data as Map);
+      final created = (createData['created'] as List? ?? const [])
+          .whereType<Map>()
+          .map((value) => Map<String, dynamic>.from(value))
+          .toList();
+      final retried = (createData['retried'] as List? ?? const [])
+          .whereType<Map>()
+          .map((value) => Map<String, dynamic>.from(value))
+          .toList();
+      final invitations = [...created, ...retried];
+
+      if (invitations.isEmpty) {
+        throw Exception(
+          'The participant could not be resent. They may have joined or been revoked.',
+        );
+      }
+
+      final emailResult = await _functions
+          .httpsCallable('sendEventAdmissionEmails')
+          .call({
+        'eventId': widget.eventId,
+        'invitations': invitations
+            .map((entry) => {
+                  'admissionId': entry['admissionId'],
+                  'token': entry['token'],
+                })
+            .toList(),
+      });
+
+      final emailData = Map<String, dynamic>.from(emailResult.data as Map);
+      final sent = (emailData['sent'] as List? ?? const []).length;
+      final failed = (emailData['failed'] as List? ?? const [])
+          .whereType<Map>()
+          .map((value) => Map<String, dynamic>.from(value))
+          .toList();
+      final resendSucceeded = sent > 0 && failed.isEmpty;
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            resendSucceeded
+                ? 'Invitation resent to $email.'
+                : 'Could not send to $email: '
+                    '${(failed.first['reason'] ?? 'Email failed').toString()}',
+          ),
+          backgroundColor:
+              resendSucceeded ? null : const Color(0xFFB42318),
+        ),
+      );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.message ?? 'Could not resend this invitation.'),
+          backgroundColor: const Color(0xFFB42318),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not resend this invitation: $error'),
+          backgroundColor: const Color(0xFFB42318),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _resendingAdmissionIds.remove(admissionId));
+      }
+    }
+  }
+
+  String _cleanInvitationEmail(String value) {
+    return value
+        .replaceAll(
+          RegExp(r'[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]'),
+          '',
+        )
+        .replaceAll('\u00A0', ' ')
+        .trim()
+        .toLowerCase();
+  }
+
   Stream<QuerySnapshot<Map<String, dynamic>>> _admissionsStream() {
     return FirebaseFirestore.instance
         .collection('events')
@@ -376,8 +565,8 @@ class _AdminWebEventAdmissionsSectionState
                       ),
                       const SizedBox(height: 5),
                       const Text(
-                        'Upload a CSV with Name and Email columns. '
-                        'Each new invitee receives a QR code by email.',
+                        'Upload multiple CSV files with Name and Email columns. '
+                        'Duplicates are skipped. Re-upload a file to retry failed invitations, or use Resend beside a participant.',
                       ),
                       if (_message != null) ...[
                         const SizedBox(height: 10),
@@ -463,6 +652,15 @@ class _AdminWebEventAdmissionsSectionState
                     final color = _statusColor(data);
                     final isDeleting =
                         _deletingAdmissionIds.contains(document.id);
+                    final isResending =
+                        _resendingAdmissionIds.contains(document.id);
+                    final admissionStatus =
+                        (data['status'] ?? '').toString().toLowerCase();
+                    final canResend = !isWalkIn &&
+                        email.isNotEmpty &&
+                        admissionStatus != 'joined' &&
+                        admissionStatus != 'verified_by_staff' &&
+                        admissionStatus != 'revoked';
 
                     return ListTile(
                       dense: true,
@@ -505,6 +703,29 @@ class _AdminWebEventAdmissionsSectionState
                             label: _statusLabel(data),
                             color: color,
                           ),
+                          if (canResend)
+                            IconButton(
+                              tooltip: 'Resend invitation with a new QR',
+                              onPressed: isResending || isDeleting
+                                  ? null
+                                  : () => _resendInvitation(
+                                        admissionId: document.id,
+                                        participantName: name,
+                                        email: email,
+                                      ),
+                              icon: isResending
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.forward_to_inbox_outlined,
+                                      color: AdminWebTheme.primary,
+                                    ),
+                            ),
                           IconButton(
                             tooltip: 'Delete admission record',
                             onPressed: isDeleting

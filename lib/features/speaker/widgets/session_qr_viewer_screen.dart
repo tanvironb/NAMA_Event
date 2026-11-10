@@ -321,6 +321,12 @@ class _SessionQRViewerScreenState extends State<SessionQRViewerScreen> {
       return;
     }
 
+    final category = widget.session.category
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final isBreakoutSession =
+        category == 'breakout' || category == 'breakoutsession';
+
     final sessionDate = DateFormat('EEEE, MMM d, yyyy').format(
       widget.session.startTime,
     );
@@ -333,22 +339,26 @@ class _SessionQRViewerScreenState extends State<SessionQRViewerScreen> {
         builder: (_) => SendNotificationScreen(
           eventId: widget.session.eventId,
           eventName: widget.session.title,
-          initialTitle: 'Session QR Code Available',
+          initialTitle: isBreakoutSession
+              ? 'Breakout Session Instructions'
+              : 'Session QR Code Available',
           initialSubtitle: widget.session.title,
           initialAudience: 'attendee',
           initialType: AppNotificationType.announcement,
-          initialQrPayload: widget.session.qrCodePayload,
-          initialSessionCode: _sessionCode,
+          initialQrPayload:
+              isBreakoutSession ? null : widget.session.qrCodePayload,
+          initialSessionCode: isBreakoutSession ? null : _sessionCode,
           initialSessionTitle: widget.session.title,
           initialSessionDate: widget.session.startTime,
-          initialBody:
-              'The QR code and session code are now available for check-in.\n\n'
-              'Session: ${widget.session.title}\n'
-              'Date: $sessionDate\n'
-              'Time: $sessionTime\n'
-              'Location: ${widget.session.location.isEmpty ? 'Not provided' : widget.session.location}\n'
-              'Session Code: $_sessionCode\n\n'
-              'Please scan the QR code or use the session code to check in.',
+          initialBody: isBreakoutSession
+              ? 'To join "${widget.session.title}" session, please refer to the event staff.'
+              : 'The QR code and session code are now available for check-in.\n\n'
+                  'Session: ${widget.session.title}\n'
+                  'Date: $sessionDate\n'
+                  'Time: $sessionTime\n'
+                  'Location: ${widget.session.location.isEmpty ? 'Not provided' : widget.session.location}\n'
+                  'Session Code: $_sessionCode\n\n'
+                  'Please scan the QR code or use the session code to check in.',
         ),
       ),
     );

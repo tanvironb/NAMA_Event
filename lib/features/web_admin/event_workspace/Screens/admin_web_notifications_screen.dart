@@ -28,10 +28,22 @@ class _AdminWebNotificationsScreenState
   final _titleController = TextEditingController();
   final _subtitleController = TextEditingController();
   final _bodyController = TextEditingController();
+  late final Stream<QuerySnapshot<Map<String, dynamic>>>
+      _breakoutSessions;
 
   String _selectedType = 'announcement';
   String _selectedAudience = 'all';
+  String? _selectedBreakoutSessionId;
+  String _selectedBreakoutSessionTitle = '';
   bool _sending = false;
+
+  bool get _hasBreakoutSession =>
+      _selectedBreakoutSessionId != null &&
+      _selectedBreakoutSessionTitle.isNotEmpty;
+
+  String get _breakoutNotificationBody =>
+      'To join "$_selectedBreakoutSessionTitle" session, '
+      'please refer to the event staff.';
 
   static const Map<String, String> _notificationTypes = {
     'announcement': 'Announcement',
@@ -47,6 +59,15 @@ class _AdminWebNotificationsScreenState
     'speaker': 'Speakers',
     'moderator': 'Moderators',
   };
+
+  @override
+  void initState() {
+    super.initState();
+    _breakoutSessions = FirebaseFirestore.instance
+        .collection('sessions')
+        .where('eventId', isEqualTo: widget.eventId)
+        .snapshots();
+  }
 
   @override
   void dispose() {
@@ -79,6 +100,55 @@ class _AdminWebNotificationsScreenState
         .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots();
+  }
+
+  bool _isBreakoutSession(Map<String, dynamic> data) {
+    final category = (data['category'] ?? '')
+        .toString()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return category == 'breakout' || category == 'breakoutsession';
+  }
+
+  String _sessionTitle(Map<String, dynamic> data) {
+    final title = (data['title'] ?? data['name'] ?? data['sessionTitle'] ?? '')
+        .toString()
+        .trim();
+    return title.isEmpty ? 'Untitled breakout session' : title;
+  }
+
+  void _selectBreakoutSession(
+    String? sessionId,
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> sessions,
+  ) {
+    QueryDocumentSnapshot<Map<String, dynamic>>? selected;
+    if (sessionId != null) {
+      for (final session in sessions) {
+        if (session.id == sessionId) {
+          selected = session;
+          break;
+        }
+      }
+    }
+
+    setState(() {
+      _selectedBreakoutSessionId = selected?.id;
+      _selectedBreakoutSessionTitle = selected == null
+          ? ''
+          : _sessionTitle(selected.data());
+
+      if (selected != null) {
+        _selectedType = 'announcement';
+        _titleController.text =
+            'Session Check-in: $_selectedBreakoutSessionTitle';
+        _subtitleController.text = widget.eventName;
+        _bodyController.text = _breakoutNotificationBody;
+      } else {
+        _titleController.clear();
+        _subtitleController.clear();
+        _bodyController.clear();
+      }
+    });
   }
 
   Future<int> _recipientCount() async {
@@ -129,7 +199,8 @@ class _AdminWebNotificationsScreenState
             'This notification will be sent to $count '
             '${count == 1 ? 'user' : 'users'} in ${widget.eventName}.\n\n'
             'Audience: ${_audiences[_selectedAudience]}\n'
-            'Type: ${_notificationTypes[_selectedType]}',
+            'Type: ${_notificationTypes[_selectedType]}'
+            '${_hasBreakoutSession ? '\nBreakout session: $_selectedBreakoutSessionTitle' : ''}',
           ),
           actions: [
             TextButton(
@@ -180,6 +251,15 @@ class _AdminWebNotificationsScreenState
       final subtitle = _subtitleController.text.trim();
       final body = _bodyController.text.trim();
 
+      final sessionFields = _hasBreakoutSession
+          ? <String, dynamic>{
+              'sessionId': _selectedBreakoutSessionId,
+              'sessionTitle': _selectedBreakoutSessionTitle,
+              'sessionCategory': 'breakout',
+              'isBreakoutSession': true,
+            }
+          : <String, dynamic>{};
+
       final commonNotificationData = <String, dynamic>{
         'title': title,
         'subtitle': subtitle.isEmpty ? null : subtitle,
@@ -195,12 +275,14 @@ class _AdminWebNotificationsScreenState
         'createdBy': adminUser?.uid ?? '',
         'createdByEmail': adminUser?.email ?? '',
         'source': 'admin_web',
+        ...sessionFields,
         'data': <String, dynamic>{
           'type': _selectedType,
           'eventId': widget.eventId,
           'eventName': widget.eventName,
           'notificationId': historyReference.id,
           'targetRole': _selectedAudience,
+          ...sessionFields,
         },
       };
 
@@ -248,6 +330,7 @@ class _AdminWebNotificationsScreenState
         'type': _selectedType,
         'targetRole': _selectedAudience,
         'recipientCount': recipients.length,
+        ...sessionFields,
         'status': 'sent',
         'createdBy': adminUser?.uid ?? '',
         'createdByEmail': adminUser?.email ?? '',
@@ -264,6 +347,8 @@ class _AdminWebNotificationsScreenState
       setState(() {
         _selectedType = 'announcement';
         _selectedAudience = 'all';
+        _selectedBreakoutSessionId = null;
+        _selectedBreakoutSessionTitle = '';
       });
 
       _showMessage(
@@ -403,6 +488,8 @@ class _AdminWebNotificationsScreenState
         key: _formKey,
         child: Column(
           children: [
+            _buildBreakoutSessionSelector(),
+            const SizedBox(height: 15),
             _ResponsiveFields(
               children: [
                 _DropdownField(
@@ -443,7 +530,7 @@ class _AdminWebNotificationsScreenState
               hint: 'Enter notification title',
               controller: _titleController,
               icon: Icons.title_rounded,
-              enabled: !_sending,
+              enabled: !_sending && !_hasBreakoutSession,
               maxLength: 80,
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
@@ -460,7 +547,7 @@ class _AdminWebNotificationsScreenState
               hint: 'Optional short subtitle',
               controller: _subtitleController,
               icon: Icons.short_text_rounded,
-              enabled: !_sending,
+              enabled: !_sending && !_hasBreakoutSession,
               maxLength: 120,
               onChanged: (_) => setState(() {}),
             ),
@@ -471,7 +558,7 @@ class _AdminWebNotificationsScreenState
                   'Write the notification message users should receive',
               controller: _bodyController,
               icon: Icons.message_outlined,
-              enabled: !_sending,
+              enabled: !_sending && !_hasBreakoutSession,
               maxLength: 500,
               maxLines: 6,
               validator: (value) {
@@ -535,6 +622,82 @@ class _AdminWebNotificationsScreenState
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBreakoutSessionSelector() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _breakoutSessions,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return _InlineMessage(
+            icon: Icons.error_outline_rounded,
+            title: 'Could not load breakout sessions',
+            message: snapshot.error.toString(),
+          );
+        }
+
+        final sessions = (snapshot.data?.docs ?? [])
+            .where((session) => _isBreakoutSession(session.data()))
+            .toList()
+          ..sort((a, b) => _sessionTitle(a.data())
+              .toLowerCase()
+              .compareTo(_sessionTitle(b.data()).toLowerCase()));
+
+        final selectedIdIsAvailable = sessions.any(
+          (session) => session.id == _selectedBreakoutSessionId,
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _FieldLabel('Breakout Session (optional)'),
+            const SizedBox(height: 7),
+            DropdownButtonFormField<String>(
+              value: selectedIdIsAvailable
+                  ? _selectedBreakoutSessionId
+                  : '',
+              isExpanded: true,
+              onChanged: _sending
+                  ? null
+                  : (value) => _selectBreakoutSession(
+                        value == null || value.isEmpty ? null : value,
+                        sessions,
+                      ),
+              items: [
+                const DropdownMenuItem<String>(
+                  value: '',
+                  child: Text('General notification (no session)'),
+                ),
+                ...sessions.map((session) {
+                  return DropdownMenuItem<String>(
+                    value: session.id,
+                    child: Text(
+                      _sessionTitle(session.data()),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  );
+                }),
+              ],
+              decoration: _inputDecoration(
+                hint: snapshot.connectionState == ConnectionState.waiting
+                    ? 'Loading breakout sessions…'
+                    : 'Choose a breakout session',
+                icon: Icons.meeting_room_outlined,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Selecting a breakout session sets the message to direct attendees to event staff. No QR code or session code is included.',
+              style: TextStyle(
+                color: AdminWebTheme.textSecondary,
+                fontSize: 9.5,
+                height: 1.4,
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -652,6 +815,11 @@ class _AdminWebNotificationsScreenState
             label: 'Type',
             value: _notificationTypes[_selectedType] ?? '',
           ),
+          if (_hasBreakoutSession)
+            _PreviewInfoRow(
+              label: 'Session',
+              value: _selectedBreakoutSessionTitle,
+            ),
         ],
       ),
     );

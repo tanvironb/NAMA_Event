@@ -15,10 +15,12 @@ import 'package:events_app_trueattempt/features/help/screen/help_center_screen.d
 
 class ProfileTabScreen extends ConsumerWidget {
   final bool hideCalendarAndMeetings;
+  final VoidCallback? onBackPressed;
 
   const ProfileTabScreen({
     super.key,
     this.hideCalendarAndMeetings = false,
+    this.onBackPressed,
   });
 
   static const Color primaryColor = Color(0xFF24158A);
@@ -42,7 +44,8 @@ class ProfileTabScreen extends ConsumerWidget {
             }
 
             final profileImageUrl = appUser.profileImageUrl.trim();
-            final canGoBack = Navigator.of(context).canPop();
+            final canGoBack =
+                onBackPressed != null || Navigator.of(context).canPop();
 
             final userRole = appUser.role.toLowerCase().trim();
 
@@ -61,7 +64,8 @@ class ProfileTabScreen extends ConsumerWidget {
                     children: [
                       if (canGoBack) ...[
                         InkWell(
-                          onTap: () => Navigator.of(context).pop(),
+                          onTap: onBackPressed ??
+                              () => Navigator.of(context).pop(),
                           borderRadius: BorderRadius.circular(10),
                           child: Container(
                             height: 32,

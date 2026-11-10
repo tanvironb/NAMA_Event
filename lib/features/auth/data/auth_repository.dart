@@ -150,7 +150,7 @@ class AuthRepository {
         'eventIds': <String>[],
         'currentEventId': '',
         'activeEventId': '',
-        'profileVisibility': 'minimal',
+        'profileVisibility': 'full',
         'qrCodePayload': '',
         'profileImageUrl': '',
         'title': '',

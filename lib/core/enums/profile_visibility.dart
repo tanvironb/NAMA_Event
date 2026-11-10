@@ -28,7 +28,7 @@ enum ProfileVisibility {
       case 'full':
         return ProfileVisibility.full;
       default:
-        return ProfileVisibility.minimal; // Default for safety
+        return ProfileVisibility.full;
     }
   }
 

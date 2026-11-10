@@ -29,6 +29,7 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
 
   bool _usageTrackingStarted = false;
   bool _welcomeNotificationChecked = false;
+  bool _welcomeNotificationInProgress = false;
 
   String? _trackedEventId;
   String? _lastWelcomeCheckedUid;
@@ -134,11 +135,10 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
     required Map<String, dynamic> userData,
   }) async {
     if (_lastWelcomeCheckedUid == uid && _welcomeNotificationChecked) return;
+    if (_welcomeNotificationInProgress) return;
 
     _lastWelcomeCheckedUid = uid;
-    _welcomeNotificationChecked = true;
-
-    if (userData['welcomeNotificationSent'] == true) return;
+    _welcomeNotificationInProgress = true;
 
     final role = _normalizeRole(userData);
 
@@ -146,28 +146,63 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
         role != 'speaker' &&
         role != 'moderator' &&
         role != 'staff') {
+      _welcomeNotificationChecked = true;
+      _welcomeNotificationInProgress = false;
       return;
     }
 
     try {
-      final activeEventSnapshot = await FirebaseFirestore.instance
-          .collection('events')
-          .where('isActive', isEqualTo: true)
-          .limit(1)
-          .get();
+      final events = FirebaseFirestore.instance.collection('events');
+      DocumentSnapshot<Map<String, dynamic>>? eventDoc;
 
-      if (activeEventSnapshot.docs.isEmpty) {
-        debugPrint('MainHubScreen: No active event found for welcome message.');
+      if (role == 'speaker' || role == 'moderator') {
+        final assignedEventIds = <dynamic>[
+          userData['currentEventId'],
+          userData['activeEventId'],
+          if (userData['eventIds'] is List)
+            ...(userData['eventIds'] as List).reversed,
+        ]
+            .map((value) => (value ?? '').toString().trim())
+            .where((id) => id.isNotEmpty)
+            .toSet();
+
+        for (final eventId in assignedEventIds) {
+          final assignedEvent = await events.doc(eventId).get();
+          if (assignedEvent.exists) {
+            eventDoc = assignedEvent;
+            break;
+          }
+        }
+      } else {
+        final activeEventSnapshot = await events
+            .where('isActive', isEqualTo: true)
+            .get();
+
+        for (final candidate in activeEventSnapshot.docs) {
+          final status = (candidate.data()['status'] ?? '')
+              .toString()
+              .trim()
+              .toLowerCase();
+          if (status != 'archived') {
+            eventDoc = candidate;
+            break;
+          }
+        }
+      }
+
+      if (eventDoc == null) {
+        debugPrint(
+          'MainHubScreen: No event available for welcome message; will retry.',
+        );
         return;
       }
 
-      final eventDoc = activeEventSnapshot.docs.first;
-      final eventData = eventDoc.data();
+      final eventData = eventDoc.data() ?? <String, dynamic>{};
 
       final eventName = (eventData['name'] ??
               eventData['title'] ??
               eventData['eventName'] ??
-              'NAMA Event')
+              'NAMA Events')
           .toString();
 
       final notificationRef = FirebaseFirestore.instance
@@ -182,7 +217,7 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
         await notificationRef.set({
           'eventId': eventDoc.id,
           'eventName': eventName,
-          'title': 'Welcome Onboard',
+          'title': 'Welcome to NAMA Events!',
           'subtitle': 'We are glad to have you here',
           'body':
               'Welcome onboard! We are excited to have you as part of $eventName. Explore the app, connect with others, and enjoy a smooth event experience.',
@@ -205,10 +240,18 @@ class _MainHubScreenState extends ConsumerState<MainHubScreen>
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      debugPrint('MainHubScreen: Welcome notification created for $uid');
+      debugPrint(
+        existingNotification.exists
+            ? 'MainHubScreen: Welcome notification already exists for $uid'
+            : 'MainHubScreen: Welcome notification created for $uid',
+      );
+      _welcomeNotificationChecked = true;
     } catch (e) {
       debugPrint('MainHubScreen: Failed to create welcome notification: $e');
       _welcomeNotificationChecked = false;
+      _lastWelcomeCheckedUid = null;
+    } finally {
+      _welcomeNotificationInProgress = false;
     }
   }
 

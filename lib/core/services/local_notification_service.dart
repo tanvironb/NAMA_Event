@@ -81,14 +81,13 @@ class LocalNotificationService {
   static Future<void> showFromRemoteMessage(RemoteMessage message) async {
     await initialize();
 
-    /*
-      iOS foreground banner is handled by:
-      FirebaseMessaging.instance.setForegroundNotificationPresentationOptions()
-
-      If we also show a local notification on iOS, it can show duplicate banners.
-      So this local notification is mainly for Android foreground notification.
-    */
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+    // iOS presents foreground messages that include an FCM notification
+    // payload using setForegroundNotificationPresentationOptions(). Data-only
+    // messages have no native banner, so show those as local notifications.
+    // This avoids duplicate banners for normal notification+data messages.
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.iOS &&
+        message.notification != null) {
       return;
     }
 

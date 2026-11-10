@@ -21,6 +21,7 @@ class AppNotification {
   final String qrPayload;
   final String sessionCode;
   final String sessionTitle;
+  final bool isBreakoutSession;
 
   AppNotification({
     required this.id,
@@ -39,6 +40,7 @@ class AppNotification {
     this.qrPayload = '',
     this.sessionCode = '',
     this.sessionTitle = '',
+    this.isBreakoutSession = false,
   });
 
   factory AppNotification.fromFirestore(DocumentSnapshot doc) {
@@ -72,19 +74,73 @@ class AppNotification {
         ? docData['data'] as Map<String, dynamic>
         : <String, dynamic>{};
 
-    final qrPayload = (docData['qrPayload'] ?? dataMap['qrPayload'] ?? '')
+    final storedQrPayload =
+        (docData['qrPayload'] ??
+                docData['qrCodePayload'] ??
+                dataMap['qrPayload'] ??
+                dataMap['qrCodePayload'] ??
+                '')
         .toString()
         .trim();
 
-    final sessionCode =
-        (docData['sessionCode'] ?? dataMap['sessionCode'] ?? '')
+    final storedSessionCode =
+        (docData['sessionCode'] ??
+                docData['checkInCode'] ??
+                dataMap['sessionCode'] ??
+                dataMap['checkInCode'] ??
+                '')
             .toString()
             .trim();
+    final sessionCategory = (docData['sessionCategory'] ??
+            dataMap['sessionCategory'] ??
+            dataMap['category'] ??
+            '')
+        .toString()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final isBreakoutSession =
+        docData['isBreakoutSession'] == true ||
+        dataMap['isBreakoutSession'] == true ||
+        sessionCategory == 'breakout' ||
+        sessionCategory == 'breakoutsession';
 
-    final sessionTitle =
+    final allText = [
+      docData['title'],
+      docData['subtitle'],
+      docData['body'],
+      dataMap['title'],
+      dataMap['subtitle'],
+      dataMap['body'],
+    ].whereType<String>().join(' ');
+
+    // Older session check-in announcements stored the code only in the
+    // message text. Recover it so the notification can still render a QR.
+    final codeMatch = RegExp(
+      r'\bSES[-\s]?\d+\b',
+      caseSensitive: false,
+    ).firstMatch(allText);
+    final sessionCode = isBreakoutSession
+        ? ''
+        : storedSessionCode.isNotEmpty
+            ? storedSessionCode
+            : codeMatch?.group(0)?.replaceAll(' ', '-').toUpperCase() ?? '';
+
+    final storedSessionTitle =
         (docData['sessionTitle'] ?? dataMap['sessionTitle'] ?? '')
             .toString()
             .trim();
+    final titleMatch = RegExp(
+      r'^Session\s+Check[- ]?in\s*:\s*(.+)$',
+      caseSensitive: false,
+    ).firstMatch((docData['title'] ?? '').toString().trim());
+    final sessionTitle = storedSessionTitle.isNotEmpty
+        ? storedSessionTitle
+        : titleMatch?.group(1)?.trim() ?? '';
+    final qrPayload = isBreakoutSession
+        ? ''
+        : storedQrPayload.isNotEmpty
+            ? storedQrPayload
+            : sessionCode;
 
     return AppNotification(
       id: doc.id,
@@ -104,6 +160,7 @@ class AppNotification {
       qrPayload: qrPayload,
       sessionCode: sessionCode,
       sessionTitle: sessionTitle,
+      isBreakoutSession: isBreakoutSession,
     );
   }
 

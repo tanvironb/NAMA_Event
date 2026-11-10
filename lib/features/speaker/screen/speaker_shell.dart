@@ -33,12 +33,14 @@ class SpeakerShell extends ConsumerStatefulWidget {
 class _SpeakerShellState extends ConsumerState<SpeakerShell> {
   int _selectedIndex = 0;
   NotificationService? _notificationService;
-  List<Widget> _widgetOptions() => const <Widget>[
-        SpeakerHomeQuickActionsPage(),
-        AgendaScreen(),
-        DirectoriesHubScreen(),
-        QRHubScreen(),
-        ProfileTabScreen(),
+  List<Widget> _widgetOptions() => <Widget>[
+        const SpeakerHomeQuickActionsPage(),
+        const AgendaScreen(),
+        const DirectoriesHubScreen(),
+        const QRHubScreen(),
+        ProfileTabScreen(
+          onBackPressed: () => _onItemTapped(0),
+        ),
       ];
   @override
   void initState() {

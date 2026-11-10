@@ -1298,6 +1298,17 @@ class _WebSessionManagementDialogState
   String get _sessionTitle =>
       (_sessionData['title'] ?? 'Session').toString();
 
+  bool get _isBreakoutSession {
+    final category = (_sessionData['category'] ?? '')
+        .toString()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return category == 'breakout' || category == 'breakoutsession';
+  }
+
+  String get _sessionCategory =>
+      (_sessionData['category'] ?? '').toString().trim();
+
   String get _checkInCode =>
       (_sessionData['checkInCode'] ?? '').toString().trim();
 
@@ -1357,9 +1368,10 @@ class _WebSessionManagementDialogState
           'checkInCode': checkInCode,
           'qrCodePayload': qrPayload,
         };
-        _notificationMessageController.text =
-            'Use session code $checkInCode to join "$_sessionTitle". '
-            'Open the session in the NAMA Events app and enter this code.';
+        _notificationMessageController.text = _isBreakoutSession
+            ? 'To join "$_sessionTitle" session, please refer to the event staff.'
+            : 'Use session code $checkInCode to join "$_sessionTitle". '
+                'Open the session in the NAMA Events app and enter this code.';
         _isPreparing = false;
       });
     } catch (error) {
@@ -1436,9 +1448,10 @@ class _WebSessionManagementDialogState
           'checkInCode': checkInCode,
           'qrCodePayload': qrPayload,
         };
-        _notificationMessageController.text =
-            'Use session code $checkInCode to join "$_sessionTitle". '
-            'Open the session in the NAMA Events app and enter this code.';
+        _notificationMessageController.text = _isBreakoutSession
+            ? 'To join "$_sessionTitle" session, please refer to the event staff.'
+            : 'Use session code $checkInCode to join "$_sessionTitle". '
+                'Open the session in the NAMA Events app and enter this code.';
       });
 
       _showMessage('Session QR and code regenerated.');
@@ -1496,7 +1509,8 @@ class _WebSessionManagementDialogState
       return;
     }
 
-    if (_checkInCode.isEmpty || _qrPayload.isEmpty) {
+    if (!_isBreakoutSession &&
+        (_checkInCode.isEmpty || _qrPayload.isEmpty)) {
       _showMessage(
         'The session QR and code are not ready.',
         error: true,
@@ -1520,6 +1534,17 @@ class _WebSessionManagementDialogState
       final adminNotificationReference =
           FirebaseFirestore.instance.collection('adminNotifications').doc();
 
+      final dataPayload = <String, dynamic>{
+        'notificationId': adminNotificationReference.id,
+        'type': 'session_access',
+        'eventId': widget.eventId,
+        'eventName': widget.eventName,
+        'sessionId': widget.sessionReference.id,
+        'sessionTitle': _sessionTitle,
+        'sessionCategory': _sessionCategory,
+        'isBreakoutSession': _isBreakoutSession,
+      };
+
       final notificationData = <String, dynamic>{
         'title': title,
         'subtitle': widget.eventName,
@@ -1532,20 +1557,18 @@ class _WebSessionManagementDialogState
         'eventName': widget.eventName,
         'sessionId': widget.sessionReference.id,
         'sessionTitle': _sessionTitle,
-        'checkInCode': _checkInCode,
-        'qrCodePayload': _qrPayload,
+        'sessionCategory': _sessionCategory,
+        'isBreakoutSession': _isBreakoutSession,
         'recipientCount': targetUsers.length,
-        'data': {
-          'notificationId': adminNotificationReference.id,
-          'type': 'session_access',
-          'eventId': widget.eventId,
-          'eventName': widget.eventName,
-          'sessionId': widget.sessionReference.id,
-          'sessionTitle': _sessionTitle,
-          'checkInCode': _checkInCode,
-          'qrCodePayload': _qrPayload,
-        },
+        'data': dataPayload,
       };
+
+      if (!_isBreakoutSession) {
+        notificationData['checkInCode'] = _checkInCode;
+        notificationData['qrCodePayload'] = _qrPayload;
+        dataPayload['checkInCode'] = _checkInCode;
+        dataPayload['qrCodePayload'] = _qrPayload;
+      }
 
       await adminNotificationReference.set(notificationData);
 
@@ -1706,9 +1729,14 @@ class _WebSessionManagementDialogState
                       padding: const EdgeInsets.all(24),
                       child: LayoutBuilder(
                         builder: (context, constraints) {
-                          final qrPanel = _buildQrPanel();
                           final notificationPanel =
                               _buildNotificationPanel();
+
+                          if (_isBreakoutSession) {
+                            return notificationPanel;
+                          }
+
+                          final qrPanel = _buildQrPanel();
 
                           if (constraints.maxWidth < 820) {
                             return Column(
@@ -1932,7 +1960,7 @@ class _WebSessionManagementDialogState
           const SizedBox(height: 14),
           TextField(
             controller: _notificationMessageController,
-            enabled: !_isSending,
+            enabled: !_isSending && !_isBreakoutSession,
             maxLines: 5,
             decoration: const InputDecoration(
               labelText: 'Notification message',
@@ -1951,8 +1979,12 @@ class _WebSessionManagementDialogState
               ),
             ),
             child: Text(
-              'The QR payload and session code are attached as notification '
-              'data. The visible message includes code $_checkInCode.',
+              _isBreakoutSession
+                  ? 'Breakout notifications do not include a QR code or '
+                      'session code. Attendees are directed to event staff.'
+                  : 'The QR payload and session code are attached as '
+                      'notification data. The visible message includes code '
+                      '$_checkInCode.',
               style: const TextStyle(
                 color: AdminWebTheme.textSecondary,
                 fontSize: 9.5,

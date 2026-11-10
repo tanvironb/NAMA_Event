@@ -199,14 +199,20 @@ class _NotificationDetailScreenState
   }
 
   String get _qrPayload {
+    if (widget.notification.isBreakoutSession) return '';
+
     final value = widget.notification.qrPayload.trim();
 
     return value.isNotEmpty
         ? value
-        : _text(widget.notification.data['qrPayload']);
+        : _text(widget.notification.data['qrPayload']).isNotEmpty
+            ? _text(widget.notification.data['qrPayload'])
+            : _sessionCode;
   }
 
   String get _sessionCode {
+    if (widget.notification.isBreakoutSession) return '';
+
     final value = widget.notification.sessionCode.trim();
 
     return value.isNotEmpty

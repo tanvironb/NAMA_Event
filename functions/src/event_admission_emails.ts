@@ -1,7 +1,11 @@
 /* eslint-disable max-len */
 /* eslint-disable require-jsdoc */
 /* eslint-disable no-multiple-empty-lines */
-import {getFirestore, FieldValue} from "firebase-admin/firestore";
+import {
+  getFirestore,
+  FieldValue,
+  type DocumentReference,
+} from "firebase-admin/firestore";
 import {defineSecret} from "firebase-functions/params";
 import {HttpsError, onCall} from "firebase-functions/v2/https";
 import {Resend} from "resend";
@@ -16,6 +20,25 @@ type InvitationInput = { admissionId: string; token: string };
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeEmail(value: unknown): string {
+  const email = typeof value === "string" ? value
+    .normalize("NFKC")
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, "")
+    .replace(/\u00A0/g, " ")
+    .trim()
+    .toLowerCase() : "";
+
+  if (
+    !email ||
+    [...email].some((character) => character.charCodeAt(0) > 0x7F) ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new Error("Invitation email must be a valid ASCII email address.");
+  }
+
+  return email;
 }
 
 function sha256(value: string): string {
@@ -125,47 +148,54 @@ export const sendEventAdmissionEmails = onCall(
     const alreadySent: string[] = [];
 
     const sendOne = async (raw: unknown): Promise<void> => {
-      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-        failed.push({admissionId: "", email: "", reason: "Invalid invitation entry."});
-        return;
-      }
-
-      const input = raw as Partial<InvitationInput>;
-      const admissionId = validId(input.admissionId, "admission ID");
-      const token = requireToken(input.token);
-      const admissionRef = eventRef.collection("admissions").doc(admissionId);
-      const admissionSnapshot = await admissionRef.get();
-      if (!admissionSnapshot.exists) {
-        failed.push({admissionId, email: "", reason: "Invitation record was not found."});
-        return;
-      }
-
-      const admission = admissionSnapshot.data() ?? {};
-      const email = text(admission.email);
-      const name = text(admission.name) || "Participant";
-      if (
-        text(admission.source) !== "invitation" ||
-        text(admission.invitationTokenHash) !== sha256(token)
-      ) {
-        failed.push({admissionId, email, reason: "Invitation token did not match its record."});
-        return;
-      }
-      if (!email) {
-        failed.push({admissionId, email: "", reason: "Invitation email is missing."});
-        return;
-      }
-      if (text(admission.invitationEmailStatus).toLowerCase() === "sent") {
-        alreadySent.push(admissionId);
-        return;
-      }
-
-      await admissionRef.update({
-        invitationEmailStatus: "sending",
-        invitationEmailError: FieldValue.delete(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
+      let admissionId = "";
+      let email = "";
+      let admissionRef: DocumentReference | null = null;
+      let markedSending = false;
 
       try {
+        if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+          throw new Error("Invalid invitation entry.");
+        }
+
+        const input = raw as Partial<InvitationInput>;
+        admissionId = validId(input.admissionId, "admission ID");
+        const token = requireToken(input.token);
+        admissionRef = eventRef.collection("admissions").doc(admissionId);
+        const admissionSnapshot = await admissionRef.get();
+        if (!admissionSnapshot.exists) {
+          throw new Error("Invitation record was not found.");
+        }
+
+        const admission = admissionSnapshot.data() ?? {};
+        email = normalizeEmail(admission.email);
+        const name = text(admission.name) || "Participant";
+        if (
+          text(admission.source) !== "invitation" ||
+          text(admission.invitationTokenHash) !== sha256(token)
+        ) {
+          throw new Error("Invitation token did not match its record.");
+        }
+        if (!email) {
+          throw new Error("Invitation email is missing.");
+        }
+        if (text(admission.status).toLowerCase() === "revoked") {
+          throw new Error("This invitation has been revoked.");
+        }
+        if (text(admission.invitationEmailStatus).toLowerCase() === "sent") {
+          alreadySent.push(admissionId);
+          return;
+        }
+
+        await admissionRef.update({
+          email,
+          normalizedEmail: email,
+          invitationEmailStatus: "sending",
+          invitationEmailError: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        markedSending = true;
+
         const qrBuffer = await QRCode.toBuffer(token, {
           type: "png",
           width: 420,
@@ -211,14 +241,24 @@ export const sendEventAdmissionEmails = onCall(
           invitationEmailId: result.data?.id ?? "",
           updatedAt: FieldValue.serverTimestamp(),
         });
+        markedSending = false;
         sent.push(admissionId);
       } catch (error) {
         const reason = error instanceof Error ? error.message : "Email could not be sent.";
-        await admissionRef.update({
-          invitationEmailStatus: "failed",
-          invitationEmailError: reason.slice(0, 500),
-          updatedAt: FieldValue.serverTimestamp(),
-        });
+        if (markedSending && admissionRef) {
+          try {
+            await admissionRef.update({
+              invitationEmailStatus: "failed",
+              invitationEmailError: reason.slice(0, 500),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+          } catch (updateError) {
+            console.error("Could not mark invitation email as failed", {
+              admissionId,
+              updateError,
+            });
+          }
+        }
         failed.push({admissionId, email, reason});
       }
     };
