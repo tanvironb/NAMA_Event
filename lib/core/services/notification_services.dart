@@ -17,6 +17,7 @@ class NotificationService {
 
   bool _isInitialized = false;
   bool _disposed = false;
+  bool _tokenRetryInProgress = false;
 
   Future<void>? _initialization;
 
@@ -83,8 +84,7 @@ class NotificationService {
         'NotificationService: Starting setup for user $_userId.',
       );
 
-      final settings =
-          await _firebaseMessaging.requestPermission(
+      final settings = await _firebaseMessaging.requestPermission(
         alert: true,
         announcement: false,
         badge: true,
@@ -101,16 +101,13 @@ class NotificationService {
         '${settings.authorizationStatus.name}',
       );
 
-      if (settings.authorizationStatus ==
-              AuthorizationStatus.denied ||
+      if (settings.authorizationStatus == AuthorizationStatus.denied ||
           settings.authorizationStatus ==
               AuthorizationStatus.notDetermined) {
         debugPrint(
           'NotificationService: Phone notification permission '
           'has not been granted.',
         );
-
-        // Leave initialization incomplete so it can be retried.
         return;
       }
 
@@ -118,10 +115,7 @@ class NotificationService {
 
       if (!_isCurrentAccount) return;
 
-      // iOS displays foreground notification payloads through FCM.
-      // Android uses LocalNotificationService below.
-      await _firebaseMessaging
-          .setForegroundNotificationPresentationOptions(
+      await _firebaseMessaging.setForegroundNotificationPresentationOptions(
         alert: true,
         badge: true,
         sound: true,
@@ -154,9 +148,9 @@ class NotificationService {
       } else {
         debugPrint(
           'NotificationService: Message listeners attached, '
-          'but device registration is incomplete. '
-          'Initialization can be retried.',
+          'but device registration is incomplete. Retrying token setup.',
         );
+        unawaited(_retryTokenRegistration());
       }
     } catch (error, stackTrace) {
       _isInitialized = false;
@@ -164,7 +158,6 @@ class NotificationService {
       debugPrint(
         'NotificationService: Setup failed: $error',
       );
-
       debugPrintStack(stackTrace: stackTrace);
     }
   }
@@ -172,7 +165,6 @@ class NotificationService {
   void _attachListeners() {
     _onMessageSub ??= FirebaseMessaging.onMessage.listen(
       (message) {
-        // Catch asynchronous callback failures explicitly.
         unawaited(_showForegroundNotification(message));
       },
       onError: (Object error) {
@@ -187,8 +179,7 @@ class NotificationService {
       _handleNotificationTap,
       onError: (Object error) {
         debugPrint(
-          'NotificationService: Notification tap stream error: '
-          '$error',
+          'NotificationService: Notification tap stream error: $error',
         );
       },
     );
@@ -199,46 +190,108 @@ class NotificationService {
         unawaited(_saveRefreshedToken(token));
       },
       onError: (Object error) {
-        _isInitialized = false;
-
         debugPrint(
-          'NotificationService: Token refresh stream error: '
-          '$error',
+          'NotificationService: Token refresh stream error: $error',
         );
       },
     );
   }
 
-  Future<bool> _saveCurrentToken() async {
-    if (!_isCurrentAccount) return false;
+  Future<String?> _waitForApnsToken() async {
+    for (var attempt = 1; attempt <= 15; attempt++) {
+      if (!_isCurrentAccount) return null;
 
-    if (defaultTargetPlatform == TargetPlatform.iOS) {
-      final apnsToken =
-          await _firebaseMessaging.getAPNSToken();
+      try {
+        final token = await _firebaseMessaging.getAPNSToken();
 
-      if (!_isCurrentAccount) return false;
-
-      if (apnsToken == null || apnsToken.isEmpty) {
+        if (token != null && token.isNotEmpty) {
+          debugPrint(
+            'NotificationService: APNs token is ready.',
+          );
+          return token;
+        }
+      } catch (error) {
         debugPrint(
-          'NotificationService: Apple push token is not ready. '
-          'Waiting for token refresh or another initialization.',
+          'NotificationService: APNs token check $attempt failed: $error',
         );
-        return false;
+      }
+
+      if (attempt < 15) {
+        await Future.delayed(const Duration(seconds: 1));
       }
     }
 
-    final token = await _firebaseMessaging.getToken();
+    debugPrint(
+      'NotificationService: APNs token is still unavailable '
+      'after retries.',
+    );
+    return null;
+  }
 
+  Future<bool> _saveCurrentToken() async {
     if (!_isCurrentAccount) return false;
 
-    if (token == null || token.isEmpty) {
+    try {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final apnsToken = await _waitForApnsToken();
+
+        if (apnsToken == null || !_isCurrentAccount) {
+          return false;
+        }
+      }
+
+      final token = await _firebaseMessaging.getToken();
+
+      if (!_isCurrentAccount) return false;
+
+      if (token == null || token.isEmpty) {
+        debugPrint(
+          'NotificationService: Firebase returned no device token.',
+        );
+        return false;
+      }
+
+      return await _persistToken(token);
+    } catch (error, stackTrace) {
       debugPrint(
-        'NotificationService: Firebase returned no device token.',
+        'NotificationService: Could not get/save FCM token: $error',
       );
+      debugPrintStack(stackTrace: stackTrace);
       return false;
     }
+  }
 
-    return _persistToken(token);
+  Future<void> _retryTokenRegistration() async {
+    if (_tokenRetryInProgress || !_isCurrentAccount) return;
+
+    _tokenRetryInProgress = true;
+
+    try {
+      for (var attempt = 1; attempt <= 5; attempt++) {
+        await Future.delayed(const Duration(seconds: 3));
+
+        if (!_isCurrentAccount) return;
+
+        debugPrint(
+          'NotificationService: Token registration retry $attempt of 5.',
+        );
+
+        if (await _saveCurrentToken()) {
+          _isInitialized = true;
+          debugPrint(
+            'NotificationService: FCM token saved on retry.',
+          );
+          return;
+        }
+      }
+
+      debugPrint(
+        'NotificationService: FCM token registration still failed. '
+        'Check device logs and iOS push configuration.',
+      );
+    } finally {
+      _tokenRetryInProgress = false;
+    }
   }
 
   Future<bool> _persistToken(String token) async {
@@ -246,7 +299,6 @@ class NotificationService {
       return false;
     }
 
-    // Preserve the existing token field used by NAMA Events.
     await _userProfileRepository.updateUserProfile(
       _userId,
       {
@@ -266,11 +318,12 @@ class NotificationService {
 
   Future<void> _saveRefreshedToken(String token) async {
     try {
-      if (!_isCurrentAccount) return;
+      if (!_isCurrentAccount || token.isEmpty) return;
 
       final saved = await _persistToken(token);
 
       if (saved) {
+        _isInitialized = true;
         debugPrint(
           'NotificationService: Refreshed device token saved.',
         );
@@ -279,10 +332,8 @@ class NotificationService {
       _isInitialized = false;
 
       debugPrint(
-        'NotificationService: Failed to save refreshed token: '
-        '$error',
+        'NotificationService: Failed to save refreshed token: $error',
       );
-
       debugPrintStack(stackTrace: stackTrace);
     }
   }
@@ -299,11 +350,6 @@ class NotificationService {
         'type: ${message.data['type'] ?? "unspecified"}.',
       );
 
-      // Android: show the phone notification through the
-      // existing local notification service.
-      //
-      // iOS: the existing local service skips local display,
-      // allowing Firebase foreground presentation to display it.
       await LocalNotificationService.showFromRemoteMessage(
         message,
       );
@@ -312,7 +358,6 @@ class NotificationService {
         'NotificationService: Unable to display '
         'foreground notification: $error',
       );
-
       debugPrintStack(stackTrace: stackTrace);
     }
   }
@@ -326,7 +371,6 @@ class NotificationService {
       debugPrint(
         'NotificationService: Notification tap failed: $error',
       );
-
       debugPrintStack(stackTrace: stackTrace);
     }
   }
