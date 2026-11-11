@@ -23,6 +23,8 @@ class AdminWebEventAdmissionsSection extends StatefulWidget {
 
 class _AdminWebEventAdmissionsSectionState
     extends State<AdminWebEventAdmissionsSection> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
   bool _uploading = false;
   String? _message;
   bool _messageIsError = false;
@@ -31,6 +33,12 @@ class _AdminWebEventAdmissionsSectionState
 
   FirebaseFunctions get _functions =>
       FirebaseFunctions.instanceFor(region: 'asia-southeast1');
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   List<List<String>> _parseCsv(String input) {
     final rows = <List<String>>[];
@@ -626,22 +634,99 @@ class _AdminWebEventAdmissionsSectionState
               );
             }
 
+            final query = _searchQuery.trim().toLowerCase();
+            final filteredRecords = query.isEmpty
+                ? records
+                : records.where((document) {
+                    final data = document.data();
+                    final name = (data['name'] ?? '').toString().toLowerCase();
+                    final email =
+                        (data['email'] ?? '').toString().toLowerCase();
+                    return name.contains(query) || email.contains(query);
+                  }).toList();
+
             return Card(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 10),
-                    child: Text(
-                      'Admission list (${records.length})',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final searchField = SizedBox(
+                          width: constraints.maxWidth < 520
+                              ? constraints.maxWidth
+                              : 320,
+                          child: TextField(
+                            controller: _searchController,
+                            onChanged: (value) {
+                              setState(() => _searchQuery = value);
+                            },
+                            textInputAction: TextInputAction.search,
+                            decoration: InputDecoration(
+                              hintText: 'Search invited people by name or email',
+                              prefixIcon: const Icon(Icons.search_rounded),
+                              suffixIcon: _searchQuery.isEmpty
+                                  ? null
+                                  : IconButton(
+                                      tooltip: 'Clear search',
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() => _searchQuery = '');
+                                      },
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
+                              isDense: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                          ),
+                        );
+
+                        final title = Text(
+                          query.isEmpty
+                              ? 'Admission list (${records.length})'
+                              : 'Admission list (${filteredRecords.length} of '
+                                  '${records.length})',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 14,
+                          ),
+                        );
+
+                        if (constraints.maxWidth < 520) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              title,
+                              const SizedBox(height: 12),
+                              searchField,
+                            ],
+                          );
+                        }
+
+                        return Row(
+                          children: [
+                            Expanded(child: title),
+                            searchField,
+                          ],
+                        );
+                      },
                     ),
                   ),
                   const Divider(height: 1),
-                  ...records.map((document) {
+                  if (filteredRecords.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Center(
+                        child: Text(
+                          'No invited people match “${_searchQuery.trim()}”.',
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                      ),
+                    ),
+                  ...filteredRecords.map((document) {
                     final data = document.data();
                     final source =
                         (data['source'] ?? 'invitation').toString();
